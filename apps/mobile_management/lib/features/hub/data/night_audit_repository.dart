@@ -170,6 +170,87 @@ class NightAuditRepository {
     );
   }
 
+  Future<void> reconcileRoom({
+    required String roomId,
+    required String expectedStatus,
+    required String targetHousekeepingStatus,
+  }) async {
+    await _dio.post(
+      '/v1/housekeeping/tasks',
+      data: {
+        'roomId': roomId,
+        'action': 'RECONCILE',
+        'pmsStatus': expectedStatus,
+        'targetStatus': targetHousekeepingStatus,
+        'idempotencyKey':
+            'mobile-night-audit-room-$roomId-${DateTime.now().millisecondsSinceEpoch}',
+      },
+    );
+  }
+
+  Future<void> settlePosSession({
+    required String sessionId,
+    required double actualCash,
+    String? reason,
+  }) async {
+    await _dio.post(
+      '/v1/pos/sessions/$sessionId/settle',
+      data: {
+        'actualCash': actualCash,
+        'authorizerId': null,
+        'reason': reason?.trim() ?? '',
+        'idempotencyKey':
+            'mobile-night-audit-pos-session-$sessionId-${DateTime.now().millisecondsSinceEpoch}',
+      },
+    );
+  }
+
+  Future<void> closeFrontdeskShift({
+    required String shiftId,
+    required double declaredCash,
+    String? reason,
+  }) async {
+    await _dio.post(
+      '/v1/frontdesk/sessions/$shiftId/close',
+      data: {
+        'declaredCash': declaredCash,
+        'reason': reason?.trim() ?? '',
+        'idempotencyKey':
+            'mobile-night-audit-frontdesk-$shiftId-${DateTime.now().millisecondsSinceEpoch}',
+      },
+    );
+  }
+
+  Future<void> resolveSyncConflict({
+    required String conflictId,
+    required String action,
+  }) async {
+    await _dio.post(
+      '/v1/sync/conflicts/$conflictId/resolve',
+      data: {
+        'action': action,
+        'resolutionComment': 'Night Audit mobile resolution: $action',
+        'idempotencyKey':
+            'mobile-night-audit-sync-$conflictId-${DateTime.now().millisecondsSinceEpoch}',
+      },
+    );
+  }
+
+  Future<void> reservationAction(
+    String reservationId,
+    String action, {
+    Map<String, dynamic>? data,
+  }) async {
+    await _dio.post(
+      '/v1/reservations/$reservationId/$action',
+      data: {
+        ...?data,
+        'idempotencyKey':
+            'mobile-night-audit-$action-$reservationId-${DateTime.now().millisecondsSinceEpoch}',
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> executeNightAudit(String propertyId) async {
     final response = await _dio.post(
       '/mobile/v1/executive/night-audit/execute',
