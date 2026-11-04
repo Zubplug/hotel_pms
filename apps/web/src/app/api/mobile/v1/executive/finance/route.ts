@@ -353,6 +353,40 @@ export async function GET(req: NextRequest) {
       ]),
     ]);
 
+    // Collection intelligence for the cashier dashboard. Keep the payload
+    // intentionally small: this is a decision summary, not a transaction log.
+    const [todayPosPayments, todayFrontDeskPayments] = await Promise.all([
+      prisma.posPayment.findMany({
+        where: {
+          order: { propertyId: primaryPropertyId },
+          businessDate,
+          status: { in: ['CONFIRMED', 'PAID'] },
+          amount: { gt: 0 },
+        },
+        select: { method: true, amount: true, order: { select: { outlet: { select: { name: true } } } } },
+      }),
+      prisma.payment.findMany({
+        where: {
+          propertyId: primaryPropertyId,
+          businessDate,
+          status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] },
+          amount: { gt: 0 },
+        },
+        select: { method: true, amount: true, frontdeskSession: { select: { cashAccount: { select: { name: true } } } } },
+      }),
+    ]);
+    const paymentMethodTotals = new Map<string, number>();
+    const outletTotals = new Map<string, number>();
+    const addCollection = (method: string, outlet: string, amount: number) => {
+      paymentMethodTotals.set(method, (paymentMethodTotals.get(method) || 0) + amount);
+      outletTotals.set(outlet, (outletTotals.get(outlet) || 0) + amount);
+    };
+    todayPosPayments.forEach((payment) => addCollection(String(payment.method), payment.order.outlet.name, Number(payment.amount)));
+    todayFrontDeskPayments.forEach((payment) => addCollection(String(payment.method), payment.frontdeskSession?.cashAccount.name || 'Front Desk', Number(payment.amount)));
+    const collectionMethods = Array.from(paymentMethodTotals.entries()).map(([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount);
+    const collectionOutlets = Array.from(outletTotals.entries()).map(([outlet, amount]) => ({ outlet, amount })).sort((a, b) => b.amount - a.amount);
+    const todayCollections = collectionMethods.reduce((sum, row) => sum + row.amount, 0);
+
     // ── Response ───────────────────────────────────────────────────────────
     return successResponse({
       period,
@@ -372,6 +406,9 @@ export async function GET(req: NextRequest) {
         pendingDeposits: pendingDeposit._count.id,
         pendingDepositValue: Number(pendingDeposit._sum.expectedAmount || 0),
         sessionsAwaitingReview: cashierReview[0] + cashierReview[1],
+        todayCollections,
+        collectionMethods,
+        collectionOutlets,
       },
       transactionControls,
       outstanding,

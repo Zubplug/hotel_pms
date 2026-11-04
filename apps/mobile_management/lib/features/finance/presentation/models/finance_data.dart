@@ -187,6 +187,9 @@ class CashierSnapshot {
   final int pendingDeposits;
   final double pendingDepositValue;
   final int sessionsAwaitingReview;
+  final double todayCollections;
+  final List<CollectionSummary> collectionMethods;
+  final List<OutletCollectionSummary> collectionOutlets;
 
   const CashierSnapshot({
     required this.safeBalance,
@@ -195,6 +198,9 @@ class CashierSnapshot {
     required this.pendingDeposits,
     required this.pendingDepositValue,
     required this.sessionsAwaitingReview,
+    required this.todayCollections,
+    required this.collectionMethods,
+    required this.collectionOutlets,
   });
 
   factory CashierSnapshot.fromJson(Map<String, dynamic> json) =>
@@ -205,6 +211,35 @@ class CashierSnapshot {
         pendingDeposits: json['pendingDeposits'] ?? 0,
         pendingDepositValue: (json['pendingDepositValue'] ?? 0).toDouble(),
         sessionsAwaitingReview: json['sessionsAwaitingReview'] ?? 0,
+        todayCollections: (json['todayCollections'] ?? 0).toDouble(),
+        collectionMethods: (json['collectionMethods'] as List? ?? [])
+            .map((row) => CollectionSummary.fromJson(row))
+            .toList(),
+        collectionOutlets: (json['collectionOutlets'] as List? ?? [])
+            .map((row) => OutletCollectionSummary.fromJson(row))
+            .toList(),
+      );
+}
+
+class CollectionSummary {
+  final String method;
+  final double amount;
+  const CollectionSummary({required this.method, required this.amount});
+  factory CollectionSummary.fromJson(Map<String, dynamic> json) =>
+      CollectionSummary(
+        method: '${json['method'] ?? 'OTHER'}',
+        amount: (json['amount'] ?? 0).toDouble(),
+      );
+}
+
+class OutletCollectionSummary {
+  final String outlet;
+  final double amount;
+  const OutletCollectionSummary({required this.outlet, required this.amount});
+  factory OutletCollectionSummary.fromJson(Map<String, dynamic> json) =>
+      OutletCollectionSummary(
+        outlet: '${json['outlet'] ?? 'Other'}',
+        amount: (json['amount'] ?? 0).toDouble(),
       );
 }
 

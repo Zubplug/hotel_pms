@@ -79,11 +79,36 @@ class _CashierBody extends StatelessWidget {
       ),
       slivers: [
         SliverAppBar(
-          expandedHeight: 142,
           pinned: true,
           backgroundColor: _cashBg,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
+          titleSpacing: 16,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'GENERAL CASHIER',
+                style: TextStyle(
+                  color: _cashGold,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.8,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                data.property.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _cashText,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
           actions: [
             Container(
               margin: const EdgeInsets.symmetric(vertical: 10),
@@ -172,22 +197,6 @@ class _CashierBody extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ],
-          flexibleSpace: FlexibleSpaceBar(
-            collapseMode: CollapseMode.parallax,
-            background: _Header(data: data),
-            titlePadding: const EdgeInsetsDirectional.only(
-              start: 20,
-              bottom: 14,
-            ),
-            title: const Text(
-              'Cash Control',
-              style: TextStyle(
-                color: _cashText,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
@@ -201,6 +210,8 @@ class _CashierBody extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _SafeCard(data: data, currency: currency),
+              const SizedBox(height: 20),
+              _CollectionsOverview(data: data, currency: currency),
               const SizedBox(height: 20),
               const _SectionHeading(
                 title: 'CUSTODY PIPELINE',
@@ -262,100 +273,214 @@ class _CashierBody extends StatelessWidget {
   }
 }
 
-class _Header extends StatelessWidget {
+class _CollectionsOverview extends StatelessWidget {
   final FinanceDashboardData data;
+  final String currency;
 
-  const _Header({required this.data});
+  const _CollectionsOverview({required this.data, required this.currency});
 
   @override
   Widget build(BuildContext context) {
+    final methods = data.cashier.collectionMethods.take(4).toList();
+    final outlets = data.cashier.collectionOutlets.take(4).toList();
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_cashPanel, _cashBg],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _cashPanel,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _cashLine),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -60,
-            top: -90,
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _cashGold.withValues(alpha: .08),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _cashGold.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.insights_rounded,
+                  color: _cashGold,
+                  size: 20,
+                ),
               ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 15, 20, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: _cashGold.withValues(alpha: .13),
-                      borderRadius: BorderRadius.circular(13),
-                      border: Border.all(
-                        color: _cashGold.withValues(alpha: .35),
+              const SizedBox(width: 11),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'TODAY\'S COLLECTIONS',
+                      style: TextStyle(
+                        color: _cashGold,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.3,
                       ),
                     ),
-                    child: const Icon(
-                      Icons.account_balance_wallet_rounded,
-                      color: _cashGold,
+                    SizedBox(height: 3),
+                    Text(
+                      'Where the money is coming from',
+                      style: TextStyle(
+                        color: _cashText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'GENERAL CASHIER',
-                          style: TextStyle(
-                            color: _cashGold,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.6,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          data.property.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _cashText,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _date(data.businessDate),
-                          style: const TextStyle(
-                            color: _cashMuted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              Text(
+                _money(data.cashier.todayCollections, currency),
+                style: const TextStyle(
+                  color: _cashText,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _CollectionColumn(
+                  title: 'BY PAYMENT METHOD',
+                  icon: Icons.credit_card_rounded,
+                  rows: methods
+                      .map(
+                        (row) => _CollectionRow(
+                          _paymentLabel(row.method),
+                          row.amount,
+                          currency,
+                        ),
+                      )
+                      .toList(),
+                  empty: 'No collections recorded',
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 126,
+                color: _cashLine,
+                margin: const EdgeInsets.symmetric(horizontal: 13),
+              ),
+              Expanded(
+                child: _CollectionColumn(
+                  title: 'BY OUTLET / TILL',
+                  icon: Icons.storefront_rounded,
+                  rows: outlets
+                      .map(
+                        (row) =>
+                            _CollectionRow(row.outlet, row.amount, currency),
+                      )
+                      .toList(),
+                  empty: 'No outlet activity',
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  String _paymentLabel(String value) => value
+      .replaceAll('_', ' ')
+      .toLowerCase()
+      .split(' ')
+      .map(
+        (part) => part.isEmpty
+            ? part
+            : '${part[0].toUpperCase()}${part.substring(1)}',
+      )
+      .join(' ');
+}
+
+class _CollectionColumn extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<_CollectionRow> rows;
+  final String empty;
+
+  const _CollectionColumn({
+    required this.title,
+    required this.icon,
+    required this.rows,
+    required this.empty,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Icon(icon, color: _cashMuted, size: 14),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: _cashMuted,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .8,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 9),
+      if (rows.isEmpty)
+        Text(empty, style: const TextStyle(color: _cashMuted, fontSize: 11))
+      else
+        ...rows,
+    ],
+  );
+}
+
+class _CollectionRow extends StatelessWidget {
+  final String label;
+  final double amount;
+  final String currency;
+
+  const _CollectionRow(this.label, this.amount, this.currency);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 9),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _cashText,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          _money(amount, currency),
+          style: const TextStyle(
+            color: _cashText,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _StatusBanner extends StatelessWidget {
@@ -879,13 +1004,5 @@ String _currencyMark(String currency) {
       return '€';
     default:
       return currency.isEmpty ? '₦' : '$currency ';
-  }
-}
-
-String _date(String value) {
-  try {
-    return DateFormat('EEE, d MMM yyyy').format(DateTime.parse(value));
-  } catch (_) {
-    return value.isEmpty ? 'Business date unavailable' : value;
   }
 }
