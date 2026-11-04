@@ -464,6 +464,18 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
     return DateFormat('d MMM yyyy · h:mm a').format(date.toLocal());
   }
 
+  String _formatAmount(num value, String currency) {
+    final code = currency.trim().isEmpty
+        ? 'NGN'
+        : currency.trim().toUpperCase();
+    final symbol = code == 'NGN' ? '₦' : '$code ';
+    return NumberFormat.currency(
+      locale: 'en_NG',
+      symbol: symbol,
+      decimalDigits: 2,
+    ).format(value);
+  }
+
   String? _cardContextSummary(String type, Map<String, dynamic> request) {
     final context = _requestContext(request);
     final upper = type.toUpperCase();
@@ -474,7 +486,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
         return 'Requested concession · ${num.parse(percent.toString()).toStringAsFixed(0)}%';
       }
       if (discount != null && num.tryParse(discount.toString()) != null) {
-        return 'Requested concession · ₦${num.parse(discount.toString()).toStringAsFixed(2)}';
+        return 'Requested concession · ${_formatAmount(num.parse(discount.toString()), 'NGN')}';
       }
     }
     if (upper == 'COMPLIMENTARY') {
@@ -527,7 +539,6 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
     required String requester,
     required String reason,
   }) {
-    final symbol = currency == 'NGN' ? '₦' : currency;
     return Card(
       color: const Color(0xFF101B30),
       elevation: 0,
@@ -601,7 +612,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
               ),
               const SizedBox(height: 5),
               Text(
-                '$symbol${amount.toStringAsFixed(2)}',
+                _formatAmount(amount, currency),
                 style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
@@ -803,7 +814,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${currency == 'NGN' ? '₦' : currency}${amount.toStringAsFixed(2)}',
+                      _formatAmount(amount, currency),
                       style: const TextStyle(
                         color: Color(0xFFD8AD52),
                         fontSize: 28,
@@ -1183,7 +1194,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
         (key.toLowerCase().contains('amount') ||
             key.toLowerCase().contains('cost') ||
             key.toLowerCase().contains('price'))) {
-      return '₦${numeric.toStringAsFixed(2)}';
+      return _formatAmount(numeric, 'NGN');
     }
     if (numeric != null && key.toLowerCase().contains('percent')) {
       return '${numeric.toStringAsFixed(2)}%';
