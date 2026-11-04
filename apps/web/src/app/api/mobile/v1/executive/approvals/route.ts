@@ -134,6 +134,16 @@ export async function GET(req: NextRequest) {
       [staff.id, staff] as const,
       ...(staff.userId ? [[staff.userId, staff] as const] : []),
     ]));
+    // Approval records created by older workflows may store the assigned
+    // approver as a Staff.id, while newer workflows store User.id. Resolve
+    // both identities for the signed-in user before applying assignment scope.
+    const currentStaff = await prisma.staff.findFirst({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    const currentIdentityIds = new Set(
+      [user.id, currentStaff?.id].filter((id): id is string => Boolean(id)),
+    );
 
     const managementRoles = new Set([
       'GENERAL_MANAGER',
@@ -153,18 +163,35 @@ export async function GET(req: NextRequest) {
       PROPERTY_MANAGER_REVIEW: managementRoles,
       MANAGER_REVIEW: managementRoles,
     };
+    const roleAliases: Record<string, Set<string>> = {
+      GENERAL_MANAGER: new Set(['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER']),
+      HOTEL_MANAGER: new Set(['HOTEL_MANAGER', 'MANAGER']),
+      MANAGER: new Set(['MANAGER']),
+    };
     const canViewApproval = (approval: (typeof pendingApprovals)[number]) => {
       if (user.isSuperAdmin) return true;
 
       const details = (approval.details || {}) as Record<string, unknown>;
       const assignedUserId = details.approverId || details.currentApproverId || details.assignedTo;
-      if (assignedUserId && String(assignedUserId) !== user.id) return false;
+      if (assignedUserId) {
+        const assigned = String(assignedUserId);
+        // Some legacy payloads put a role name in assignedTo. That is a role
+        // hint, not a user assignment, so let the stage/role checks below
+        // decide visibility instead of hiding the request.
+        const isRoleLabel = managementRoles.has(assigned.toUpperCase()) ||
+          assigned.toUpperCase().endsWith('_REVIEW');
+        if (!isRoleLabel && !currentIdentityIds.has(assigned)) return false;
+      }
 
       const requester = requesterById.get(approval.requestedBy);
       if (approval.requestedBy === user.id || requester?.userId === user.id) return false;
 
       const requiredRole = details.approverRole || details.requiredRole;
-      if (requiredRole && String(requiredRole).toUpperCase() !== role) return false;
+      if (requiredRole) {
+        const required = String(requiredRole).toUpperCase();
+        const compatibleRoles = roleAliases[role] || new Set([role]);
+        if (!compatibleRoles.has(required)) return false;
+      }
 
       const stage = String(details.stage || details.approvalStage || '').toUpperCase();
       if (stage && stageRoles[stage]) return stageRoles[stage].has(role);
