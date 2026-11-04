@@ -65,7 +65,10 @@ export async function GET(req: NextRequest) {
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
     const reservations = await prisma.reservation.findMany({
       where: { propertyId, deletedAt: null, OR: [
-        { status: 'CHECKED_IN', checkIn: { lt: nextDay }, checkOut: { gt: day } },
+        // Status is authoritative for current in-house guests. Do not hide a
+        // still CHECKED_IN guest merely because the scheduled checkout date is
+        // today; the record remains visible until checkout changes the status.
+        { status: 'CHECKED_IN' },
         { status: 'NO_SHOW', checkIn: day },
         // Reserved is a management register, not a daily arrival list. Keep
         // every active confirmed/pending reservation visible regardless of its
