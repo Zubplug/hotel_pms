@@ -35,7 +35,7 @@ Do not commit the decrypted output.
 
 ## Versioning
 
-The current first release is `1.0.0` with Android version code `1`. Increment the
+The current release is `1.0.1` with Android version code `2`. Increment the
 build number for every Play upload.
 
 Before submission, complete the Play Console requirements for the app:

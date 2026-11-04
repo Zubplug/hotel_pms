@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../data/night_audit_repository.dart';
 import '../../../finance/presentation/screens/finance_screen.dart';
 import '../providers/night_audit_provider.dart';
@@ -10,6 +11,18 @@ const _card = Color(0xFF111D33);
 const _gold = Color(0xFFD4A853);
 const _text = Color(0xFFEEF2FF);
 const _muted = Color(0xFF94A3B8);
+
+String _displayDate(dynamic input) {
+  final parsed = DateTime.tryParse(input?.toString() ?? '');
+  if (parsed == null) return input?.toString() ?? '—';
+  return DateFormat('dd MMM yyyy').format(parsed.toLocal());
+}
+
+String _displayDateTime(dynamic input) {
+  final parsed = DateTime.tryParse(input?.toString() ?? '');
+  if (parsed == null) return input?.toString() ?? '—';
+  return DateFormat('dd MMM yyyy, h:mm a').format(parsed.toLocal());
+}
 
 final nightAuditWorkflowProvider =
     FutureProvider.family<Map<String, dynamic>, String>((ref, propertyId) {
@@ -146,7 +159,7 @@ class _NightAuditReviewScreenState
     final businessDate = text(data['businessDate']);
     return Column(
       children: [
-        _header(businessDate),
+        _header(_displayDate(businessDate)),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
@@ -274,6 +287,7 @@ class _NightAuditReviewScreenState
   );
 
   List<Map<String, dynamic>> _blockers(Map<String, dynamic> data) {
+    final operational = map(data['operational']);
     final system = map(data['system']);
     final financial = map(data['financial']);
     final cash = map(data['cash']);
@@ -326,18 +340,58 @@ class _NightAuditReviewScreenState
     );
     add(
       'complimentary',
-      'Complimentary verification',
-      'Approve or reject this complimentary record.',
+      'Complimentary pending approval',
+      'Approve or reject complimentary food, room, or service entitlement.',
       financial['unverifiedComplimentary'],
       'complimentary',
     );
     add(
+      'discount',
+      'Discount pending approval',
+      'Approve or reject the requested discount before room charges are posted.',
+      financial['pendingDiscounts'],
+      'discount',
+    );
+    add(
       'bypass',
-      'Check-in bypass review',
-      'Verify or reject the bypass with an audit note.',
+      'Check-in bypass pending approval',
+      'Verify or reject the deposit bypass with an audit note.',
       financial['pendingCheckInBypasses'],
       'bypass',
     );
+    add(
+      'arrival',
+      'Pending arrival',
+      'Check in, mark no-show, cancel, or update the reservation before closing.',
+      operational['arrivals'],
+      'info',
+    );
+    add(
+      'departure',
+      'Pending departure',
+      'Check out the guest or extend the stay before closing.',
+      operational['departures'],
+      'info',
+    );
+    final guestAmenity = map(financial['guestAmenity']);
+    final amenityBlockers = list(guestAmenity['blockers']);
+    if (amenityBlockers.isNotEmpty) {
+      result.add({
+        'key': 'guest-amenity',
+        'title': 'Guest complimentary inventory blockage',
+        'detail':
+            'Warehouse or mapped stock is unavailable for this audit date.',
+        'item': {
+          'enabled': guestAmenity['enabled'],
+          'warehouse': map(guestAmenity['warehouse']),
+          'guestCount': guestAmenity['guestCount'],
+          'estimatedCost': guestAmenity['estimatedCost'],
+          'items': list(guestAmenity['items']),
+          'blockers': amenityBlockers,
+        },
+        'action': 'info',
+      });
+    }
     add(
       'transaction',
       'Unverified transaction',
@@ -436,7 +490,7 @@ class _NightAuditReviewScreenState
         _categoryCards(reviewItems, 'No operational items require review.'),
         const SizedBox(height: 4),
         _notice(
-          'Operational items are warnings unless the server marks them as blockers. Review them before sign-off, then continue to system controls.',
+          'Pending arrivals and departures must be resolved before close. Room discrepancies remain operational follow-ups unless the server marks them as blockers.',
         ),
       ],
     );
@@ -446,73 +500,71 @@ class _NightAuditReviewScreenState
     Map<String, dynamic> data,
     List<Map<String, dynamic>> blockers,
   ) {
-    final financial = map(data['financial']);
-    final postings = list(financial['pendingNightAuditPostings']);
+    final approvalCards = blockers
+        .where(
+          (b) => ['complimentary', 'discount', 'bypass'].contains(b['key']),
+        )
+        .toList();
+    final inventoryCards = blockers
+        .where((b) => b['key'] == 'guest-amenity')
+        .toList();
     return Column(
       children: [
-        _summaryRow(
-          'Room charges to post',
-          postings.length,
-          Icons.bed_rounded,
-          Colors.greenAccent,
-        ),
-        _summaryRow(
-          'Complimentary records',
-          count(financial['unverifiedComplimentary']),
-          Icons.card_giftcard_rounded,
-          Colors.amberAccent,
-        ),
-        _summaryRow(
-          'Pending approvals',
-          count(financial['pendingDiscounts']),
-          Icons.approval_rounded,
-          Colors.orangeAccent,
-        ),
-        _summaryRow(
-          'Check-in bypasses',
-          count(financial['pendingCheckInBypasses']),
-          Icons.verified_user_rounded,
-          Colors.redAccent,
-        ),
-        const SizedBox(height: 12),
         _categoryCards(
-          blockers
-              .where((b) => ['complimentary', 'bypass'].contains(b['key']))
-              .toList(),
-          'No financial blockers remain.',
+          approvalCards,
+          inventoryCards.isEmpty && approvalCards.isEmpty
+              ? 'No financial blockers remain.'
+              : 'No approval blockers remain.',
         ),
+        if (inventoryCards.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          _categoryCards(
+            inventoryCards,
+            'No complimentary inventory blockage remains.',
+          ),
+        ],
       ],
     );
   }
 
   Widget _cash(Map<String, dynamic> data, List<Map<String, dynamic>> blockers) {
     final cash = map(data['cash']);
-    return Column(
-      children: [
-        _summaryRow(
-          'Unverified transactions',
-          count(cash['unverifiedTransactions']),
-          Icons.receipt_long_rounded,
-          Colors.redAccent,
-        ),
-        _summaryRow(
-          'Cash handovers',
-          count(cash['cashHandovers']),
-          Icons.swap_horiz_rounded,
-          Colors.amberAccent,
-        ),
-        _summaryRow(
-          'Bank deposits',
-          count(cash['bankDeposits']),
-          Icons.account_balance_rounded,
-          Colors.lightBlueAccent,
-        ),
-        const SizedBox(height: 12),
-        _categoryCards(
-          blockers.where((b) => b['key'] == 'transaction').toList(),
-          'No cash blockers remain.',
-        ),
-      ],
+    final items = <Map<String, dynamic>>[
+      ...list(cash['unverifiedTransactions'])
+          .where((item) => map(item)['verificationStatus'] == 'UNVERIFIED')
+          .map(
+            (item) => {
+              'key': 'transaction',
+              'title': 'Transaction verification',
+              'detail': 'Review and verify this payment before closing.',
+              'item': map(item),
+              'action': 'transaction',
+            },
+          ),
+      ...list(cash['cashHandovers']).map(
+        (item) => {
+          'key': 'cash-handover',
+          'title': 'Pending cash handover',
+          'detail':
+              'Receive and acknowledge this handover with the General Cashier.',
+          'item': map(item),
+          'action': 'info',
+        },
+      ),
+      ...list(cash['pendingCashDrops']).map(
+        (item) => {
+          'key': 'cash-drop',
+          'title': 'Pending cash drop',
+          'detail':
+              'Confirm the physical cash drop with the responsible cashier.',
+          'item': map(item),
+          'action': 'info',
+        },
+      ),
+    ];
+    return _categoryCards(
+      items,
+      'All cash controls and payments are verified.',
     );
   }
 
@@ -526,7 +578,9 @@ class _NightAuditReviewScreenState
     return Column(
       children: groups.entries.map((group) {
         final sample = group.value.first;
-        final title = _categoryTitle(group.key);
+        final title = text(sample['title']).isNotEmpty
+            ? text(sample['title'])
+            : _categoryTitle(group.key);
         final color = _categoryColor(group.key);
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -578,11 +632,7 @@ class _NightAuditReviewScreenState
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          [
-                                'arrival',
-                                'departure',
-                                'room-discrepancy',
-                              ].contains(group.key)
+                          _isWarningKey(group.key)
                               ? 'WARNING • does not block close'
                               : 'BLOCKER • must be resolved before close',
                           style: TextStyle(
@@ -601,13 +651,25 @@ class _NightAuditReviewScreenState
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => _openBlockerScreen(title, group.value),
+                  onPressed: () => group.key == 'guest-amenity'
+                      ? _reviewGuestAmenity(sample)
+                      : group.key == 'cash-handover' || group.key == 'cash-drop'
+                      ? _openCashInstructionScreen(
+                          title,
+                          group.key,
+                          group.value,
+                        )
+                      : _openBlockerScreen(title, group.value),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: color,
                     side: BorderSide(color: color.withValues(alpha: .45)),
                   ),
                   icon: const Icon(Icons.visibility_rounded, size: 16),
-                  label: const Text('Review all records'),
+                  label: Text(
+                    group.key == 'cash-handover' || group.key == 'cash-drop'
+                        ? 'View handling instructions'
+                        : 'Review all records',
+                  ),
                 ),
               ),
             ],
@@ -626,11 +688,22 @@ class _NightAuditReviewScreenState
     'pos-session' => 'Open POS sessions',
     'frontdesk' => 'Open front-desk shifts',
     'sync' => 'Financial sync conflicts',
-    'complimentary' => 'Complimentary verification',
-    'bypass' => 'Check-in bypass review',
+    'complimentary' => 'Complimentary pending approval',
+    'guest-amenity' => 'Guest complimentary inventory blockage',
+    'bypass' => 'Check-in bypass pending approval',
     'transaction' => 'Transaction verification',
-    _ => 'Audit blockers',
+    'cash-handover' => 'Pending cash handover',
+    'cash-drop' => 'Pending cash drop',
+    _ => 'Review required',
   };
+
+  bool _isWarningKey(String key) =>
+      const {'room-discrepancy', 'cash-handover', 'cash-drop'}.contains(key);
+
+  List<Map<String, dynamic>> _blockingItems(Map<String, dynamic> data) =>
+      _blockers(
+        data,
+      ).where((item) => !_isWarningKey(text(item['key']))).toList();
 
   IconData _categoryIcon(String key) => switch (key) {
     'arrival' => Icons.login_rounded,
@@ -640,21 +713,27 @@ class _NightAuditReviewScreenState
     'pos-session' || 'frontdesk' => Icons.point_of_sale_rounded,
     'sync' => Icons.sync_problem_rounded,
     'complimentary' => Icons.card_giftcard_rounded,
+    'guest-amenity' => Icons.inventory_2_rounded,
     'bypass' => Icons.verified_user_rounded,
     'transaction' => Icons.receipt_long_rounded,
+    'cash-handover' || 'cash-drop' => Icons.account_balance_wallet_rounded,
     _ => Icons.warning_amber_rounded,
   };
 
   Color _categoryColor(String key) => switch (key) {
-    'arrival' || 'departure' || 'room-discrepancy' => Colors.amberAccent,
+    'room-discrepancy' => Colors.amberAccent,
+    'arrival' || 'departure' => Colors.redAccent,
     'sync' ||
     'bypass' ||
     'transaction' ||
     'complimentary' ||
+    'discount' ||
     'pos-order' ||
     'fnb-order' ||
     'pos-session' ||
     'frontdesk' => Colors.redAccent,
+    'guest-amenity' => Colors.redAccent,
+    'cash-handover' || 'cash-drop' => Colors.amberAccent,
     _ => Colors.orangeAccent,
   };
 
@@ -675,6 +754,22 @@ class _NightAuditReviewScreenState
     if (mounted) ref.invalidate(nightAuditWorkflowProvider(widget.propertyId));
   }
 
+  Future<void> _openCashInstructionScreen(
+    String title,
+    String kind,
+    List<Map<String, dynamic>> items,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CashControlInstructionScreen(
+          title: title,
+          kind: kind,
+          items: items,
+        ),
+      ),
+    );
+  }
+
   Future<bool> _openModule(Map<String, dynamic> entry) async {
     final key = entry['key'];
     if (key == 'arrival' || key == 'departure') {
@@ -682,6 +777,12 @@ class _NightAuditReviewScreenState
     }
     if (key == 'room-discrepancy') {
       return _resolveRoomDiscrepancy(entry);
+    }
+    if (key == 'guest-amenity') {
+      return _reviewGuestAmenity(entry);
+    }
+    if (key == 'cash-handover' || key == 'cash-drop') {
+      return _resolveCashFollowUp(entry);
     }
     if (key == 'sync' ||
         key == 'pos-session' ||
@@ -775,6 +876,87 @@ class _NightAuditReviewScreenState
       return false;
     }
   }
+
+  Future<bool> _resolveCashFollowUp(Map<String, dynamic> entry) async {
+    final item = map(entry['item']);
+    final key = text(entry['key']);
+    final isHandover = key == 'cash-handover';
+    final title = isHandover ? 'Receive cash handover' : 'Confirm cash drop';
+    final message = isHandover
+        ? 'Confirm the physical handover reference and amount with the General Cashier. The custody transfer must be recorded before this item can be closed.'
+        : 'Confirm the physical cash drop with the responsible cashier and record it through the cash-management workflow.';
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .78),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.account_balance_wallet_rounded,
+              color: Colors.amberAccent,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(title, style: const TextStyle(color: _text)),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message, style: const TextStyle(color: _muted, height: 1.4)),
+            const SizedBox(height: 14),
+            _cashDetail(
+              'Reference',
+              item['handoverReference'] ?? item['id'] ?? '—',
+            ),
+            _cashDetail(
+              'Location',
+              item['location'] ?? item['drawerName'] ?? '—',
+            ),
+            if (item['amount'] != null)
+              _cashDetail('Amount', '₦${item['amount']}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    return false;
+  }
+
+  Widget _cashDetail(String label, dynamic value) => Padding(
+    padding: const EdgeInsets.only(top: 7),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 82,
+          child: Text(
+            label,
+            style: const TextStyle(color: _muted, fontSize: 11),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value?.toString() ?? '—',
+            style: const TextStyle(
+              color: _text,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Future<bool> _resolveRoomDiscrepancy(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
@@ -1434,33 +1616,101 @@ class _NightAuditReviewScreenState
   ) {
     final summary = map(data['summary']);
     final serverBlockers = count(summary['blockers']);
-    final blocked = serverBlockers > 0 || blockers.isNotEmpty;
+    final blockingItems = blockers
+        .where((item) => !_isWarningKey(text(item['key'])))
+        .length;
+    final blocked = serverBlockers > 0 || blockingItems > 0;
     return Column(
       children: [
-        Icon(
-          blocked ? Icons.lock_outline_rounded : Icons.verified_rounded,
-          size: 68,
-          color: blocked ? Colors.orangeAccent : Colors.greenAccent,
-        ),
-        const SizedBox(height: 14),
-        Text(
-          blocked
-              ? 'Controls still require attention'
-              : 'Ready for final sign-off',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: _text,
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: blocked
+                  ? [const Color(0xFF3A2B1D), _card]
+                  : [const Color(0xFF12362F), _card],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: (blocked ? Colors.orangeAccent : Colors.greenAccent)
+                  .withValues(alpha: .28),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          blocked
-              ? '$serverBlockers server blocker(s) remain. Resolve them before execution.'
-              : 'The audit will post room charges and roll the property business date forward.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: _muted, height: 1.45),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color:
+                          (blocked ? Colors.orangeAccent : Colors.greenAccent)
+                              .withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      blocked
+                          ? Icons.lock_outline_rounded
+                          : Icons.verified_rounded,
+                      color: blocked ? Colors.orangeAccent : Colors.greenAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          blocked ? 'Action required' : 'Ready for sign-off',
+                          style: const TextStyle(
+                            color: _text,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          blocked
+                              ? 'Resolve the controls below before execution.'
+                              : 'All controls passed. Review charges before posting.',
+                          style: const TextStyle(color: _muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  _signOffMetric(
+                    'Blockers',
+                    '${serverBlockers + blockingItems}',
+                    blocked ? Colors.orangeAccent : Colors.greenAccent,
+                  ),
+                  const SizedBox(width: 10),
+                  _signOffMetric('Stage', '5 of 5', _gold),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      blocked ? 'Execution locked' : 'Ready to review',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        color: blocked
+                            ? Colors.orangeAccent
+                            : Colors.greenAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 20),
         _notice(
@@ -1470,12 +1720,38 @@ class _NightAuditReviewScreenState
     );
   }
 
+  Widget _signOffMetric(String label, String value, Color color) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: color.withValues(alpha: .72),
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: .7,
+        ),
+      ),
+      const SizedBox(height: 3),
+      Text(
+        value,
+        style: TextStyle(
+          color: color,
+          fontSize: 15,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ],
+  );
+
   Widget _bottomBar(
     Map<String, dynamic> data,
     List<Map<String, dynamic>> blockers,
   ) {
     final serverBlockers = count(map(data['summary'])['blockers']);
-    final blocked = serverBlockers > 0 || blockers.isNotEmpty;
+    final blocked =
+        serverBlockers > 0 ||
+        blockers.any((item) => !_isWarningKey(text(item['key'])));
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
@@ -1499,7 +1775,9 @@ class _NightAuditReviewScreenState
             Expanded(
               child: FilledButton(
                 onPressed: step == 4
-                    ? (blocked || confirming ? null : _execute)
+                    ? (blocked || confirming
+                          ? null
+                          : () => _openRoomChargesReview(data))
                     : () => setState(() => step++),
                 style: FilledButton.styleFrom(
                   backgroundColor: step == 4 ? Colors.green : _gold,
@@ -1512,10 +1790,28 @@ class _NightAuditReviewScreenState
                         width: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(step == 4 ? 'Confirm and run audit' : 'Continue'),
+                    : Text(step == 4 ? 'Execute Night Audit' : 'Continue'),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openRoomChargesReview(Map<String, dynamic> data) async {
+    final charges = list(
+      map(data['financial'])['pendingNightAuditPostings'],
+    ).map(map).toList();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RoomChargesReviewScreen(
+          businessDate: text(data['businessDate']),
+          charges: charges,
+          blocked:
+              _blockingItems(data).isNotEmpty ||
+              count(map(data['summary'])['blockers']) > 0,
+          onExecute: _execute,
         ),
       ),
     );
@@ -1553,6 +1849,12 @@ class _NightAuditReviewScreenState
   Future<bool> _resolve(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
     final action = entry['action'];
+    if (action == 'discount') {
+      return _resolveDiscount(entry);
+    }
+    if (action == 'transaction') {
+      return _resolveTransaction(entry);
+    }
     final notes = TextEditingController();
     final approved = await showDialog<bool>(
       context: context,
@@ -1650,39 +1952,130 @@ class _NightAuditReviewScreenState
     }
   }
 
-  Widget _summaryRow(String title, int value, IconData icon, Color color) =>
-      Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: _card,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.white.withValues(alpha: .07)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  color: _text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+  Future<bool> _resolveTransaction(Map<String, dynamic> entry) async {
+    final item = map(entry['item']);
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .78),
+      builder: (dialogContext) => _TransactionVerificationDialog(
+        item: item,
+        onClose: () => Navigator.pop(dialogContext),
+      ),
+    );
+    if (result == null || !mounted) return false;
+    try {
+      await ref
+          .read(nightAuditRepositoryProvider)
+          .verifyTransaction(
+            propertyId: widget.propertyId,
+            transactionId: text(item['id']),
+            type: item['order'] != null ? 'POS_PAYMENT' : 'PAYMENT',
+            status: result['status']!,
+            notes: result['notes'],
+          );
+      ref.invalidate(nightAuditWorkflowProvider(widget.propertyId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result['status'] == 'VERIFIED'
+                  ? 'Transaction verified successfully'
+                  : 'Transaction questioned and sent for follow-up',
             ),
-            Text(
-              '$value',
-              style: TextStyle(
-                color: value > 0 ? color : _text,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      );
+            backgroundColor: result['status'] == 'VERIFIED'
+                ? Colors.green
+                : Colors.orange,
+          ),
+        );
+      }
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Transaction update failed: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _resolveDiscount(Map<String, dynamic> entry) async {
+    final item = map(entry['item']);
+    final details = map(item['details']);
+    final decision = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .78),
+      builder: (dialogContext) => _FinancialControlDialog(
+        title: 'Review discount approval',
+        subtitle:
+            'A management decision is required before room charges can be posted.',
+        accent: Colors.amberAccent,
+        fields: {
+          'Type': text(details['targetType'], 'RESERVATION_ROOM'),
+          'Requested by': text(item['requestedByName'] ?? item['requestedBy']),
+          'Acknowledged by': text(
+            item['acknowledgedByName'],
+            'Not acknowledged',
+          ),
+          'Reason': text(
+            item['reason'] ?? details['reason'],
+            'No reason provided',
+          ),
+        },
+        actions: const {
+          'Reject discount': 'reject',
+          'Approve discount': 'approve',
+        },
+        onClose: () => Navigator.pop(dialogContext),
+      ),
+    );
+    if (decision == null || !mounted) return false;
+    try {
+      await ref
+          .read(nightAuditRepositoryProvider)
+          .resolveDiscountApproval(
+            approvalId: text(item['id']),
+            action: decision,
+          );
+      ref.invalidate(nightAuditWorkflowProvider(widget.propertyId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Discount approval updated'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Discount update failed: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _reviewGuestAmenity(Map<String, dynamic> entry) async {
+    final item = map(entry['item']);
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .78),
+      builder: (dialogContext) => _GuestAmenityDialog(
+        item: item,
+        onClose: () => Navigator.pop(dialogContext),
+      ),
+    );
+    return false;
+  }
+
   Widget _success(String message) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(16),
@@ -1717,6 +2110,970 @@ class _NightAuditReviewScreenState
     child: Text(
       message,
       style: const TextStyle(color: _muted, fontSize: 12, height: 1.4),
+    ),
+  );
+}
+
+class _TransactionVerificationDialog extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onClose;
+
+  const _TransactionVerificationDialog({
+    required this.item,
+    required this.onClose,
+  });
+
+  @override
+  State<_TransactionVerificationDialog> createState() =>
+      _TransactionVerificationDialogState();
+}
+
+class _TransactionVerificationDialogState
+    extends State<_TransactionVerificationDialog> {
+  final notes = TextEditingController();
+  bool questioning = false;
+
+  @override
+  void dispose() {
+    notes.dispose();
+    super.dispose();
+  }
+
+  String _value(dynamic value, [String fallback = 'N/A']) =>
+      value == null || value.toString().trim().isEmpty
+      ? fallback
+      : value.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final order = item['order'] is Map
+        ? Map<String, dynamic>.from(item['order'] as Map)
+        : <String, dynamic>{};
+    final folio = item['folio'] is Map
+        ? Map<String, dynamic>.from(item['folio'] as Map)
+        : <String, dynamic>{};
+    final reservation = _map(folio['reservation']);
+    final guest = reservation['primaryGuest'];
+    final guestMap = guest is Map
+        ? Map<String, dynamic>.from(guest)
+        : <String, dynamic>{};
+    final reservationRooms = reservation['reservationRooms'] is List
+        ? reservation['reservationRooms'] as List
+        : const [];
+    final firstRoom =
+        reservationRooms.isNotEmpty && reservationRooms.first is Map
+        ? _map(reservationRooms.first)
+        : <String, dynamic>{};
+    final room = _map(firstRoom['room']);
+    final roomNumber =
+        room['number'] ??
+        reservation['roomNumber'] ??
+        folio['roomNumber'] ??
+        'N/A';
+    final pos = item['order'] != null;
+    final operator = pos
+        ? _map(_map(item['session'])['operator'])
+        : _map(_map(item['frontdeskSession'])['staff']);
+    final cashier =
+        '${operator['firstName'] ?? ''} ${operator['lastName'] ?? ''}'.trim();
+    final reference =
+        item['reference'] ??
+        item['providerRef'] ??
+        item['providerTransactionId'] ??
+        'N/A';
+    final location = pos
+        ? _map(order['outlet'])['name'] ?? 'POS outlet'
+        : 'Front Desk';
+    final record = pos
+        ? 'Order: ${order['receiptNumber'] ?? order['id'] ?? 'N/A'}'
+        : 'Folio: ${folio['folioNumber'] ?? 'N/A'}';
+    return Dialog(
+      backgroundColor: _card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.indigoAccent.withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: const Icon(
+                      Icons.verified_user_rounded,
+                      color: Colors.indigoAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Transaction verification',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onClose,
+                    icon: const Icon(Icons.close_rounded, color: _muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Review the payment evidence before closing the business date. Verify only when the receipt and supporting record agree.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .035),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .08),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    _transactionRow(
+                      'Amount',
+                      '₦${_value(item['amount'], '0')}',
+                    ),
+                    _transactionRow(
+                      'Method',
+                      item['method'] == 'BANK_TRANSFER'
+                          ? 'Bank Transfer'
+                          : _value(item['method'], 'POS'),
+                    ),
+                    _transactionRow('Reference', reference),
+                    _transactionRow(
+                      'Date / time',
+                      _displayDateTime(item['createdAt']),
+                    ),
+                    const Divider(color: Colors.white12, height: 22),
+                    _transactionRow(
+                      'Cashier',
+                      cashier.isEmpty ? 'System' : cashier,
+                    ),
+                    _transactionRow('Location', location),
+                    _transactionRow(
+                      'Shift reference',
+                      pos
+                          ? _map(item['session'])['shiftReference']
+                          : _map(item['frontdeskSession'])['shiftReference'],
+                    ),
+                    _transactionRow(
+                      'Guest / account',
+                      '${guestMap['firstName'] ?? ''} ${guestMap['lastName'] ?? ''}'
+                              .trim()
+                              .isEmpty
+                          ? 'N/A'
+                          : '${guestMap['firstName'] ?? ''} ${guestMap['lastName'] ?? ''}',
+                    ),
+                    _transactionRow('Room number', roomNumber),
+                    _transactionRow('Record', record),
+                  ],
+                ),
+              ),
+              if (questioning) ...[
+                const SizedBox(height: 14),
+                const Text(
+                  'Reason / observation (required)',
+                  style: TextStyle(
+                    color: _muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                TextField(
+                  controller: notes,
+                  minLines: 3,
+                  maxLines: 5,
+                  style: const TextStyle(color: _text, fontSize: 12),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Reference does not match the receipt...',
+                    hintStyle: TextStyle(color: _muted),
+                    filled: true,
+                    fillColor: Colors.white12,
+                    border: OutlineInputBorder(borderSide: BorderSide.none),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => setState(() => questioning = true),
+                      icon: const Icon(Icons.help_outline_rounded),
+                      label: const Text('Question'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.amberAccent,
+                        side: BorderSide(
+                          color: Colors.amberAccent.withValues(alpha: .4),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        if (questioning && notes.text.trim().isEmpty) return;
+                        Navigator.pop(context, {
+                          'status': questioning ? 'QUESTIONED' : 'VERIFIED',
+                          'notes': notes.text.trim(),
+                        });
+                      },
+                      icon: Icon(
+                        questioning
+                            ? Icons.flag_rounded
+                            : Icons.check_circle_rounded,
+                      ),
+                      label: Text(questioning ? 'Submit question' : 'Verify'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: questioning
+                            ? Colors.amber.shade800
+                            : Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _transactionRow(String label, dynamic value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 10,
+              letterSpacing: .7,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            _value(value),
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: _text,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  static Map<String, dynamic> _map(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+}
+
+class CashControlDialog extends StatelessWidget {
+  final Map<String, dynamic> cash;
+  final int unverifiedCount;
+  final num unverifiedTotal;
+  final VoidCallback onClose;
+
+  const CashControlDialog({
+    super.key,
+    required this.cash,
+    required this.unverifiedCount,
+    required this.unverifiedTotal,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final handovers = _list(cash['cashHandovers']);
+    final drops = _list(cash['pendingCashDrops']);
+    final transactions = _list(cash['unverifiedTransactions'])
+        .where((item) => _map(item)['verificationStatus'] == 'UNVERIFIED')
+        .toList();
+    final isBlocked = transactions.isNotEmpty;
+    return Dialog(
+      backgroundColor: _card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: (isBlocked ? Colors.redAccent : Colors.amberAccent)
+                          .withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: isBlocked ? Colors.redAccent : Colors.amberAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Cash control review',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_rounded, color: _muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isBlocked
+                    ? 'Payment verification is blocking close. Confirm each receipt with the responsible cashier before signing off.'
+                    : 'Review the cash follow-ups for this audit date. Warnings can be completed by the cashier or General Cashier after review.',
+                style: const TextStyle(
+                  color: _muted,
+                  height: 1.4,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _cashMetric(
+                'Unverified payments',
+                '$unverifiedCount · ₦${unverifiedTotal.toStringAsFixed(0)}',
+                isBlocked ? Colors.redAccent : Colors.greenAccent,
+                isBlocked
+                    ? Icons.lock_outline_rounded
+                    : Icons.check_circle_rounded,
+              ),
+              const SizedBox(height: 14),
+              _cashSection(
+                title: 'TRANSACTION VERIFICATION',
+                subtitle: 'Blocking until each payment is verified.',
+                color: Colors.redAccent,
+                children: transactions.isEmpty
+                    ? [
+                        const Text(
+                          'No unverified transactions.',
+                          style: TextStyle(color: _muted, fontSize: 12),
+                        ),
+                      ]
+                    : transactions.take(8).map((item) {
+                        final row = _map(item);
+                        return _cashLine(
+                          '${row['method'] ?? 'Payment'} · ₦${row['amount'] ?? 0}',
+                          '${row['reference'] ?? row['id'] ?? 'No reference'} · ${row['cashierName'] ?? 'Assigned cashier'}',
+                        );
+                      }).toList(),
+              ),
+              const SizedBox(height: 12),
+              _cashSection(
+                title: 'PENDING CASH HANDOVERS',
+                subtitle:
+                    'Notice: receive and acknowledge with the General Cashier.',
+                color: Colors.amberAccent,
+                children: handovers.isEmpty
+                    ? [
+                        const Text(
+                          'No pending handovers.',
+                          style: TextStyle(color: _muted, fontSize: 12),
+                        ),
+                      ]
+                    : handovers.take(8).map((item) {
+                        final row = _map(item);
+                        final person = _map(row['handedOverBy']);
+                        return _cashLine(
+                          row['drawerName']?.toString() ??
+                              row['location']?.toString() ??
+                              'Cash drawer',
+                          'Handed over by ${'${person['firstName'] ?? ''} ${person['lastName'] ?? ''}'.trim().isEmpty ? 'assigned cashier' : '${person['firstName'] ?? ''} ${person['lastName'] ?? ''}'}',
+                        );
+                      }).toList(),
+              ),
+              const SizedBox(height: 12),
+              _cashSection(
+                title: 'PENDING CASH DROPS',
+                subtitle:
+                    'Confirm the physical drop with the responsible cashier.',
+                color: Colors.amberAccent,
+                children: drops.isEmpty
+                    ? [
+                        const Text(
+                          'No pending cash drops.',
+                          style: TextStyle(color: _muted, fontSize: 12),
+                        ),
+                      ]
+                    : drops.take(8).map((item) {
+                        final row = _map(item);
+                        return _cashLine(
+                          '₦${row['amount'] ?? 0} · ${row['location'] ?? 'Cash point'}',
+                          'Dropped by ${row['cashierName'] ?? 'assigned cashier'}',
+                        );
+                      }).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'NEXT ACTION',
+                style: TextStyle(
+                  color: _muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '1. Verify payment receipts with the cashier or front desk.\n'
+                '2. Ask the General Cashier to receive pending handovers.\n'
+                '3. Confirm pending cash drops physically and record receipt.\n'
+                '4. Refresh this step before continuing to sign-off.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 15),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.done_rounded),
+                  label: const Text('Close review'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isBlocked
+                        ? Colors.redAccent
+                        : Colors.amberAccent,
+                    side: BorderSide(
+                      color: (isBlocked ? Colors.redAccent : Colors.amberAccent)
+                          .withValues(alpha: .45),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cashMetric(String label, String value, Color color, IconData icon) =>
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: .22)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: _text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(color: color, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+
+  Widget _cashSection({
+    required String title,
+    required String subtitle,
+    required Color color,
+    required List<Widget> children,
+  }) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .035),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: color.withValues(alpha: .16)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: color,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.05,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(subtitle, style: const TextStyle(color: _muted, fontSize: 11)),
+        const SizedBox(height: 9),
+        ...children,
+      ],
+    ),
+  );
+
+  Widget _cashLine(String primary, String secondary) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          primary,
+          style: const TextStyle(
+            color: _text,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(secondary, style: const TextStyle(color: _muted, fontSize: 11)),
+      ],
+    ),
+  );
+
+  static Map<String, dynamic> _map(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+  static List<dynamic> _list(dynamic value) => value is List ? value : const [];
+}
+
+class _GuestAmenityDialog extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onClose;
+
+  const _GuestAmenityDialog({required this.item, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    final warehouse = item['warehouse'] is Map
+        ? Map<String, dynamic>.from(item['warehouse'] as Map)
+        : <String, dynamic>{};
+    final blockers = item['blockers'] is List
+        ? item['blockers'] as List
+        : const [];
+    final inventory = item['items'] is List ? item['items'] as List : const [];
+    final outOfStock = inventory.where((stock) {
+      final row = stock is Map
+          ? Map<String, dynamic>.from(stock)
+          : <String, dynamic>{};
+      final available = num.tryParse('${row['available'] ?? 0}') ?? 0;
+      final status = row['status']?.toString().toLowerCase() ?? '';
+      return available <= 0 ||
+          status.contains('out') ||
+          status.contains('unavailable') ||
+          status.contains('insufficient');
+    }).toList();
+    return Dialog(
+      backgroundColor: _card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: const Icon(
+                      Icons.inventory_2_rounded,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Complimentary guest amenities',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_rounded, color: _muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'This is a blocking inventory control. The night audit cannot post the complimentary guest entitlement until the warehouse and mapped stock are available.',
+                style: TextStyle(color: _muted, height: 1.4, fontSize: 12),
+              ),
+              const SizedBox(height: 17),
+              _amenityRow(
+                'Warehouse',
+                warehouse['name']?.toString() ?? 'Not configured',
+              ),
+              _amenityRow('Guests', item['guestCount']?.toString() ?? '—'),
+              _amenityRow('Estimated COGS', '₦${item['estimatedCost'] ?? 0}'),
+              const SizedBox(height: 16),
+              const Text(
+                'BLOCKING REASONS',
+                style: TextStyle(
+                  color: _muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...blockers.map(
+                (reason) => Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Text(
+                    '• ${reason.toString()}',
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ),
+              if (inventory.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'INVENTORY CHECK',
+                  style: TextStyle(
+                    color: _muted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...inventory.take(8).map((stock) {
+                  final row = stock is Map
+                      ? Map<String, dynamic>.from(stock)
+                      : <String, dynamic>{};
+                  return _amenityRow(
+                    row['name']?.toString() ?? 'Amenity',
+                    '${row['available'] ?? 0} available · ${row['status'] ?? 'CHECK'}',
+                  );
+                }),
+              ],
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: .08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.redAccent.withValues(alpha: .22),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'OUT-OF-STOCK / ACTION REQUIRED',
+                      style: TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (outOfStock.isEmpty)
+                      const Text(
+                        'The warehouse or recipe mapping is incomplete. Ask the managers to verify the stock setup.',
+                        style: TextStyle(
+                          color: _muted,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      )
+                    else
+                      ...outOfStock.take(8).map((stock) {
+                        final row = stock is Map
+                            ? Map<String, dynamic>.from(stock)
+                            : <String, dynamic>{};
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: Text(
+                            '• ${row['name']?.toString() ?? 'Amenity'} — ${row['available'] ?? 0} available',
+                            style: const TextStyle(
+                              color: _text,
+                              fontSize: 12,
+                              height: 1.35,
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'RECOMMENDED RESOLUTION',
+                style: TextStyle(
+                  color: _muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '1. Contact the Stock Manager to confirm the required item and quantity.\n'
+                '2. Contact the Outlet Warehouse Manager to arrange a stock transfer or restock.\n'
+                '3. Confirm the transfer is received and the recipe/warehouse mapping is correct.\n'
+                '4. Refresh this audit step before continuing. Do not bypass the deduction.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 15),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.info_outline_rounded),
+                  label: const Text('Close review'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                    side: BorderSide(
+                      color: Colors.redAccent.withValues(alpha: .45),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Resolve the warehouse or stock configuration, then refresh this step. This review does not bypass inventory deduction.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _muted, fontSize: 11, height: 1.35),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _amenityRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: _text,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _FinancialControlDialog extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final Map<String, String> fields;
+  final Map<String, String> actions;
+  final VoidCallback onClose;
+
+  const _FinancialControlDialog({
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.fields,
+    required this.actions,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+    backgroundColor: _card,
+    insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(Icons.account_balance_rounded, color: accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: _text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded, color: _muted),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subtitle,
+              style: const TextStyle(color: _muted, height: 1.4, fontSize: 12),
+            ),
+            const SizedBox(height: 17),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .04),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: .08)),
+              ),
+              child: Column(
+                children: fields.entries
+                    .map(
+                      (field) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                field.key,
+                                style: const TextStyle(
+                                  color: _muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                field.value,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: _text,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            const SizedBox(height: 18),
+            ...actions.entries.map(
+              (action) => Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context, action.value),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: action.value == 'approve'
+                          ? Colors.indigoAccent
+                          : Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(
+                      action.key,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: onClose,
+                child: const Text('Keep unresolved'),
+              ),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -1904,7 +3261,9 @@ class _SystemControlDialogState extends State<_SystemControlDialog> {
                       ),
                       _row(
                         'Opened',
-                        value(widget.item['openedAt'], 'Not recorded'),
+                        widget.item['openedAt'] == null
+                            ? 'Not recorded'
+                            : _displayDateTime(widget.item['openedAt']),
                       ),
                       _row(
                         'Shift reference',
@@ -2167,6 +3526,681 @@ class _SystemControlDialogState extends State<_SystemControlDialog> {
       ),
     ),
   );
+}
+
+class RoomChargesReviewScreen extends StatelessWidget {
+  final String businessDate;
+  final List<Map<String, dynamic>> charges;
+  final bool blocked;
+  final Future<void> Function() onExecute;
+
+  const RoomChargesReviewScreen({
+    super.key,
+    required this.businessDate,
+    required this.charges,
+    required this.blocked,
+    required this.onExecute,
+  });
+
+  num _amount(Map<String, dynamic> item, String key, [String fallback = '0']) =>
+      num.tryParse('${item[key] ?? item[fallback]}') ?? 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final gross = charges.fold<num>(
+      0,
+      (sum, item) => sum + _amount(item, 'grossAmount', 'amount'),
+    );
+    final discount = charges.fold<num>(
+      0,
+      (sum, item) =>
+          sum + (num.tryParse('${item['discountAmount'] ?? 0}') ?? 0),
+    );
+    final net = charges.fold<num>(
+      0,
+      (sum, item) => sum + _amount(item, 'netAmount', 'amount'),
+    );
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _bg,
+        foregroundColor: _text,
+        elevation: 0,
+        title: const Text(
+          'ROOM CHARGE REVIEW',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [const Color(0xFF263B61), _card],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.indigoAccent.withValues(alpha: .3),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.fact_check_rounded,
+                  color: Colors.indigoAccent,
+                  size: 34,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Confirm nightly charges',
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  charges.isEmpty
+                      ? 'Business date ${_displayDate(businessDate)}. No room charges are currently proposed.'
+                      : 'Business date ${_displayDate(businessDate)}. Verify the proposal before anything is posted.',
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(child: _totalCard('Gross', gross, Colors.white70)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _totalCard('Discount', discount, Colors.amberAccent),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _totalCard('Net to post', net, Colors.greenAccent),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (blocked)
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.redAccent.withValues(alpha: .25),
+                ),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lock_outline_rounded, color: Colors.redAccent),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Execution is unavailable while blocking controls remain unresolved. Return to the wizard and resolve them first.',
+                      style: TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Row(
+            children: [
+              const Icon(Icons.list_alt_rounded, color: _gold, size: 17),
+              const SizedBox(width: 8),
+              Text(
+                '${charges.length} charge${charges.length == 1 ? '' : 's'} proposed',
+                style: const TextStyle(
+                  color: _text,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (charges.isEmpty)
+            _emptyChargesCard()
+          else
+            ...charges.map((item) => _chargeCard(item)),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+          child: FilledButton.icon(
+            onPressed: blocked ? null : () => _confirmExecute(context),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text('Confirm & Execute Night Audit'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.green.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyChargesCard() => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: _card,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: Colors.white.withValues(alpha: .08)),
+    ),
+    child: const Row(
+      children: [
+        Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'There are no room charges waiting to be posted for this audit.',
+            style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _totalCard(String label, num amount, Color color) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: color.withValues(alpha: .18)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: color.withValues(alpha: .8),
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          '₦${amount.toStringAsFixed(0)}',
+          style: TextStyle(
+            color: color,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _chargeCard(Map<String, dynamic> item) {
+    final guest = item['guestName'] ?? item['primaryGuestName'] ?? 'Guest';
+    final room = item['roomNumber'] ?? '—';
+    final amount = _amount(item, 'netAmount', 'amount');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.hotel_rounded,
+                color: Colors.indigoAccent,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Room $room · $guest',
+                  style: const TextStyle(
+                    color: _text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                '₦${amount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              _pill(
+                'Confirmation',
+                item['confirmationNumber'] ?? 'Unavailable',
+              ),
+              _pill('Nights', item['nights'] ?? item['quantity'] ?? 1),
+              _pill('Rate plan', item['ratePlanName'] ?? 'Standard'),
+            ],
+          ),
+        ],
+      ),
+    );
+    /*
+    return Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.white.withValues(alpha: .08))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [const Icon(Icons.hotel_rounded, color: Colors.indigoAccent, size: 18), const SizedBox(width: 8), Expanded(child: Text('Room $room · $guest', style: const TextStyle(color: _text, fontWeight: FontWeight.w800))), Text('₦${amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900))]), const SizedBox(height: 9), Wrap(spacing: 8, runSpacing: 6, children: [_pill('Confirmation', item['confirmationNumber'] ?? 'Unavailable'), _pill('Nights', item['nights'] ?? item['quantity'] ?? 1), _pill('Rate plan', item['ratePlanName'] ?? 'Standard')])])));
+    */
+  }
+
+  Widget _pill(String label, dynamic value) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .05),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      '$label: $value',
+      style: const TextStyle(color: _muted, fontSize: 10),
+    ),
+  );
+
+  Future<void> _confirmExecute(BuildContext context) async {
+    final net = charges.fold<num>(
+      0,
+      (sum, item) => sum + _amount(item, 'netAmount', 'amount'),
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: _card,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.verified_user_rounded,
+                      color: Colors.greenAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Final execution check',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    icon: const Icon(Icons.close_rounded, color: _muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'You are about to close the audit for this business date.',
+                style: TextStyle(color: _text, fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .08),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    _confirmationRow(
+                      'Business date',
+                      _displayDate(businessDate),
+                    ),
+                    const SizedBox(height: 10),
+                    _confirmationRow('Charges to post', '${charges.length}'),
+                    const SizedBox(height: 10),
+                    _confirmationRow(
+                      'Net room revenue',
+                      '₦${net.toStringAsFixed(2)}',
+                      emphasize: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, color: _gold, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Room charges will be posted and the property business date will advance. Confirm only after reviewing the details.',
+                      style: TextStyle(
+                        color: _muted,
+                        fontSize: 11,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _text,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: .14),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      child: const Text('Go back'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                      label: const Text('Confirm & run'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed == true && context.mounted) await onExecute();
+  }
+
+  Widget _confirmationRow(
+    String label,
+    String value, {
+    bool emphasize = false,
+  }) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(label, style: const TextStyle(color: _muted, fontSize: 12)),
+      Text(
+        value,
+        style: TextStyle(
+          color: emphasize ? Colors.greenAccent : _text,
+          fontSize: 12,
+          fontWeight: emphasize ? FontWeight.w900 : FontWeight.w700,
+        ),
+      ),
+    ],
+  );
+}
+
+class CashControlInstructionScreen extends StatelessWidget {
+  final String title;
+  final String kind;
+  final List<Map<String, dynamic>> items;
+
+  const CashControlInstructionScreen({
+    super.key,
+    required this.title,
+    required this.kind,
+    required this.items,
+  });
+
+  bool get isHandover => kind == 'cash-handover';
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Colors.amberAccent;
+    final actionName = isHandover ? 'cash handover' : 'cash drop';
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _bg,
+        foregroundColor: _text,
+        elevation: 0,
+        title: const Text(
+          'CASH CONTROL GUIDANCE',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [const Color(0xFF263047), _card],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: color.withValues(alpha: .3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: .14),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Icon(
+                        Icons.account_balance_wallet_rounded,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'This is a General Cashier follow-up, not a Night Audit blocker. The auditor should record the outstanding item and continue the audit after confirming the operational owner.',
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _instructionSection(
+            'WHAT THE GENERAL CASHIER SHOULD DO',
+            isHandover
+                ? [
+                    'Confirm the cashier, drawer/location, amount, and handover reference.',
+                    'Physically receive and count the cash with the handing-over cashier.',
+                    'Accept the handover in the cash-management workflow and retain the audit evidence.',
+                  ]
+                : [
+                    'Confirm the drop amount, location, cashier, and drop reference.',
+                    'Verify the physical cash deposit with the General Cashier or safe custodian.',
+                    'Record and reconcile the cash drop in the cash-management workflow.',
+                  ],
+            color,
+          ),
+          const SizedBox(height: 12),
+          _instructionSection('AUDITOR ACTION', [
+            'Confirm the General Cashier has been notified.',
+            'Do not mark the warning as resolved without custody evidence.',
+            'Return to the audit workflow and refresh the Cash Control step when the handoff is complete.',
+          ], Colors.lightBlueAccent),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.greenAccent.withValues(alpha: .07),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Colors.greenAccent.withValues(alpha: .2),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.check_circle_outline_rounded,
+                  color: Colors.greenAccent,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'This warning does not prevent Night Audit from closing. Unverified payments or unreconciled cashier activity may still block close.',
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            '${items.length} $actionName${items.length == 1 ? '' : 's'} currently pending',
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _instructionSection(String heading, List<String> steps, Color color) =>
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withValues(alpha: .2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              heading,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...steps.asMap().entries.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${entry.key + 1}',
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        entry.value,
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class NightAuditBlockerDetailsScreen extends StatefulWidget {
@@ -2558,6 +4592,9 @@ class _NightAuditBlockerDetailsScreenState
                           ? 'Resolve reservation'
                           : entry['key'] == 'room-discrepancy'
                           ? 'Resolve room'
+                          : entry['key'] == 'cash-handover' ||
+                                entry['key'] == 'cash-drop'
+                          ? 'Resolve cash control'
                           : 'Open responsible module')
                     : 'Resolve this record',
               ),
@@ -2594,7 +4631,7 @@ class _NightAuditBlockerDetailsScreenState
   String _shortDate(dynamic date) {
     final parsed = DateTime.tryParse(value(date));
     if (parsed == null) return value(date);
-    return '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}';
+    return DateFormat('dd MMM').format(parsed.toLocal());
   }
 
   Widget _detail(String label, dynamic content) => Padding(

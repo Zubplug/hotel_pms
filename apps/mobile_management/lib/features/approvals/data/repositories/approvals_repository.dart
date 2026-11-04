@@ -15,7 +15,20 @@ class ApprovalsRepository {
   Future<List<dynamic>> fetchPendingApprovals() async {
     final response = await _dio.get('/mobile/v1/executive/approvals');
     if (response.statusCode == 200) {
-      return response.data['data'] as List<dynamic>;
+      final payload = response.data;
+      if (payload is List<dynamic>) return payload;
+      if (payload is Map<String, dynamic>) {
+        final data = payload['data'];
+        if (data is List<dynamic>) return data;
+        if (data is Map<String, dynamic> &&
+            data['approvals'] is List<dynamic>) {
+          return data['approvals'] as List<dynamic>;
+        }
+        if (payload['approvals'] is List<dynamic>) {
+          return payload['approvals'] as List<dynamic>;
+        }
+      }
+      return const [];
     }
     throw Exception('Failed to fetch approvals');
   }

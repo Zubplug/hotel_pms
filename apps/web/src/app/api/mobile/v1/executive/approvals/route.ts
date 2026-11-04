@@ -125,6 +125,16 @@ export async function GET(req: NextRequest) {
       },
     }));
 
+    const requesterIds = [...new Set(pendingApprovals.map((approval) => approval.requestedBy).filter(Boolean))];
+    const requesterStaff = requesterIds.length ? await prisma.staff.findMany({
+      where: { OR: [{ id: { in: requesterIds } }, { userId: { in: requesterIds } }] },
+      select: { id: true, userId: true, firstName: true, lastName: true, employeeId: true, position: true, role: true },
+    }) : [];
+    const requesterById = new Map(requesterStaff.flatMap((staff) => [
+      [staff.id, staff] as const,
+      ...(staff.userId ? [[staff.userId, staff] as const] : []),
+    ]));
+
     const discountRoomIds = pendingApprovals
       .filter((approval) => approval.type === 'DISCOUNT')
       .map((approval) => {
@@ -163,12 +173,41 @@ export async function GET(req: NextRequest) {
     }) : [];
     const reviewRoomById = new Map(reviewRooms.map((room) => [room.id, room]));
     const enrichedApprovals = pendingApprovals.map((approval) => {
-      if (approval.type !== 'DISCOUNT') return { ...approval, source: 'APPROVAL_REQUEST' };
+      const staff = requesterById.get(approval.requestedBy);
+      const requestedByName = staff
+        ? `${staff.firstName || ''} ${staff.lastName || ''}`.replace(/\s+/g, ' ').trim()
+        : null;
+      const requesterDetails = {
+        requestedByName: requestedByName || null,
+        requesterEmployeeId: staff?.employeeId || null,
+        requesterPosition: staff?.position || staff?.role || null,
+      };
+      if (approval.type !== 'DISCOUNT') {
+        return { ...approval, source: 'APPROVAL_REQUEST', details: { ...((approval.details || {}) as Record<string, unknown>), ...requesterDetails } };
+      }
       const snapshot = (approval.snapshot || {}) as Record<string, unknown>;
       const details = (approval.details || {}) as Record<string, unknown>;
       const roomId = String(snapshot.reservationRoomId || details.reservationRoomId || '');
       const reviewRoom = reviewRoomById.get(roomId);
-      return { ...approval, source: 'APPROVAL_REQUEST', details: { ...details, review: reviewRoom || null } };
+      const guest = reviewRoom?.reservation?.primaryGuest;
+      const guestName = guest ? `${guest.firstName || ''} ${guest.lastName || ''}`.replace(/\s+/g, ' ').trim() : null;
+      return {
+        ...approval,
+        source: 'APPROVAL_REQUEST',
+        details: {
+          ...details,
+          ...requesterDetails,
+          review: reviewRoom || null,
+          guestName: guestName || null,
+          roomNumber: reviewRoom?.room?.number || null,
+          roomType: reviewRoom?.room?.roomType?.name || null,
+          confirmationNumber: reviewRoom?.reservation?.confirmationNumber || null,
+          checkIn: reviewRoom?.reservation?.checkIn || reviewRoom?.checkIn || null,
+          checkOut: reviewRoom?.reservation?.checkOut || reviewRoom?.checkOut || null,
+          guestEmail: guest?.email || null,
+          isVip: Boolean(guest?.isVip),
+        },
+      };
     });
 
     const [cashExpenses, reimbursementClaims, employeeLoans, salaryAdvances] = await Promise.all([

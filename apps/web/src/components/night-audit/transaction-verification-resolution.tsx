@@ -87,6 +87,11 @@ export function TransactionVerificationResolution({
   const guestName = !isPos && transaction?.folio?.reservation?.primaryGuest
     ? `${transaction.folio.reservation.primaryGuest.firstName} ${transaction.folio.reservation.primaryGuest.lastName}` 
     : 'N/A';
+  const reservation = transaction?.folio?.reservation;
+  const roomNumber = reservation?.reservationRooms?.[0]?.room?.number
+    || reservation?.roomNumber
+    || transaction?.folio?.roomNumber
+    || 'N/A';
 
   const formatCurrency = (amount: number, currency: string = 'NGN') => {
     return new Intl.NumberFormat('en-NG', {
@@ -213,6 +218,9 @@ export function TransactionVerificationResolution({
 
                     <div className="text-slate-500 text-[11px] uppercase tracking-wider">Guest / Account</div>
                     <div className="text-right text-slate-200">{guestName}</div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Room Number</div>
+                    <div className="text-right text-slate-200">{roomNumber}</div>
 
                     <div className="text-slate-500 text-[11px] uppercase tracking-wider">Record</div>
                     <div className="text-right text-slate-300">{folioOrOrder}</div>

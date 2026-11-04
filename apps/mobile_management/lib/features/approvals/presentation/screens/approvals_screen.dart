@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../providers/approvals_provider.dart';
 import '../../data/repositories/approvals_repository.dart';
 import '../../../../core/services/websocket_service.dart';
@@ -195,67 +196,326 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
           : approvalsAsync.when(
               data: (approvals) {
                 if (approvals.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 64,
-                          color: Colors.green,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'All clear — no pending approvals',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
+                  return _emptyState();
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: approvals.length,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                  itemCount: approvals.length + 1,
                   itemBuilder: (context, index) {
-                    final req = approvals[index] as Map<String, dynamic>;
-                    final amount = req['amount'] != null
-                        ? (req['amount'] as num).toDouble()
-                        : 0.0;
+                    if (index == 0) return _queueHeader(approvals.length);
+                    final approvalIndex = index - 1;
+                    final raw = approvals[approvalIndex];
+                    final req = raw is Map
+                        ? Map<String, dynamic>.from(raw)
+                        : <String, dynamic>{};
+                    final id =
+                        req['id']?.toString() ?? 'request-$approvalIndex';
+                    final type = req['type']?.toString() ?? 'APPROVAL_REQUEST';
+                    final rawAmount = req['amount'];
+                    final amount = rawAmount is num
+                        ? rawAmount.toDouble()
+                        : double.tryParse(rawAmount?.toString() ?? '') ?? 0.0;
                     return _buildApprovalCard(
                       request: req,
-                      id: req['id'] as String,
-                      type: req['type'] as String,
+                      id: id,
+                      type: type,
                       amount: amount,
-                      currency: req['currency'] as String? ?? 'NGN',
-                      requester: req['requestedBy'] as String? ?? 'Unknown',
-                      reason: req['reason'] as String? ?? 'No reason provided',
+                      currency: req['currency']?.toString() ?? 'NGN',
+                      requester: _requesterLabel(req),
+                      reason: req['reason']?.toString() ?? 'No reason provided',
                     );
                   },
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Failed to load: $err'),
-                    TextButton(
-                      onPressed: () {
-                        ref.invalidate(pendingApprovalsProvider);
-                      },
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: Color(0xFFD8AD52)),
               ),
+              error: (err, _) => _errorState(err),
             ),
     );
+  }
+
+  Widget _emptyState() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 82,
+            height: 82,
+            decoration: BoxDecoration(
+              color: const Color(0xFF42D392).withValues(alpha: .12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.verified_rounded,
+              size: 42,
+              color: Color(0xFF42D392),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'All clear',
+            style: TextStyle(
+              color: Color(0xFFF1F5FF),
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'There are no pending approval decisions for this property.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Color(0xFF91A2BF), height: 1.45),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _errorState(Object error) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.cloud_off_rounded,
+            color: Colors.redAccent,
+            size: 48,
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Could not load approvals',
+            style: TextStyle(
+              color: Color(0xFFF1F5FF),
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            error.toString(),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFF91A2BF), height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => ref.invalidate(pendingApprovalsProvider),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try again'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _queueHeader(int count) => Container(
+    margin: const EdgeInsets.only(bottom: 18),
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF1D3154), Color(0xFF101B30)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: const Color(0xFFD8AD52).withValues(alpha: .24)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFFD8AD52).withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: const Icon(Icons.fact_check_rounded, color: Color(0xFFD8AD52)),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Management decisions',
+                style: TextStyle(
+                  color: Color(0xFFF1F5FF),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$count pending request${count == 1 ? '' : 's'} require review',
+                style: const TextStyle(color: Color(0xFF91A2BF), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3A557).withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '$count OPEN',
+            style: const TextStyle(
+              color: Color(0xFFF3A557),
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .7,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Map<String, dynamic> _requestContext(Map<String, dynamic> request) {
+    final context = <String, dynamic>{};
+    void merge(dynamic value) {
+      if (value is! Map) return;
+      for (final entry in Map<String, dynamic>.from(value).entries) {
+        if (entry.value != null && entry.value.toString().trim().isNotEmpty) {
+          context[entry.key] = entry.value;
+        }
+      }
+    }
+
+    merge(request['snapshot']);
+    merge(request['details']);
+    merge(request['metadata']);
+    merge(request['context']);
+    merge(request['payload']);
+    merge(request['request']);
+    merge(request);
+
+    // The API enriches room-based approvals under `details.review`.
+    final review = request['details'] is Map
+        ? (request['details'] as Map)['review']
+        : null;
+    if (review is Map) {
+      final reservation = review['reservation'];
+      final room = review['room'];
+      final guest = reservation is Map ? reservation['primaryGuest'] : null;
+      final roomType = room is Map ? room['roomType'] : null;
+      if (guest is Map) {
+        final name = '${guest['firstName'] ?? ''} ${guest['lastName'] ?? ''}'
+            .trim();
+        if (name.isNotEmpty) context['guestName'] = name;
+      }
+      if (room is Map && room['number'] != null) {
+        context['roomNumber'] = room['number'];
+      }
+      if (roomType is Map && roomType['name'] != null) {
+        context['roomType'] = roomType['name'];
+      }
+      if (reservation is Map) {
+        for (final key in ['confirmationNumber', 'checkIn', 'checkOut']) {
+          if (reservation[key] != null) context[key] = reservation[key];
+        }
+      }
+    }
+    return context;
+  }
+
+  String _requesterLabel(Map<String, dynamic> request) {
+    final context = _requestContext(request);
+    final value =
+        context['requestedByName'] ??
+        context['requesterName'] ??
+        context['requestedByUserName'] ??
+        context['requester'] ??
+        context['requestedBy'];
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty || _looksLikeId(text) ? 'Management request' : text;
+  }
+
+  String? _guestLabel(Map<String, dynamic> request) {
+    final context = _requestContext(request);
+    final value =
+        context['guestName'] ??
+        context['guestFullName'] ??
+        context['primaryGuestName'] ??
+        context['guest'];
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty || _looksLikeId(text) ? null : text;
+  }
+
+  String? _roomLabel(Map<String, dynamic> request) {
+    final context = _requestContext(request);
+    final value = context['roomNumber'] ?? context['roomNo'] ?? context['room'];
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty || _looksLikeId(text) ? null : text;
+  }
+
+  bool _looksLikeId(String value) => RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value);
+
+  String _submittedLabel(Map<String, dynamic> request) {
+    final value = request['requestedAt'] ?? request['createdAt'];
+    final date = value == null ? null : DateTime.tryParse(value.toString());
+    if (date == null) return 'Submitted recently';
+    return DateFormat('d MMM yyyy · h:mm a').format(date.toLocal());
+  }
+
+  String? _cardContextSummary(String type, Map<String, dynamic> request) {
+    final context = _requestContext(request);
+    final upper = type.toUpperCase();
+    if (upper == 'DISCOUNT') {
+      final percent = context['discountPercent'] ?? context['percentage'];
+      final discount = context['discountAmount'] ?? context['discountValue'];
+      if (percent != null && num.tryParse(percent.toString()) != null) {
+        return 'Requested concession · ${num.parse(percent.toString()).toStringAsFixed(0)}%';
+      }
+      if (discount != null && num.tryParse(discount.toString()) != null) {
+        return 'Requested concession · ₦${num.parse(discount.toString()).toStringAsFixed(2)}';
+      }
+    }
+    if (upper == 'COMPLIMENTARY') {
+      final item =
+          context['itemName'] ??
+          context['amenityName'] ??
+          context['productName'] ??
+          context['serviceName'];
+      if (item != null && item.toString().trim().isNotEmpty) {
+        return 'Complimentary benefit · ${item.toString()}';
+      }
+    }
+    return null;
+  }
+
+  String _displayType(String type) {
+    switch (type.toUpperCase()) {
+      case 'DISCOUNT':
+        return 'Discount approval';
+      case 'COMPLIMENTARY':
+        return 'Complimentary approval';
+      case 'REFUND':
+        return 'Refund approval';
+      case 'VOID':
+        return 'Void transaction approval';
+      case 'STOCK_TRANSFER':
+        return 'Stock transfer approval';
+      case 'PURCHASE_ORDER':
+        return 'Purchase order approval';
+      default:
+        return type
+            .replaceAll('_', ' ')
+            .toLowerCase()
+            .split(' ')
+            .map((word) {
+              return word.isEmpty
+                  ? word
+                  : '${word[0].toUpperCase()}${word.substring(1)}';
+            })
+            .join(' ');
+    }
   }
 
   Widget _buildApprovalCard({
@@ -272,7 +532,10 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
       color: const Color(0xFF101B30),
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Colors.white.withValues(alpha: .07)),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => _showApprovalDetails(request, amount, currency, type),
@@ -290,12 +553,14 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.shade200),
+                      color: const Color(0xFFF3A557).withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: const Color(0xFFF3A557).withValues(alpha: .3),
+                      ),
                     ),
                     child: Text(
-                      type,
+                      _displayType(type),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Color(0xFFF3A557),
@@ -305,7 +570,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                     ),
                   ),
                   Text(
-                    id.length > 12 ? '...${id.substring(id.length - 8)}' : id,
+                    _submittedLabel(request),
                     style: const TextStyle(
                       color: Color(0xFF91A2BF),
                       fontSize: 11,
@@ -314,6 +579,27 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                 ],
               ),
               const SizedBox(height: 12),
+              if (_cardContextSummary(type, request) != null) ...[
+                Text(
+                  _cardContextSummary(type, request)!,
+                  style: const TextStyle(
+                    color: Color(0xFFD8AD52),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 9),
+              ],
+              const Text(
+                'AMOUNT UNDER REVIEW',
+                style: TextStyle(
+                  color: Color(0xFF91A2BF),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: .8,
+                ),
+              ),
+              const SizedBox(height: 5),
               Text(
                 '$symbol${amount.toStringAsFixed(2)}',
                 style: const TextStyle(
@@ -343,6 +629,39 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                 ],
               ),
               const SizedBox(height: 8),
+              Text(
+                'Submitted ${_submittedLabel(request)}',
+                style: const TextStyle(color: Color(0xFF91A2BF), fontSize: 11),
+              ),
+              const SizedBox(height: 9),
+              if (_guestLabel(request) != null || _roomLabel(request) != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.hotel_outlined,
+                        size: 16,
+                        color: Color(0xFF91A2BF),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          [
+                            if (_guestLabel(request) != null)
+                              _guestLabel(request)!,
+                            if (_roomLabel(request) != null)
+                              'Room ${_roomLabel(request)}',
+                          ].join('  •  '),
+                          style: const TextStyle(
+                            color: Color(0xFFD7E1F2),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -401,14 +720,16 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
     String currency,
     String type,
   ) {
-    final details = request['details'];
-    final snapshot = request['snapshot'];
-    final reason = request['reason'] as String? ?? 'No reason provided';
+    final reason = request['reason']?.toString() ?? 'No reason provided';
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF101B30),
       showDragHandle: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
@@ -431,6 +752,36 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                     _detailBadge(type),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16243D),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF243653)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.shield_outlined,
+                        color: Color(0xFF42D392),
+                        size: 18,
+                      ),
+                      SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          'Review the request context before making a decision. Approval actions are authenticated.',
+                          style: TextStyle(
+                            color: Color(0xFFB8C5D9),
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   '${currency == 'NGN' ? '₦' : currency}${amount.toStringAsFixed(2)}',
@@ -442,16 +793,12 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                 ),
                 const SizedBox(height: 18),
                 _detailLine('Request ID', request['id']?.toString() ?? '—'),
-                _detailLine(
-                  'Requested by',
-                  request['requestedBy']?.toString() ?? '—',
-                ),
-                _detailLine(
-                  'Submitted',
-                  request['requestedAt']?.toString() ??
-                      request['createdAt']?.toString() ??
-                      '—',
-                ),
+                _detailLine('Requested by', _requesterLabel(request)),
+                if (_guestLabel(request) != null)
+                  _detailLine('Guest', _guestLabel(request)!),
+                if (_roomLabel(request) != null)
+                  _detailLine('Room', _roomLabel(request)!),
+                _detailLine('Submitted', _submittedLabel(request)),
                 const SizedBox(height: 14),
                 const Text(
                   'Reason',
@@ -471,7 +818,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                     height: 1.45,
                   ),
                 ),
-                ..._buildRequestDetails(type, details, snapshot),
+                ..._buildRequestDetails(type, request),
                 const SizedBox(height: 20),
                 Row(
                   children: [
@@ -558,17 +905,9 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
     }
   }
 
-  List<Widget> _buildRequestDetails(
-    String type,
-    dynamic details,
-    dynamic snapshot,
-  ) {
-    final detailMap = details is Map
-        ? Map<String, dynamic>.from(details)
-        : <String, dynamic>{};
-    final snapshotMap = snapshot is Map
-        ? Map<String, dynamic>.from(snapshot)
-        : <String, dynamic>{};
+  List<Widget> _buildRequestDetails(String type, Map<String, dynamic> request) {
+    final detailMap = _requestContext(request);
+    final snapshotMap = detailMap;
     final keysByType = <String, List<String>>{
       'REFUND': [
         'refundRequestId',
@@ -579,20 +918,35 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
         'refundMethod',
       ],
       'DISCOUNT': [
-        'reservationRoomId',
-        'reservationId',
         'guestName',
         'roomNumber',
+        'roomType',
+        'confirmationNumber',
+        'checkIn',
+        'checkOut',
         'discountType',
         'discountAmount',
         'discountPercent',
+        'originalAmount',
+        'originalRate',
+        'finalAmount',
+        'beneficiaryType',
+        'acknowledgingStaffName',
         'stage',
       ],
       'COMPLIMENTARY': [
-        'reservationRoomId',
-        'reservationId',
         'guestName',
         'roomNumber',
+        'roomType',
+        'confirmationNumber',
+        'amenityName',
+        'itemName',
+        'serviceName',
+        'quantity',
+        'estimatedCost',
+        'beneficiaryType',
+        'settlementType',
+        'acknowledgingStaffName',
         'reason',
         'stage',
       ],
@@ -651,13 +1005,22 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
         keysByType[type.toUpperCase()] ?? detailMap.keys.toList();
     final rows = <Widget>[];
     for (final key in requestedKeys) {
-      final value = detailMap[key] ?? snapshotMap[key];
+      final value =
+          detailMap[key] ??
+          snapshotMap[key] ??
+          _decisionAliasValue(type, key, detailMap, snapshotMap);
       if (value == null || value.toString().trim().isEmpty) continue;
-      rows.add(_detailLine(_humanizeKey(key), _displayValue(value)));
+      rows.add(
+        _detailLine(_humanizeKey(key), _displayDecisionValue(key, value)),
+      );
     }
     if (rows.isEmpty && snapshotMap.isNotEmpty) {
       for (final entry in snapshotMap.entries.take(8)) {
         if (entry.value == null) continue;
+        if (entry.key.toLowerCase().endsWith('id') ||
+            _looksLikeId(entry.value.toString())) {
+          continue;
+        }
         rows.add(
           _detailLine(_humanizeKey(entry.key), _displayValue(entry.value)),
         );
@@ -687,6 +1050,36 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
               ),
             ),
             const SizedBox(height: 10),
+            if (_decisionGuidance(type) != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E1A2E),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      color: Color(0xFFD8AD52),
+                      size: 17,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _decisionGuidance(type)!,
+                        style: const TextStyle(
+                          color: Color(0xFFB8C5D9),
+                          fontSize: 11,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ...rows,
           ],
         ),
@@ -709,6 +1102,63 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
       default:
         return 'REQUEST CONTEXT';
     }
+  }
+
+  String? _decisionGuidance(String type) {
+    switch (type.toUpperCase()) {
+      case 'DISCOUNT':
+        return 'Confirm the guest, room, discount basis, and final financial impact. Approve only when the request matches the property policy and supporting reason.';
+      case 'COMPLIMENTARY':
+        return 'Confirm the guest entitlement, room, quantity, and business reason. Check that the benefit is authorised and can be fulfilled operationally.';
+      default:
+        return null;
+    }
+  }
+
+  dynamic _decisionAliasValue(
+    String type,
+    String key,
+    Map<String, dynamic> details,
+    Map<String, dynamic> snapshot,
+  ) {
+    final combined = {...snapshot, ...details};
+    final aliases = <String, List<String>>{
+      'guestName': ['guest', 'guestFullName', 'primaryGuestName'],
+      'roomNumber': ['room', 'roomNo', 'roomName'],
+      'amenityName': ['amenity', 'amenityType', 'entitlement'],
+      'itemName': ['item', 'inventoryItem', 'productName'],
+      'serviceName': ['service', 'benefitName'],
+      'discountAmount': ['amount', 'discountValue'],
+      'discountPercent': ['percentage', 'percent'],
+      'estimatedCost': ['cost', 'amount'],
+    };
+    for (final alias in aliases[key] ?? const <String>[]) {
+      if (combined[alias] != null) return combined[alias];
+    }
+    return null;
+  }
+
+  String _displayDecisionValue(String key, dynamic value) {
+    if (key.toLowerCase().contains('date') ||
+        key.toLowerCase().contains('checkin') ||
+        key.toLowerCase().contains('checkout') ||
+        key.toLowerCase().endsWith('at')) {
+      final parsed = DateTime.tryParse(value.toString());
+      if (parsed != null) {
+        return DateFormat('d MMM yyyy · h:mm a').format(parsed.toLocal());
+      }
+    }
+    final numeric = num.tryParse(value.toString());
+    if (numeric != null &&
+        (key.toLowerCase().contains('amount') ||
+            key.toLowerCase().contains('cost') ||
+            key.toLowerCase().contains('price'))) {
+      return '₦${numeric.toStringAsFixed(2)}';
+    }
+    if (numeric != null && key.toLowerCase().contains('percent')) {
+      return '${numeric.toStringAsFixed(2)}%';
+    }
+    return _displayValue(value);
   }
 
   String _humanizeKey(String key) => key

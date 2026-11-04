@@ -19,11 +19,6 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
   const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts, pendingCheckInBypasses, eventHall, guestAmenity } = data.financial;
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
-  const estimatedRoomCharges = pendingNightAuditPostings.reduce(
-    (acc: number, posting: any) => acc + Number(posting.netAmount ?? posting.amount ?? posting.grossAmount ?? 0),
-    0,
-  );
-
   const unverifiedCompl = unverifiedComplimentary?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
 
   const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || (pendingDiscounts?.length || 0) > 0 || (pendingCheckInBypasses?.length || 0) > 0 || (eventHall?.warnings || 0) > 0 || (eventHall?.blockers || 0) > 0 || (guestAmenity?.blockers?.length || 0) > 0 || (guestAmenity?.zeroCostItems?.length || 0) > 0;
@@ -96,43 +91,11 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
         </div>
       )}
 
-      {/* ── Unposted Room Charges ───────────────────────────────────────── */}
-      {pendingNightAuditPostings?.length > 0 && (
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-bold text-amber-300">Unposted Room Charges</h4>
-              <p className="mt-0.5 text-xs text-amber-400/70">Rooms occupied tonight require nightly accommodation charges to be posted.</p>
-            </div>
-            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">
-              {pendingNightAuditPostings.length} pending
-            </span>
-          </div>
-          <div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.03] p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">Estimated Total</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-white">
-                  {formatMoney(estimatedRoomCharges, currency)}
-                </p>
-              </div>
-              <button
-                onClick={() => onResolve('ROOM_CHARGES_PREVIEW', { items: pendingNightAuditPostings, currency })}
-                className="group flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-5 py-2.5 text-xs font-bold text-amber-300 transition-all hover:bg-amber-400/20"
-              >
-                Review Charges
-                <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Complimentary Verifications ─────────────────────────────────── */}
       {unverifiedCompl.length > 0 && (
         <div className="pt-2">
           <div className="mb-3">
-            <h4 className="text-sm font-bold text-amber-300">Complimentary Verifications (Blocker)</h4>
+            <h4 className="text-sm font-bold text-amber-300">Complimentary Pending Approval (Blocker)</h4>
             <p className="mt-0.5 text-xs text-amber-400/70">Comped items or rooms must be verified and explained before closing the day.</p>
           </div>
           <div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.03] p-4 flex items-center justify-between shadow-sm transition-colors hover:border-amber-400/25">
@@ -158,7 +121,7 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
         <div className="pt-2">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-rose-300">Check-In Bypasses (Blocker)</h4>
+              <h4 className="text-sm font-bold text-rose-300">Check-In Bypass Pending Approval (Blocker)</h4>
               <p className="mt-0.5 text-xs text-rose-400/70">Guests checked in without the required deposit must be reviewed before closing the day.</p>
             </div>
             <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-xs font-bold text-rose-300">
@@ -193,7 +156,7 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
       {pendingDiscounts?.length > 0 && (
         <div className="pt-2">
           <div className="mb-3">
-            <h4 className="text-sm font-bold text-amber-300">Pending Discounts</h4>
+            <h4 className="text-sm font-bold text-amber-300">Discount Pending Approval</h4>
             <p className="mt-0.5 text-xs text-amber-400/70">Discounts awaiting management approval.</p>
           </div>
           <div className="space-y-2">

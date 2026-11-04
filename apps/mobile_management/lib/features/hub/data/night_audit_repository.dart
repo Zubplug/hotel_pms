@@ -170,6 +170,13 @@ class NightAuditRepository {
     );
   }
 
+  Future<void> resolveDiscountApproval({
+    required String approvalId,
+    required String action,
+  }) async {
+    await _dio.post('/manager/approvals/$approvalId/$action', data: {});
+  }
+
   Future<void> reconcileRoom({
     required String roomId,
     required String expectedStatus,

@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/storage/secure_storage_provider.dart';
 import '../../../../core/services/fcm_service.dart';
+import '../../../dashboard/presentation/providers/auditor_dashboard_provider.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../profile/presentation/providers/profile_provider.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -21,6 +24,7 @@ class AuthNotifier extends StateNotifier<AuthStatus> {
 
   Future<void> login(String token) async {
     await _tokenStorage.saveTokens(accessToken: token, refreshToken: '');
+    _invalidateSessionProviders();
     state = AuthStatus.authenticated;
   }
 
@@ -31,10 +35,17 @@ class AuthNotifier extends StateNotifier<AuthStatus> {
     await _ref.read(fcmServiceProvider).unregisterToken();
     await _tokenStorage.clearTokens();
     await _tokenStorage.clearUserCache();
+    _invalidateSessionProviders();
     state = AuthStatus.unauthenticated;
+  }
 
-    // Invalidate everything to clear in-memory state
-    _ref.invalidate(authProvider);
+  void _invalidateSessionProviders() {
+    // Profile data controls the role-specific dashboard. Clear it on both
+    // sides of a session transition so the next account cannot inherit the
+    // previous account's role or dashboard state.
+    _ref.invalidate(profileProvider);
+    _ref.invalidate(dashboardDataProvider);
+    _ref.invalidate(auditorDashboardDataProvider);
   }
 }
 

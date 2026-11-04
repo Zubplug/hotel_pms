@@ -6,11 +6,7 @@ import '../config/app_config.dart';
 import '../storage/secure_storage_provider.dart';
 
 /// Events broadcast over the WebSocket that the Manager App cares about.
-enum WsEventType {
-  approvalCreated,
-  approvalUpdated,
-  unknown,
-}
+enum WsEventType { approvalCreated, approvalUpdated, unknown }
 
 class WsEvent {
   final WsEventType type;
@@ -39,7 +35,24 @@ class WebSocketService {
     if (token == null) return;
 
     try {
-      final uri = Uri.parse('${AppConfig.wsUrl}?token=$token');
+      final configuredUri = Uri.parse(AppConfig.wsUrl);
+      final scheme = configuredUri.scheme == 'https'
+          ? 'wss'
+          : configuredUri.scheme == 'http'
+          ? 'ws'
+          : configuredUri.scheme;
+      final uri = Uri(
+        scheme: scheme,
+        userInfo: configuredUri.userInfo,
+        host: configuredUri.host,
+        // A port of zero can be injected by a local build configuration. It
+        // is not a valid production WebSocket port, so let the URI use the
+        // standard port for ws/wss instead.
+        port: configuredUri.port == 0 ? null : configuredUri.port,
+        path: configuredUri.path,
+        queryParameters: {...configuredUri.queryParameters, 'token': token},
+        fragment: configuredUri.fragment,
+      );
       _channel = WebSocketChannel.connect(uri);
 
       _channel!.stream.listen(
@@ -47,11 +60,20 @@ class WebSocketService {
           try {
             final data = jsonDecode(message as String) as Map<String, dynamic>;
             final eventType = _parseEventType(data['type'] as String? ?? '');
-            _controller!.add(WsEvent(eventType, data['payload'] as Map<String, dynamic>? ?? {}));
+            _controller!.add(
+              WsEvent(
+                eventType,
+                data['payload'] as Map<String, dynamic>? ?? {},
+              ),
+            );
           } catch (_) {}
         },
         onDone: _scheduleReconnect,
-        onError: (_) => _scheduleReconnect(),
+        onError: (Object error, StackTrace stackTrace) {
+          // Realtime updates are optional; a failed socket must not crash the
+          // dashboard or surface as an unhandled asynchronous exception.
+          _scheduleReconnect();
+        },
         cancelOnError: true,
       );
     } catch (_) {
@@ -61,9 +83,12 @@ class WebSocketService {
 
   WsEventType _parseEventType(String type) {
     switch (type) {
-      case 'APPROVAL_CREATED': return WsEventType.approvalCreated;
-      case 'APPROVAL_UPDATED': return WsEventType.approvalUpdated;
-      default: return WsEventType.unknown;
+      case 'APPROVAL_CREATED':
+        return WsEventType.approvalCreated;
+      case 'APPROVAL_UPDATED':
+        return WsEventType.approvalUpdated;
+      default:
+        return WsEventType.unknown;
     }
   }
 

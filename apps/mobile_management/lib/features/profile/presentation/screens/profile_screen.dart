@@ -195,7 +195,7 @@ class ProfileScreen extends ConsumerWidget {
 
                 // Footer
                 const Text(
-                  'LodgeCore Mobile\\nVersion 1.0.0\\n© 2026 LodgeCore',
+                  'LodgeCore Mobile\\nVersion 1.0.1\\n© 2026 LodgeCore',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _textMuted,
