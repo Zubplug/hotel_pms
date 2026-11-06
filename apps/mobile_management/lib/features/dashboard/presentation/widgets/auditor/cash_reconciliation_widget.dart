@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../models/auditor_dashboard_data.dart';
 import 'package:intl/intl.dart';
+import '../../models/auditor_dashboard_data.dart';
+
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+
+const _surface  = Color(0xFF0C1828);
+const _border   = Color(0xFF1A2D47);
+const _text     = Color(0xFFF0F5FF);
+const _textSub  = Color(0xFF8FA3BF);
+const _textDim  = Color(0xFF4D6480);
+const _amber    = Color(0xFFF59E0B);
+const _rose     = Color(0xFFF43F5E);
 
 class CashReconciliationWidget extends StatelessWidget {
   final CashReconciliation reconciliation;
@@ -9,138 +19,177 @@ class CashReconciliationWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const surfaceNavy = Color(0xFF1E293B);
-    const textSecondary = Color(0xFF94A3B8);
+    final fmt = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
 
-    final currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
+    final items = [
+      _RecItem(
+        label: 'Open Front Desk Shifts',
+        value: reconciliation.openShifts.toString(),
+        icon: Icons.desktop_windows_outlined,
+        hasIssue: reconciliation.openShifts > 0,
+        isWarning: false,
+      ),
+      _RecItem(
+        label: 'Pending Cash Handovers',
+        value: reconciliation.pendingHandovers.toString(),
+        icon: Icons.payments_outlined,
+        hasIssue: reconciliation.pendingHandovers > 0,
+        isWarning: false,
+      ),
+      _RecItem(
+        label: 'Unreconciled Cash',
+        value: fmt.format(reconciliation.unreconciledCash),
+        icon: Icons.money_off_outlined,
+        hasIssue: reconciliation.unreconciledCash > 0,
+        isWarning: false,
+      ),
+      _RecItem(
+        label: 'POS Sessions to Close',
+        value: reconciliation.posSessionsRequiringClosure.toString(),
+        icon: Icons.storefront_outlined,
+        hasIssue: reconciliation.posSessionsRequiringClosure > 0,
+        isWarning: false,
+      ),
+      _RecItem(
+        label: 'Outstanding Deposits',
+        value: reconciliation.outstandingDeposits.toString(),
+        icon: Icons.account_balance_outlined,
+        hasIssue: reconciliation.outstandingDeposits > 0,
+        isWarning: true,
+      ),
+    ];
 
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: surfaceNavy,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'CASH & SHIFT RECONCILIATION',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                  color: textSecondary,
+          // ── Header ──────────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Row(children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: _amber.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(9),
                 ),
+                child: const Icon(Icons.point_of_sale_rounded, color: _amber, size: 16),
               ),
-              Icon(Icons.point_of_sale_rounded, color: textSecondary, size: 16),
-            ],
+              const SizedBox(width: 10),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CASH & SHIFT RECONCILIATION',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Open positions before audit close',
+                    style: TextStyle(color: _textDim, fontSize: 10),
+                  ),
+                ],
+              ),
+            ]),
           ),
-          const SizedBox(height: 16),
-          _buildItem(
-            'Open Front Desk Shifts',
-            reconciliation.openShifts.toString(),
-            Icons.desktop_windows_outlined,
-            reconciliation.openShifts > 0,
-          ),
-          const Divider(color: Colors.white10, height: 24),
-          _buildItem(
-            'Pending Cash Handovers',
-            reconciliation.pendingHandovers.toString(),
-            Icons.payments_outlined,
-            reconciliation.pendingHandovers > 0,
-          ),
-          const Divider(color: Colors.white10, height: 24),
-          _buildItem(
-            'Unreconciled Cash',
-            currencyFormat.format(reconciliation.unreconciledCash),
-            Icons.money_off_outlined,
-            reconciliation.unreconciledCash > 0,
-          ),
-          const Divider(color: Colors.white10, height: 24),
-          _buildItem(
-            'POS Sessions Requiring Closure',
-            reconciliation.posSessionsRequiringClosure.toString(),
-            Icons.storefront_outlined,
-            reconciliation.posSessionsRequiringClosure > 0,
-          ),
-          const Divider(color: Colors.white10, height: 24),
-          _buildItem(
-            'Outstanding Deposits',
-            reconciliation.outstandingDeposits.toString(),
-            Icons.account_balance_outlined,
-            reconciliation.outstandingDeposits > 0,
-            isWarning: true,
+          const SizedBox(height: 12),
+          Container(height: 1, color: _border),
+          // ── Rows ────────────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: items.map((it) => _RecRow(item: it)).toList(),
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildItem(
-    String label,
-    String value,
-    IconData icon,
-    bool hasIssues, {
-    bool isWarning = false,
-  }) {
-    final issueColor = isWarning ? Colors.orangeAccent : Colors.redAccent;
-    return Row(
-      children: [
+// ─── Data Model ───────────────────────────────────────────────────────────────
+class _RecItem {
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool hasIssue;
+  final bool isWarning;
+  const _RecItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.hasIssue,
+    required this.isWarning,
+  });
+}
+
+// ─── Single Row ───────────────────────────────────────────────────────────────
+class _RecRow extends StatelessWidget {
+  final _RecItem item;
+  const _RecRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final issueColor = item.isWarning ? _amber : _rose;
+    final activeColor = item.hasIssue ? issueColor : _textDim;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          width: 36, height: 36,
           decoration: BoxDecoration(
-            color: hasIssues
-                ? issueColor.withValues(alpha: 0.1)
-                : Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(8),
+            color: item.hasIssue
+                ? issueColor.withValues(alpha: .10)
+                : _border.withValues(alpha: .5),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: hasIssues ? issueColor : Colors.white54,
-          ),
+          child: Icon(item.icon, color: activeColor, size: 17),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(
-            label,
+            item.label,
             style: TextStyle(
-              fontSize: 14,
-              color: Color(0xFFF8FAFC),
-              fontWeight: FontWeight.w500,
+              color: item.hasIssue ? _text : _textSub,
+              fontSize: 12,
+              fontWeight: item.hasIssue ? FontWeight.w600 : FontWeight.w500,
             ),
           ),
         ),
-        if (hasIssues)
+        if (item.hasIssue)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: issueColor,
-              borderRadius: BorderRadius.circular(12),
+              color: issueColor.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: issueColor.withValues(alpha: .3)),
             ),
             child: Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
+              item.value,
+              style: TextStyle(
+                color: issueColor,
                 fontSize: 12,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w800,
               ),
             ),
           )
         else
           Text(
-            value,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.3),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            item.value,
+            style: const TextStyle(color: _textDim, fontSize: 12, fontWeight: FontWeight.w500),
           ),
-      ],
+      ]),
     );
   }
 }

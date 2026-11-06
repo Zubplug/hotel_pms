@@ -84,8 +84,6 @@ export default function TermsPage() {
 
             <Section title="19. General"><p>If any provision is invalid or unenforceable, the remaining provisions remain in effect. Failure to enforce a provision is not a waiver. You may not transfer these Terms without our written consent; we may assign them as part of a merger, restructuring, sale of assets, or transfer of the Service. These Terms constitute the entire agreement concerning the Service.</p></Section>
 
-            <Section title="20. Contact LodgeCore"><address style={{ fontStyle: "normal", lineHeight: 1.9 }}><strong style={{ color: "var(--text-primary)" }}>ZUBPLUG DIGITAL INTEGRATED SERVICES LIMITED</strong><br />56, New Maitama Street, Opposite Arsenal Guest House, Kubwa<br />Abuja, Nigeria<br /><span style={{ color: "var(--text-muted)" }}>Support: </span><a href="mailto:support@getlodgecore.com" style={{ color: "var(--accent)", textDecoration: "underline" }}>support@getlodgecore.com</a><br /><a href="tel:+2347085094454" style={{ color: "var(--accent)", textDecoration: "underline" }}>+234 708 509 4454</a></address></Section>
-
             <div style={{ borderTop: "1px solid var(--border)", marginTop: 46, paddingTop: 22, display: "flex", flexWrap: "wrap", gap: 18, justifyContent: "space-between", fontSize: 13 }}><Link href="/privacy" style={{ color: "var(--accent)" }}>Privacy policy →</Link><Link href="/book-demo" style={{ color: "var(--accent)" }}>Contact LodgeCore →</Link></div>
           </article>
         </div>

@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,95 @@ const _card = Color(0xFF111D33);
 const _gold = Color(0xFFD4A853);
 const _text = Color(0xFFEEF2FF);
 const _muted = Color(0xFF94A3B8);
+const _line = Color(0xFF1E3355);
+const _emerald = Color(0xFF34D399);
+const _scrim = Color(0xCC030712);
+const _dialogShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.all(Radius.circular(24)),
+  side: BorderSide(color: Color(0x40D4A853)),
+);
+
+/// Shared launcher: blurred scrim, spring entrance and a unified theme for
+/// inputs and buttons so every audit dialog looks and feels identical.
+Future<T?> _showAuditDialog<T>({
+  required BuildContext context,
+  Color? barrierColor,
+  required WidgetBuilder builder,
+}) {
+  return showDialog<T>(
+    context: context,
+    barrierColor: _scrim,
+    builder: (dialogContext) {
+      final base = Theme.of(dialogContext);
+      OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: c, width: w),
+      );
+      final themed = base.copyWith(
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: _bg,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
+          labelStyle: const TextStyle(color: _muted, fontSize: 13),
+          hintStyle: TextStyle(color: _muted.withValues(alpha: .6)),
+          enabledBorder: border(_line),
+          border: border(_line),
+          focusedBorder: border(_gold, 1.4),
+          errorBorder: border(Colors.redAccent.withValues(alpha: .7)),
+          focusedErrorBorder: border(Colors.redAccent, 1.4),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.w800,
+              letterSpacing: .3,
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            side: const BorderSide(color: _line),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: _muted,
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        textSelectionTheme: const TextSelectionThemeData(cursorColor: _gold),
+      );
+      return BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: Theme(
+          data: themed,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutBack,
+            builder: (_, t, child) => Opacity(
+              opacity: t.clamp(0.0, 1.0),
+              child: Transform.scale(scale: .94 + .06 * t, child: child),
+            ),
+            child: builder(dialogContext),
+          ),
+        ),
+      );
+    },
+  );
+}
 
 String _displayDate(dynamic input) {
   final parsed = DateTime.tryParse(input?.toString() ?? '');
@@ -163,22 +253,17 @@ class _NightAuditReviewScreenState
         _header(_displayDate(businessDate)),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
             children: [
               Text(
-                stages[step].title,
+                stages[step].subtitle,
                 style: const TextStyle(
-                  color: _text,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+                  color: _muted,
+                  fontSize: 13,
+                  height: 1.4,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                stages[step].subtitle,
-                style: const TextStyle(color: _muted),
-              ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               if (step < 4) _stageContent(data, blockers),
               if (step == 4) _signOff(data, blockers),
             ],
@@ -190,10 +275,10 @@ class _NightAuditReviewScreenState
   }
 
   Widget _header(String date) => Container(
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+    padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
     decoration: const BoxDecoration(
       color: _bg,
-      border: Border(bottom: BorderSide(color: Color(0xFF1E3355))),
+      border: Border(bottom: BorderSide(color: _line)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,43 +286,84 @@ class _NightAuditReviewScreenState
         Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Text(
+                widget.propertyName.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _gold,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _line),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  const Icon(Icons.event_rounded, color: _muted, size: 12),
+                  const SizedBox(width: 6),
                   Text(
-                    widget.propertyName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    date,
                     style: const TextStyle(
-                      color: _gold,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      color: _text,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Business date $date',
-                    style: const TextStyle(color: _muted, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.nightlight_round, color: _gold),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
+        Row(
+          children: List.generate(stages.length, (i) {
+            final done = i < step;
+            final active = i == step;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: i == stages.length - 1 ? 0 : 6),
+                child: GestureDetector(
+                  onTap: i < step ? () => setState(() => step = i) : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    height: 4,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: done
+                          ? _emerald
+                          : active
+                          ? _gold
+                          : _line,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 14),
         Row(
           children: [
             Container(
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: _gold.withValues(alpha: .14),
-                borderRadius: BorderRadius.circular(11),
+                color: _gold.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _gold.withValues(alpha: .3)),
               ),
-              child: Icon(stages[step].icon, color: _gold, size: 18),
+              child: Icon(stages[step].icon, color: _gold, size: 19),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,43 +371,25 @@ class _NightAuditReviewScreenState
                   Text(
                     'STEP ${step + 1} OF ${stages.length}',
                     style: const TextStyle(
-                      color: _gold,
+                      color: _muted,
                       fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     stages[step].title,
                     style: const TextStyle(
                       color: _text,
-                      fontSize: 17,
+                      fontSize: 18,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
               ),
             ),
-            Text(
-              '${((step + 1) / stages.length * 100).round()}%',
-              style: const TextStyle(
-                color: _muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
           ],
-        ),
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: (step + 1) / stages.length,
-            minHeight: 5,
-            backgroundColor: Colors.white10,
-            valueColor: const AlwaysStoppedAnimation<Color>(_gold),
-          ),
         ),
       ],
     ),
@@ -583,97 +691,138 @@ class _NightAuditReviewScreenState
             ? text(sample['title'])
             : _categoryTitle(group.key);
         final color = _categoryColor(group.key);
+        final isWarn = _isWarningKey(group.key);
+        final isCash = group.key == 'cash-handover' || group.key == 'cash-drop';
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: _card,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withValues(alpha: .28)),
+            border: Border.all(color: _line),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => group.key == 'guest-amenity'
+                  ? _reviewGuestAmenity(sample)
+                  : isCash
+                  ? _openCashInstructionScreen(title, group.key, group.value)
+                  : _openBlockerScreen(title, group.value),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(width: 4, color: color),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: .12),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    _categoryIcon(group.key),
+                                    color: color,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: const TextStyle(
+                                      color: _text,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: .14),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${group.value.length}',
+                                    style: TextStyle(
+                                      color: color,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              text(sample['detail']),
+                              style: const TextStyle(
+                                color: _muted,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: color.withValues(alpha: .4),
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    isWarn ? 'ADVISORY' : 'BLOCKER',
+                                    style: TextStyle(
+                                      color: color,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  isCash ? 'Instructions' : 'Review',
+                                  style: TextStyle(
+                                    color: color,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: color,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    child: Icon(_categoryIcon(group.key), color: color),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: _text,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${group.value.length} record${group.value.length == 1 ? '' : 's'} require review',
-                          style: const TextStyle(color: _muted, fontSize: 12),
-                        ),
-                        Text(
-                          text(sample['detail']),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: color.withValues(alpha: .85),
-                            fontSize: 11,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _isWarningKey(group.key)
-                              ? 'WARNING • does not block close'
-                              : 'BLOCKER • must be resolved before close',
-                          style: TextStyle(
-                            color: color.withValues(alpha: .9),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: .7,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => group.key == 'guest-amenity'
-                      ? _reviewGuestAmenity(sample)
-                      : group.key == 'cash-handover' || group.key == 'cash-drop'
-                      ? _openCashInstructionScreen(
-                          title,
-                          group.key,
-                          group.value,
-                        )
-                      : _openBlockerScreen(title, group.value),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: color,
-                    side: BorderSide(color: color.withValues(alpha: .45)),
-                  ),
-                  icon: const Icon(Icons.visibility_rounded, size: 16),
-                  label: Text(
-                    group.key == 'cash-handover' || group.key == 'cash-drop'
-                        ? 'View handling instructions'
-                        : 'Review all records',
-                  ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         );
       }).toList(),
@@ -820,9 +969,9 @@ class _NightAuditReviewScreenState
       _ =>
         'This order must be settled or voided by the responsible waiter at the POS terminal.',
     };
-    final action = await showDialog<String>(
+    final action = await _showAuditDialog<String>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => _SystemControlDialog(
         title: title,
         description: description,
@@ -886,9 +1035,9 @@ class _NightAuditReviewScreenState
     final message = isHandover
         ? 'Confirm the physical handover reference and amount with the General Cashier. The custody transfer must be recorded before this item can be closed.'
         : 'Confirm the physical cash drop with the responsible cashier and record it through the cash-management workflow.';
-    await showDialog<void>(
+    await _showAuditDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => _CashFollowUpDialog(
         title: title,
         message: message,
@@ -912,13 +1061,13 @@ class _NightAuditReviewScreenState
     final expectedStatus = text(item['expected']);
     if (roomId.isEmpty) return false;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await _showAuditDialog<bool>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => Dialog(
         backgroundColor: _card,
         insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: _dialogShape,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
           child: SingleChildScrollView(
@@ -1160,18 +1309,45 @@ class _NightAuditReviewScreenState
   );
 
   Future<bool> _resolveOperational(Map<String, dynamic> entry) async {
-    final item = map(entry['item']);
+    var item = map(entry['item']);
     final guest = map(item['primaryGuest']);
     final isArrival = entry['key'] == 'arrival';
+    if (!isArrival && text(item['id']).isNotEmpty) {
+      try {
+        final details = await ref
+            .read(nightAuditRepositoryProvider)
+            .fetchReservationDetails(
+              text(item['id']),
+              propertyId: widget.propertyId,
+            );
+        item = {...item, ...details};
+      } catch (_) {
+        // The workflow snapshot remains usable if the detailed reservation
+        // request is temporarily unavailable.
+      }
+    }
+    if (!mounted) return false;
     final firstName = text(guest['firstName'], 'Guest');
     final lastName = text(guest['lastName'], '');
-    final action = await showDialog<String>(
+    final balanceSummary = map(item['balanceSummary']);
+    final folios = item['folios'] is List ? item['folios'] as List : const [];
+    final balance =
+        num.tryParse(balanceSummary['balance']?.toString() ?? '') ??
+        folios.fold<num>(
+          0,
+          (total, folio) =>
+              total +
+              (num.tryParse(map(folio)['balance']?.toString() ?? '') ?? 0),
+        );
+    final hasDebt = balance > 0.01;
+    final hasCredit = balance < -0.01;
+    final action = await _showAuditDialog<String>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => Dialog(
         backgroundColor: _card,
         insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: _dialogShape,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
           child: SingleChildScrollView(
@@ -1331,6 +1507,94 @@ class _NightAuditReviewScreenState
                         ],
                       ),
                       const SizedBox(height: 16),
+                      if (!isArrival) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color:
+                                (hasDebt
+                                        ? Colors.redAccent
+                                        : hasCredit
+                                        ? Colors.lightBlueAccent
+                                        : Colors.greenAccent)
+                                    .withValues(alpha: .08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color:
+                                  (hasDebt
+                                          ? Colors.redAccent
+                                          : hasCredit
+                                          ? Colors.lightBlueAccent
+                                          : Colors.greenAccent)
+                                      .withValues(alpha: .24),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                hasDebt
+                                    ? Icons.warning_amber_rounded
+                                    : hasCredit
+                                    ? Icons.account_balance_wallet_rounded
+                                    : Icons.check_circle_rounded,
+                                color: hasDebt
+                                    ? Colors.redAccent
+                                    : hasCredit
+                                    ? Colors.lightBlueAccent
+                                    : Colors.greenAccent,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      hasDebt
+                                          ? 'Balance due'
+                                          : hasCredit
+                                          ? 'Guest credit'
+                                          : 'Folio settled',
+                                      style: const TextStyle(
+                                        color: _text,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${balanceSummary['currency'] ?? 'NGN'} ${NumberFormat('#,##0.00').format(balance.abs())}',
+                                      style: TextStyle(
+                                        color: hasDebt
+                                            ? Colors.redAccent
+                                            : hasCredit
+                                            ? Colors.lightBlueAccent
+                                            : Colors.greenAccent,
+                                        fontSize: 19,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      hasDebt
+                                          ? 'If the guest has departed, transfer the debt to City Ledger.'
+                                          : hasCredit
+                                          ? 'Resolve the credit before completing checkout.'
+                                          : 'The guest can be checked out normally.',
+                                      style: const TextStyle(
+                                        color: _muted,
+                                        fontSize: 11,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(13),
@@ -1410,14 +1674,33 @@ class _NightAuditReviewScreenState
                           'Move checkout forward by one night.',
                           Colors.lightBlueAccent,
                         ),
-                        _resolutionAction(
-                          dialogContext,
-                          'check-out',
-                          Icons.check_circle_outline_rounded,
-                          'Check out guest',
-                          'Complete checkout for the current business date.',
-                          Colors.greenAccent,
-                        ),
+                        if (hasDebt)
+                          _resolutionAction(
+                            dialogContext,
+                            'skipper',
+                            Icons.account_balance_rounded,
+                            'Transfer debt to City Ledger',
+                            'Move the outstanding balance to Accounts Receivable and complete checkout.',
+                            Colors.orangeAccent,
+                          )
+                        else if (hasCredit)
+                          _resolutionAction(
+                            dialogContext,
+                            'transfer-credit',
+                            Icons.payments_outlined,
+                            'Transfer guest credit to refund queue',
+                            'Record the credit as a pending guest refund before checkout.',
+                            Colors.lightBlueAccent,
+                          )
+                        else
+                          _resolutionAction(
+                            dialogContext,
+                            'check-out',
+                            Icons.check_circle_outline_rounded,
+                            'Check out guest',
+                            'Complete checkout for the current business date.',
+                            Colors.greenAccent,
+                          ),
                       ],
                       const SizedBox(height: 8),
                       Center(
@@ -1451,6 +1734,21 @@ class _NightAuditReviewScreenState
             'newCheckoutDate': nextDate.toIso8601String().split('T').first,
           },
         );
+      } else if (action == 'skipper' || action == 'transfer-credit') {
+        final reason = await _requestDepartureReason(
+          action == 'skipper'
+              ? 'Transfer debt to City Ledger'
+              : 'Transfer guest credit to refund queue',
+          action == 'skipper'
+              ? 'Explain why the guest departed without settling the balance.'
+              : 'Explain why the guest credit should remain pending for Finance.',
+        );
+        if (reason == null || reason.trim().isEmpty || !mounted) return false;
+        await repository.reservationAction(
+          reservationId,
+          action,
+          data: {'reason': reason.trim()},
+        );
       } else {
         await repository.reservationAction(reservationId, action);
       }
@@ -1475,6 +1773,37 @@ class _NightAuditReviewScreenState
       }
       return false;
     }
+  }
+
+  Future<String?> _requestDepartureReason(String title, String hint) async {
+    final controller = TextEditingController();
+    final reason = await _showAuditDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _card,
+        title: Text(title, style: const TextStyle(color: _text)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          style: const TextStyle(color: _text),
+          decoration: InputDecoration(hintText: hint, labelText: 'Reason'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return reason;
   }
 
   Widget _dialogPill(IconData icon, String label) => Container(
@@ -1697,45 +2026,87 @@ class _NightAuditReviewScreenState
     final blocked =
         serverBlockers > 0 ||
         blockers.any((item) => !_isWarningKey(text(item['key'])));
+    final isLast = step == 4;
     return SafeArea(
+      top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: const BoxDecoration(
           color: _bg,
-          border: Border(top: BorderSide(color: Color(0xFF1E3355))),
+          border: Border(top: BorderSide(color: _line)),
         ),
         child: Row(
           children: [
-            if (step > 0)
-              OutlinedButton(
-                onPressed: () => setState(() => step--),
-                child: const Icon(Icons.arrow_back_rounded),
-              )
-            else
-              OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+            SizedBox(
+              height: 52,
+              child: OutlinedButton(
+                onPressed: () => step > 0
+                    ? setState(() => step--)
+                    : Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _muted,
+                  side: const BorderSide(color: _line),
+                  padding: EdgeInsets.symmetric(horizontal: step > 0 ? 16 : 20),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: step > 0
+                    ? const Icon(Icons.arrow_back_rounded, size: 20)
+                    : const Text(
+                        'Cancel',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
               ),
+            ),
             const SizedBox(width: 12),
             Expanded(
-              child: FilledButton(
-                onPressed: step == 4
-                    ? (blocked || confirming
-                          ? null
-                          : () => _openRoomChargesReview(data))
-                    : () => setState(() => step++),
-                style: FilledButton.styleFrom(
-                  backgroundColor: step == 4 ? Colors.green : _gold,
-                  foregroundColor: _bg,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+              child: SizedBox(
+                height: 52,
+                child: FilledButton(
+                  onPressed: isLast
+                      ? (blocked || confirming
+                            ? null
+                            : () => _openRoomChargesReview(data))
+                      : () => setState(() => step++),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isLast ? _emerald : _gold,
+                    foregroundColor: _bg,
+                    disabledBackgroundColor: _card,
+                    disabledForegroundColor: _muted,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: confirming
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isLast
+                                  ? (blocked
+                                        ? Icons.lock_outline_rounded
+                                        : Icons.nightlight_round)
+                                  : Icons.arrow_forward_rounded,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isLast ? 'Execute Night Audit' : 'Continue',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                letterSpacing: .3,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
-                child: confirming
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(step == 4 ? 'Execute Night Audit' : 'Continue'),
               ),
             ),
           ],
@@ -1804,13 +2175,13 @@ class _NightAuditReviewScreenState
       return _resolveTransaction(entry);
     }
     final notes = TextEditingController();
-    final approved = await showDialog<bool>(
+    final approved = await _showAuditDialog<bool>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => Dialog(
         backgroundColor: _card,
         insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: _dialogShape,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
           child: SingleChildScrollView(
@@ -1969,9 +2340,9 @@ class _NightAuditReviewScreenState
 
   Future<bool> _resolveBypass(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
-    final decision = await showDialog<Map<String, String>>(
+    final decision = await _showAuditDialog<Map<String, String>>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => _CheckInBypassDialog(
         item: item,
         onClose: () => Navigator.pop(dialogContext),
@@ -2019,9 +2390,9 @@ class _NightAuditReviewScreenState
 
   Future<bool> _resolveTransaction(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
-    final result = await showDialog<Map<String, String>>(
+    final result = await _showAuditDialog<Map<String, String>>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => _TransactionVerificationDialog(
         item: item,
         onClose: () => Navigator.pop(dialogContext),
@@ -2122,9 +2493,9 @@ class _NightAuditReviewScreenState
             reservationRoom['checkOut'] != null
         ? '${_displayDate(reservationRoom['checkIn'])} – ${_displayDate(reservationRoom['checkOut'])}'
         : 'Not recorded';
-    final decision = await showDialog<String>(
+    final decision = await _showAuditDialog<String>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => _FinancialControlDialog(
         title: 'Review discount approval',
         subtitle:
@@ -2199,9 +2570,9 @@ class _NightAuditReviewScreenState
 
   Future<bool> _reviewGuestAmenity(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
-    await showDialog<void>(
+    await _showAuditDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: .78),
+      barrierColor: _scrim,
       builder: (dialogContext) => _GuestAmenityDialog(
         item: item,
         onClose: () => Navigator.pop(dialogContext),
@@ -2212,23 +2583,43 @@ class _NightAuditReviewScreenState
 
   Widget _success(String message) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
     decoration: BoxDecoration(
-      color: Colors.green.withValues(alpha: .08),
-      borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: Colors.green.withValues(alpha: .25)),
+      color: _card,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: _emerald.withValues(alpha: .22)),
     ),
-    child: Row(
+    child: Column(
       children: [
-        const Icon(Icons.check_circle_rounded, color: Colors.greenAccent),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            message,
-            style: const TextStyle(
-              color: Colors.greenAccent,
-              fontWeight: FontWeight.w700,
-            ),
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _emerald.withValues(alpha: .12),
+            border: Border.all(color: _emerald.withValues(alpha: .35)),
+          ),
+          child: const Icon(Icons.check_rounded, color: _emerald, size: 28),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'ALL CLEAR',
+          style: TextStyle(
+            color: _emerald,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.6,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: _text,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            height: 1.4,
           ),
         ),
       ],
@@ -2238,12 +2629,22 @@ class _NightAuditReviewScreenState
     width: double.infinity,
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: const Color(0xFF1B263D),
+      color: _gold.withValues(alpha: .05),
       borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: _gold.withValues(alpha: .16)),
     ),
-    child: Text(
-      message,
-      style: const TextStyle(color: _muted, fontSize: 12, height: 1.4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.shield_outlined, color: _gold, size: 16),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(color: _muted, fontSize: 12, height: 1.45),
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -2290,7 +2691,7 @@ class _CashFollowUpDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: _card,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: _dialogShape,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 470),
         child: SingleChildScrollView(
@@ -2545,7 +2946,7 @@ class _CheckInBypassDialogState extends State<_CheckInBypassDialog> {
     return Dialog(
       backgroundColor: _card,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: _dialogShape,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480),
         child: SingleChildScrollView(
@@ -3133,7 +3534,7 @@ class CashControlDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: _card,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: _dialogShape,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
         child: SingleChildScrollView(
@@ -3419,7 +3820,7 @@ class _GuestAmenityDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: _card,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: _dialogShape,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
         child: SingleChildScrollView(
@@ -3666,7 +4067,7 @@ class _FinancialControlDialog extends StatelessWidget {
   Widget build(BuildContext context) => Dialog(
     backgroundColor: _card,
     insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+    shape: _dialogShape,
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 460),
       child: SingleChildScrollView(
@@ -3845,7 +4246,7 @@ class _SystemControlDialogState extends State<_SystemControlDialog> {
     return Dialog(
       backgroundColor: _card,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: _dialogShape,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
         child: SingleChildScrollView(
@@ -4543,7 +4944,7 @@ class RoomChargesReviewScreen extends StatelessWidget {
       0,
       (sum, item) => sum + _amount(item, 'netAmount', 'amount'),
     );
-    final confirmed = await showDialog<bool>(
+    final confirmed = await _showAuditDialog<bool>(
       context: context,
       builder: (dialogContext) => Dialog(
         backgroundColor: _card,
@@ -4936,6 +5337,7 @@ class _NightAuditBlockerDetailsScreenState
     extends State<NightAuditBlockerDetailsScreen> {
   late final List<Map<String, dynamic>> remaining;
   late final int total;
+  int? processingIndex;
 
   @override
   void initState() {
@@ -4978,23 +5380,35 @@ class _NightAuditBlockerDetailsScreenState
         ),
         actions: [
           Container(
-            margin: const EdgeInsets.only(right: 14),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.redAccent.withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.redAccent.withValues(alpha: .25),
-              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: .3)),
             ),
-            child: Text(
-              '${remaining.length} OPEN',
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .6,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${remaining.length} OPEN',
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .8,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -5002,21 +5416,32 @@ class _NightAuditBlockerDetailsScreenState
       body: remaining.isEmpty
           ? Center(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(28),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.check_circle_rounded,
-                      color: Colors.greenAccent,
-                      size: 64,
+                    Container(
+                      width: 84,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _emerald.withValues(alpha: .1),
+                        border: Border.all(
+                          color: _emerald.withValues(alpha: .35),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.check_rounded,
+                        color: _emerald,
+                        size: 44,
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 22),
                     const Text(
                       'All records resolved',
                       style: TextStyle(
                         color: _text,
-                        fontSize: 20,
+                        fontSize: 21,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -5024,12 +5449,26 @@ class _NightAuditBlockerDetailsScreenState
                     const Text(
                       'The Night Audit control has been refreshed successfully.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: _muted),
+                      style: TextStyle(color: _muted, height: 1.4),
                     ),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Return to audit'),
+                    const SizedBox(height: 26),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _gold,
+                          foregroundColor: _bg,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Return to audit',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -5048,102 +5487,95 @@ class _NightAuditBlockerDetailsScreenState
     );
   }
 
-  Widget _intro() => Container(
-    padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [const Color(0xFF182A48), _card],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
+  Widget _intro() {
+    final done = total - remaining.length;
+    final progress = total == 0 ? 1.0 : done / total;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF182A48), _card],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _gold.withValues(alpha: .25)),
       ),
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _gold.withValues(alpha: .28)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: _gold.withValues(alpha: .14),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.fact_check_rounded, color: _gold),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Resolution queue',
-                    style: TextStyle(
-                      color: _text,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 64,
+            height: 64,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 64,
+                  height: 64,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 5,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: _line,
+                    valueColor: const AlwaysStoppedAnimation<Color>(_gold),
                   ),
-                  SizedBox(height: 3),
-                  Text(
-                    'Clear every record before final sign-off',
-                    style: TextStyle(color: _muted, fontSize: 11),
+                ),
+                Text(
+                  '$done/$total',
+                  style: const TextStyle(
+                    color: _text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Control progress',
-              style: TextStyle(
-                color: _muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            Text(
-              '${total - remaining.length}/$total resolved',
-              style: const TextStyle(
-                color: Colors.amberAccent,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: total == 0 ? 1 : (total - remaining.length) / total,
-            minHeight: 7,
-            backgroundColor: Colors.white.withValues(alpha: .09),
-            valueColor: const AlwaysStoppedAnimation<Color>(_gold),
           ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Review the evidence on each record. Every resolution is logged against the Night Audit control trail.',
-          style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Resolution queue',
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Review the evidence on each record. Every resolution is logged to the audit trail.',
+                  style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _recordCard(int index, Map<String, dynamic> entry) {
     final item = entry['item'] is Map
         ? Map<String, dynamic>.from(entry['item'] as Map)
         : <String, dynamic>{};
     final action = entry['action'];
-    final color = action == 'info' ? Colors.orangeAccent : Colors.amberAccent;
     final key = entry['key']?.toString() ?? '';
+    final isAdvisory = const {
+      'room-discrepancy',
+      'cash-handover',
+      'cash-drop',
+    }.contains(key);
+    final color = isAdvisory ? Colors.amberAccent : const Color(0xFFFF5A5F);
+    final actionIcon = key == 'arrival' || key == 'departure'
+        ? Icons.edit_calendar_rounded
+        : key == 'room-discrepancy'
+        ? Icons.cleaning_services_rounded
+        : key == 'cash-handover' || key == 'cash-drop'
+        ? Icons.account_balance_wallet_rounded
+        : Icons.task_alt_rounded;
     final isReservation = key == 'arrival' || key == 'departure';
     final guest = item['primaryGuest'] is Map
         ? Map<String, dynamic>.from(item['primaryGuest'] as Map)
@@ -5164,174 +5596,266 @@ class _NightAuditBlockerDetailsScreenState
               : null),
       fallback: '—',
     );
+    final isInfo = action == 'info';
+    final actionLabel = isInfo
+        ? (key == 'arrival' || key == 'departure'
+              ? 'Resolve reservation'
+              : key == 'room-discrepancy'
+              ? 'Resolve room'
+              : key == 'cash-handover' || key == 'cash-drop'
+              ? 'Resolve cash control'
+              : 'Open responsible module')
+        : 'Resolve this record';
+    final rows = <Widget>[
+      if (!isReservation && item['waiterName'] != null)
+        _detail('Waiter', item['waiterName']),
+      if (!isReservation && item['outletName'] != null)
+        _detail('Outlet', item['outletName']),
+      if (!isReservation && (item['amount'] != null || item['total'] != null))
+        _detail('Amount', '₦${value(item['amount'] ?? item['total'])}'),
+    ];
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 14),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: .25)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _line),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${index + 1}',
-                  style: TextStyle(color: color, fontWeight: FontWeight.w800),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 4, color: color),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      isReservation ? guestName : value(entry['title']),
-                      style: const TextStyle(
-                        color: _text,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: Text(
+                            '${index + 1}'.padLeft(2, '0'),
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isReservation
+                                    ? guestName
+                                    : value(entry['title']),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _text,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                value(entry['title']).toUpperCase(),
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (roomNumber != '—')
+                          _infoPill(Icons.hotel_rounded, 'Room $roomNumber'),
+                        if (item['confirmationNumber'] != null)
+                          _infoPill(
+                            Icons.confirmation_number_outlined,
+                            value(item['confirmationNumber']),
+                          ),
+                        if (item['checkIn'] != null)
+                          _infoPill(
+                            Icons.login_rounded,
+                            _shortDate(item['checkIn']),
+                          ),
+                        if (item['checkOut'] != null)
+                          _infoPill(
+                            Icons.logout_rounded,
+                            _shortDate(item['checkOut']),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _bg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: color,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'REASON FOR REVIEW',
+                                  style: TextStyle(
+                                    color: color,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  value(entry['detail']),
+                                  style: const TextStyle(
+                                    color: _text,
+                                    fontSize: 12,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      value(entry['title']),
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                    if (rows.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      ...rows,
+                    ],
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: FilledButton(
+                        onPressed: processingIndex == null
+                            ? () async {
+                                setState(() => processingIndex = index);
+                                var resolved = false;
+                                try {
+                                  resolved = isInfo
+                                      ? await widget.onOpenModule(entry)
+                                      : await widget.onResolve(entry);
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      if (resolved &&
+                                          index < remaining.length) {
+                                        remaining.removeAt(index);
+                                      }
+                                      processingIndex = null;
+                                    });
+                                  }
+                                }
+                              }
+                            : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: isAdvisory
+                              ? color.withValues(alpha: .14)
+                              : color,
+                          foregroundColor: isAdvisory ? color : Colors.white,
+                          elevation: 0,
+                          side: isAdvisory
+                              ? BorderSide(color: color.withValues(alpha: .5))
+                              : null,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (processingIndex == index) ...[
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                            ] else ...[
+                              Icon(actionIcon, size: 19),
+                              const SizedBox(width: 10),
+                            ],
+                            Text(
+                              processingIndex == index
+                                  ? 'Processing…'
+                                  : actionLabel,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: .3,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (roomNumber != '—')
-                _infoPill(Icons.hotel_rounded, 'Room $roomNumber'),
-              if (item['confirmationNumber'] != null)
-                _infoPill(
-                  Icons.confirmation_number_outlined,
-                  value(item['confirmationNumber']),
-                ),
-              if (item['checkIn'] != null)
-                _infoPill(Icons.login_rounded, _shortDate(item['checkIn'])),
-              if (item['checkOut'] != null)
-                _infoPill(Icons.logout_rounded, _shortDate(item['checkOut'])),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .07),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: color.withValues(alpha: .18)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'REASON FOR REVIEW',
-                  style: TextStyle(
-                    color: color.withValues(alpha: .9),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  value(entry['detail']),
-                  style: const TextStyle(
-                    color: _text,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (!isReservation && item['waiterName'] != null)
-            _detail('Waiter', item['waiterName']),
-          if (!isReservation && item['outletName'] != null)
-            _detail('Outlet', item['outletName']),
-          if (!isReservation &&
-              (item['amount'] != null || item['total'] != null))
-            _detail('Amount', '₦${value(item['amount'] ?? item['total'])}'),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () async {
-                if (action == 'info') {
-                  final resolved = await widget.onOpenModule(entry);
-                  if (resolved && mounted) {
-                    setState(() => remaining.removeAt(index));
-                  }
-                  return;
-                }
-                final resolved = await widget.onResolve(entry);
-                if (resolved && mounted) {
-                  setState(() => remaining.removeAt(index));
-                }
-              },
-              icon: Icon(
-                action == 'info'
-                    ? Icons.open_in_new_rounded
-                    : Icons.check_circle_outline_rounded,
-              ),
-              label: Text(
-                action == 'info'
-                    ? (entry['key'] == 'arrival' || entry['key'] == 'departure'
-                          ? 'Resolve reservation'
-                          : entry['key'] == 'room-discrepancy'
-                          ? 'Resolve room'
-                          : entry['key'] == 'cash-handover' ||
-                                entry['key'] == 'cash-drop'
-                          ? 'Resolve cash control'
-                          : 'Open responsible module')
-                    : 'Resolve this record',
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _infoPill(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .05),
-      borderRadius: BorderRadius.circular(9),
+      color: _bg,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: _line),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 13, color: _muted),
-        const SizedBox(width: 5),
+        const SizedBox(width: 6),
         Text(
           label,
           style: const TextStyle(
-            color: _muted,
+            color: _text,
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -5347,16 +5871,26 @@ class _NightAuditBlockerDetailsScreenState
   }
 
   Widget _detail(String label, dynamic content) => Padding(
-    padding: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.symmetric(vertical: 9),
     child: Row(
       children: [
-        Text('$label: ', style: const TextStyle(color: _muted, fontSize: 11)),
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: _muted,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(width: 12),
         Expanded(
           child: Text(
             value(content),
+            textAlign: TextAlign.right,
             style: const TextStyle(
               color: _text,
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
           ),

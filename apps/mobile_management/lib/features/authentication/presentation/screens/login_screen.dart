@@ -1022,8 +1022,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   : Icons.dialpad_rounded,
               obscure: true,
               keyboardType: _usePassword
-                  ? TextInputType.text
-                  : TextInputType.number,
+                  ? TextInputType.visiblePassword
+                  : const TextInputType.numberWithOptions(
+                      decimal: false,
+                      signed: false,
+                    ),
               validator: (v) => _usePassword
                   ? ((v == null || v.length < 4) ? 'Enter your password' : null)
                   : ((v == null || !RegExp(r'^\d{6}$').hasMatch(v))
@@ -1067,11 +1070,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => setState(() {
-                    _usePassword = !_usePassword;
-                    _passCtrl.clear();
-                    _errorMessage = null;
-                  }),
+                  onPressed: () {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    setState(() {
+                      _usePassword = !_usePassword;
+                      _passCtrl.clear();
+                      _errorMessage = null;
+                    });
+                  },
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,

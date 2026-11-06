@@ -148,8 +148,9 @@ export async function POST(
       });
 
       if (method.toUpperCase() === 'COMPLIMENTARY' && complimentary && !parsed.data.breakfastRedemption) {
-        const acknowledgement = await tx.staff.findFirst({ where: { id: complimentary.acknowledgedByStaffId, propertyAccess: { has: order.propertyId }, isActive: true }, select: { id: true, role: true } });
-        if (!acknowledgement || !managementAcknowledgementRoles.has(String(acknowledgement.role || '').toUpperCase())) throw new Error('Acknowledging staff member must be active management staff for this property.');
+        const acknowledgement = await tx.staff.findFirst({ where: { id: complimentary.acknowledgedByStaffId, propertyAccess: { has: order.propertyId }, isActive: true }, select: { id: true, position: true } });
+        const acknowledgementPosition = String(acknowledgement?.position || '').toUpperCase().replace(/[ -]+/g, '_');
+        if (!acknowledgement || !managementAcknowledgementRoles.has(acknowledgementPosition)) throw new Error('Acknowledging staff member must be active management staff for this property.');
         const beneficiaryStaff = complimentary.beneficiaryType === 'STAFF'
           ? await tx.staff.findFirst({ where: { id: complimentary.beneficiaryStaffId || '', propertyAccess: { has: order.propertyId }, isActive: true }, select: { id: true } })
           : null;

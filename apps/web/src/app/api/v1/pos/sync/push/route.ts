@@ -792,8 +792,8 @@ export async function POST(req: NextRequest) {
               if (String(method).toUpperCase() === 'COMPLIMENTARY' && complimentary && !payload.breakfastRedemption) {
                 const ackId = complimentary.acknowledgedByStaffId;
                 const beneficiaryType = complimentary.beneficiaryType === 'STAFF' ? 'STAFF' : 'GUEST';
-                const ack = isUuid(ackId) ? await tx.staff.findFirst({ where: { id: ackId, propertyAccess: { has: order.propertyId }, isActive: true }, select: { id: true, role: true } }) : null;
-                const ackRole = String(ack?.role || '').toUpperCase();
+                const ack = isUuid(ackId) ? await tx.staff.findFirst({ where: { id: ackId, propertyAccess: { has: order.propertyId }, isActive: true }, select: { id: true, position: true } }) : null;
+                const ackRole = String(ack?.position || '').toUpperCase().replace(/[ -]+/g, '_');
                 const managementRoles = new Set(['CEO', 'SUPER_ADMIN', 'ADMIN', 'DIRECTOR', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'OUTLET_MANAGER', 'DEPARTMENT_HEAD', 'HOD']);
                 if (!ack || !managementRoles.has(ackRole)) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
                 const beneficiaryStaff = beneficiaryType === 'STAFF' && isUuid(complimentary.beneficiaryStaffId)

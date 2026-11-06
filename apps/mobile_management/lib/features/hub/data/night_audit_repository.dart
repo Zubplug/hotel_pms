@@ -99,6 +99,24 @@ class NightAuditRepository {
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> fetchReservationDetails(
+    String reservationId, {
+    String? propertyId,
+  }) async {
+    final response = await _dio.get(
+      '/mobile/v1/executive/reservations',
+      queryParameters: {
+        'reservationId': reservationId,
+        ...?propertyId == null ? null : {'propertyId': propertyId},
+      },
+    );
+    final data = response.data is Map ? response.data['data'] : null;
+    final reservation = data is Map ? data['reservation'] : null;
+    return reservation is Map
+        ? Map<String, dynamic>.from(reservation)
+        : <String, dynamic>{};
+  }
+
   Future<void> voidPosOrder({
     required String orderId,
     required String propertyId,
