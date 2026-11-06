@@ -10,6 +10,7 @@ export type PosOperatorStep =
   | 'pin'          // PIN entry
   | 'shift'        // opening float for SERVER_BANKING or first CENTRAL cashier
   | 'shift_blocked' // prior shift is awaiting approval
+  | 'audit_blocked' // Night Audit or business-date rollover blocks opening
   | 'error_central'; // central cashier model — till not open for this operator
 
 export interface UsePosOperatorAuthResult {
@@ -79,6 +80,16 @@ export function usePosOperatorAuth({
   const [pendingToken, setPendingToken] = useState<string>('');
   const [shiftBlockStatus, setShiftBlockStatus] = useState<string>('');
 
+  const showShiftStartBlocker = (message: string) => {
+    const normalized = message.toUpperCase();
+    const isAuditBlock = normalized.includes('NIGHT_AUDIT')
+      || normalized.includes('NIGHT AUDIT')
+      || normalized.includes('BUSINESS DATE');
+
+    setShiftBlockStatus(message);
+    setStep(isAuditBlock ? 'audit_blocked' : 'shift_blocked');
+  };
+
   const loadStaff = async () => {
     setStaffLoading(true);
     try {
@@ -142,7 +153,7 @@ export function usePosOperatorAuth({
     setPin('');
     if (step === 'pin') {
       setStep('select');
-    } else if (step === 'shift' || step === 'shift_blocked' || step === 'error_central') {
+    } else if (step === 'shift' || step === 'shift_blocked' || step === 'audit_blocked' || step === 'error_central') {
       setStep('pin');
     }
   };
@@ -285,7 +296,9 @@ export function usePosOperatorAuth({
     try {
       const finalOutletId = resolveOutletId();
       const deviceId = resolveDeviceId();
-      const openingCash = parseFloat(openingFloat) || 0;
+      // POS shifts use a zero opening float by policy. Cash received during
+      // the shift is recorded through the POS payment and cash-movement flow.
+      const openingCash = 0;
 
       if (isDesktopMode) {
         const res = await provider.pos.startSession({
@@ -302,7 +315,19 @@ export function usePosOperatorAuth({
           localStorage.setItem('lodgecore_pos_operator_token', pendingToken);
           onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'CENTRAL_CASHIER', sessionId: returnedSessionId });
         } else {
-          setError(res?.error || 'Failed to open shift. Try again.');
+          const message = res?.error || 'Failed to open shift. Try again.';
+          const normalized = String(message).toUpperCase();
+          if (normalized.includes('PENDING_APPROVAL')
+            || normalized.includes('AWAITING APPROVAL')
+            || normalized.includes('PREVIOUS SHIFT')
+            || normalized.includes('MUST BE APPROVED')
+            || normalized.includes('NIGHT_AUDIT')
+            || normalized.includes('NIGHT AUDIT')
+            || normalized.includes('BUSINESS DATE')) {
+            showShiftStartBlocker(String(message));
+          } else {
+            setError(String(message));
+          }
         }
       } else {
         const res = await fetch('/api/v1/pos/sessions', {
@@ -325,11 +350,36 @@ export function usePosOperatorAuth({
           localStorage.setItem('lodgecore_pos_operator_token', pendingToken);
           onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'SERVER_BANKING', sessionId: data.data.sessionId });
         } else {
-          setError(data.error || 'Failed to open shift. Try again.');
+          const message = data.error || 'Failed to open shift. Try again.';
+          const normalized = String(message).toUpperCase();
+          if (normalized.includes('PENDING_APPROVAL')
+            || normalized.includes('AWAITING APPROVAL')
+            || normalized.includes('PREVIOUS SHIFT')
+            || normalized.includes('MUST BE APPROVED')
+            || normalized.includes('NIGHT_AUDIT')
+            || normalized.includes('NIGHT AUDIT')
+            || normalized.includes('BUSINESS DATE')) {
+            showShiftStartBlocker(String(message));
+          } else {
+            setError(String(message));
+          }
         }
       }
     } catch (e: any) {
-      setError(e.message || 'Failed to open shift.');
+      const message = e.message || 'Failed to open shift.';
+      const normalized = message.toUpperCase();
+      if (normalized.includes('PENDING_APPROVAL')
+        || normalized.includes('AWAITING APPROVAL')
+        || normalized.includes('PREVIOUS SHIFT')
+        || normalized.includes('MUST BE APPROVED')) {
+        showShiftStartBlocker(message);
+      } else if (normalized.includes('NIGHT_AUDIT')
+        || normalized.includes('NIGHT AUDIT')
+        || normalized.includes('BUSINESS DATE')) {
+        showShiftStartBlocker(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }

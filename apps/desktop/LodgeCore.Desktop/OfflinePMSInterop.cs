@@ -1908,6 +1908,28 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetPosProductsAsync(propertyId, outletId);
+            foreach (var product in data)
+            {
+                if (string.IsNullOrWhiteSpace(product.Image) || !File.Exists(product.Image)) continue;
+                try
+                {
+                    var bytes = await File.ReadAllBytesAsync(product.Image);
+                    if (bytes.Length == 0 || bytes.Length > 10 * 1024 * 1024) continue;
+                    var extension = Path.GetExtension(product.Image).ToLowerInvariant();
+                    var mime = extension switch
+                    {
+                        ".jpg" or ".jpeg" => "image/jpeg",
+                        ".png" => "image/png",
+                        ".webp" => "image/webp",
+                        _ => "application/octet-stream"
+                    };
+                    product.OfflineImage = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+                }
+                catch (IOException)
+                {
+                    // The product still returns normally and the POS icon fallback is used.
+                }
+            }
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2674,6 +2696,9 @@ public class OfflinePMSInterop
                 deviceId ??= localTerminal.Id;
                 outletId ??= localTerminal.OutletId;
             }
+
+            if (!await _repo.IsStaffAuthorizedForOutletAsync(staffId, propertyId, outletId ?? string.Empty))
+                throw new UnauthorizedAccessException("This staff member is not assigned to the POS outlet on this terminal.");
             
             var property = await _repo.GetPropertyAsync(propertyId);
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";

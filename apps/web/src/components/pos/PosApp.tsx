@@ -120,6 +120,7 @@ export default function PosApp() {
   const [operatorToken, setOperatorToken] = useState<string | null>(null);
   const operatorSwitchOverride = useRef(false);
   const [showSwitchPad, setShowSwitchPad] = useState(false);
+  const [showPostActionLockPrompt, setShowPostActionLockPrompt] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
   const [itemToModify, setItemToModify] = useState<any | null>(null);
   const [showShiftBank, setShowShiftBank] = useState(false);
@@ -440,6 +441,7 @@ export default function PosApp() {
             id: product.id ?? product.Id,
             name: product.name ?? product.Name ?? 'Unnamed product',
             categoryId: product.categoryId ?? product.CategoryId ?? '',
+            image: product.offlineImage ?? product.image ?? product.Image ?? null,
             price: Number(product.price ?? product.Price ?? 0),
             taxRate: Number(product.taxRate ?? product.TaxRate ?? 0),
           })));
@@ -854,10 +856,9 @@ export default function PosApp() {
       setTableRefreshTrigger(Date.now());
       const batchCount = res.data?.productionBatches?.length ?? 0;
       toast.success(`Order sent! ${batchCount > 0 ? `${batchCount} production ticket(s) created 🔥` : 'Items queued for service ⚡'}`);
-      // The order and its production tickets are accepted/queued by the
-      // offline engine at this point. Lock immediately so the next staff
-      // member must authenticate before using this terminal.
-      lockOperator();
+      // The order is safely queued by the offline engine. Let the operator
+      // decide whether to keep working or hand the terminal to another user.
+      setShowPostActionLockPrompt(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to send order');
     } finally {
@@ -899,7 +900,7 @@ export default function PosApp() {
       // prints the waiter slip on the receipt printer, then marks the KOT
       // as PRINTED so it is never sent twice.
       toast.success(`${itemsToFire.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) queued 🔥` : ''}`);
-      lockOperator();
+      setShowPostActionLockPrompt(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to fire items');
     } finally {
@@ -1032,8 +1033,8 @@ export default function PosApp() {
               }
         );
         // Payment and receipt processing are complete (or queued locally for
-        // offline printing). Require the next operator to authenticate.
-        lockOperator();
+        // offline printing). Let the operator choose what happens next.
+        setShowPostActionLockPrompt(true);
         setTableRefreshTrigger(Date.now());
       } else {
         throw new Error(res.error);
@@ -1063,7 +1064,7 @@ export default function PosApp() {
         paymentMethod: 'UNPAID'
       }));
       toast.success('Customer receipt sent to printer');
-      lockOperator();
+      setShowPostActionLockPrompt(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to print customer receipt');
     } finally {
@@ -1403,7 +1404,7 @@ export default function PosApp() {
                       return (
                         <ProductCardStepper
                           key={p.id}
-                          product={{ id: p.id, name: p.name, price: Number(p.price) }}
+                          product={{ id: p.id, name: p.name, price: Number(p.price), image: p.image }}
                           quantity={qty}
                           onIncrement={() => handleProductTap(p)}
                           onDecrement={() => handleProductDecrement(p.id)}
@@ -1708,6 +1709,47 @@ export default function PosApp() {
         </div>{/* end main workspace */}
 
       {/* ══ Modals & Overlays ════════════════════════════════════════ */}
+
+      {/* Post-action operator decision. Offline POS actions are complete
+          locally; never force a staff switch without confirmation. */}
+      {showPostActionLockPrompt && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="post-action-lock-title">
+          <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-[#101827] shadow-2xl shadow-black/40 animate-in zoom-in-95 duration-200">
+            <div className="border-b border-white/[0.07] px-6 pb-5 pt-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-300/20">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300/80">Action completed</p>
+                  <h2 id="post-action-lock-title" className="mt-1 text-xl font-black tracking-tight text-white">What would you like to do next?</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">The transaction has been saved securely on this offline terminal. You can continue serving or hand the terminal to another operator.</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 p-6 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setShowPostActionLockPrompt(false)}
+                className="order-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm font-bold text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] sm:order-1"
+              >
+                Continue working
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPostActionLockPrompt(false);
+                  lockOperator();
+                }}
+                className="order-1 flex items-center justify-center gap-2 rounded-2xl bg-indigo-500 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-indigo-950/40 transition hover:bg-indigo-400 sm:order-2"
+              >
+                <Lock className="h-4 w-4" />
+                Sign out & hand over
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Staff Switch */}
       <TerminalAuthScreen

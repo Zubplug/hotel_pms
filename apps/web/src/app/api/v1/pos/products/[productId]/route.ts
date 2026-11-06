@@ -20,6 +20,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
   const data: Record<string, unknown> = {};
   if (body.name !== undefined) data.name = String(body.name).trim();
   if (body.description !== undefined) data.description = body.description ? String(body.description) : null;
+  if (body.image !== undefined) {
+    const image = body.image ? String(body.image).trim() : '';
+    if (image && !/^https?:\/\//i.test(image)) return errorResponse('BAD_REQUEST', 'Menu image must be a valid uploaded URL', 400);
+    data.image = image || null;
+  }
   if (body.taxRate !== undefined && Number.isFinite(Number(body.taxRate)) && Number(body.taxRate) >= 0 && Number(body.taxRate) <= 100) data.taxRate = Number(body.taxRate);
   if (body.inventoryMode !== undefined && ['NON_STOCK', 'STOCK', 'PREPARED_RECIPE'].includes(String(body.inventoryMode))) data.inventoryMode = String(body.inventoryMode);
   if (body.categoryId !== undefined) {

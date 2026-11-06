@@ -1,11 +1,12 @@
-import React from 'react';
-import { Plus, Minus } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, Minus, Utensils } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 interface Product {
   id: string;
   name: string;
   price: number;
+  image?: string | null;
 }
 
 interface ProductCardStepperProps {
@@ -30,6 +31,12 @@ export function ProductCardStepper({
   stockStatus,
 }: ProductCardStepperProps) {
   const isSelected = quantity > 0;
+  const [imageFailed, setImageFailed] = useState(false);
+  const imageUrl = typeof product.image === 'string' ? product.image.trim() : '';
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
 
   return (
     <div
@@ -46,14 +53,26 @@ export function ProductCardStepper({
         </div>
       )}
 
-      {/* Tap target — emoji + name + price */}
+      {/* Tap target — product image with an offline-safe icon fallback */}
       <button
         disabled={disabled}
         onClick={onClick}
         className="flex-1 flex flex-col items-center justify-center text-center px-2 pt-3 pb-2 gap-1.5 focus:outline-none touch-manipulation"
       >
-        <span className="text-3xl leading-none transition-transform group-hover:scale-110">
-          {emoji}
+        <span className="relative flex h-20 w-full items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+          {imageUrl && !imageFailed ? (
+            <img
+              src={imageUrl}
+              alt=""
+              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+              loading="lazy"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-3xl leading-none transition-transform group-hover:scale-110">
+              {emoji || <Utensils className="h-6 w-6 text-indigo-500" />}
+            </span>
+          )}
         </span>
         <p className="font-semibold text-slate-800 text-xs leading-snug line-clamp-2 px-1">
           {product.name}

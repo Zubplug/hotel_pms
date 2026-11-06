@@ -102,6 +102,53 @@ public class LocalRepository
             throw new InvalidOperationException("This POS shift is closed or pending approval. Open a new approved shift before posting transactions.");
     }
 
+    private async Task<int> GetPendingPosTransactionCountAsync(string sessionId)
+    {
+        // The session-start event may still be queued during a fully offline
+        // opening. It is safe to close that local shift because the event
+        // sequence will send the start before the settlement. Transaction
+        // events, however, must be synchronized before the shift is closed;
+        // otherwise the server will correctly reject them against a locked
+        // shift and the terminal will create dead letters.
+        var lifecycleEvents = new[]
+        {
+            "POS_SESSION_STARTED",
+            "POS_SESSION_UPDATED",
+            "POS_OPERATOR_SESSION_STARTED",
+        };
+
+        return await _dbContext.SyncEvents.CountAsync(evt =>
+            evt.SessionId == sessionId &&
+            !lifecycleEvents.Contains(evt.OperationType) &&
+            evt.Status != "SYNCED");
+    }
+
+    private static bool HasExplicitOutletAccess(LocalStaff staff, string outletId)
+    {
+        if (string.IsNullOrWhiteSpace(staff.AllowedOutletIds)
+            || staff.AllowedOutletIds.Trim() == "[]")
+            return false;
+
+        try
+        {
+            var outletIds = JsonSerializer.Deserialize<List<string>>(staff.AllowedOutletIds) ?? new List<string>();
+            return outletIds.Contains(outletId, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> IsStaffAuthorizedForOutletAsync(string staffId, string propertyId, string outletId)
+    {
+        if (string.IsNullOrWhiteSpace(outletId)) return false;
+
+        var staff = await _dbContext.Staff.FirstOrDefaultAsync(item =>
+            item.Id == staffId && item.PropertyId == propertyId && item.IsActive && item.HasPosAccess);
+        return staff != null && HasExplicitOutletAccess(staff, outletId);
+    }
+
     /// <summary>
     /// Repairs an order left on a stale local shift after a terminal reinstall.
     /// The repair is deliberately narrow: the replacement shift must be open,
@@ -6954,6 +7001,16 @@ public class LocalRepository
             throw new InvalidOperationException(
                 $"You have {pendingOrders.Count} open order(s) that must be settled or voided before your shift can be closed.");
 
+        // BLOCKER: a fully offline terminal must not close a shift while any
+        // order, payment, KOT, cash movement, or other POS transaction is
+        // still waiting to synchronize. The terminal remains usable offline,
+        // but the shift stays OPEN until the queue has been accepted by the
+        // server.
+        var pendingTransactions = await GetPendingPosTransactionCountAsync(sessionId);
+        if (pendingTransactions > 0)
+            throw new InvalidOperationException(
+                $"You have {pendingTransactions} POS transaction(s) waiting to synchronize. Reconnect and synchronize them before closing this shift.");
+
         var operatorStaff = await _dbContext.Staff.FirstOrDefaultAsync(staff => staff.Id == operatorId);
         var operatorRole = operatorStaff?.Role ?? string.Empty;
         var privileged = operatorRole.Contains("MANAGER", StringComparison.OrdinalIgnoreCase)
@@ -7747,22 +7804,13 @@ public class LocalRepository
 
         var allStaff = await allStaffQuery.ToListAsync();
 
-        // Filter by outlet: if staff has explicit outlet assignments, only show them
-        // for their allowed outlets. An empty AllowedOutletIds means unrestricted
-        // (e.g. managers, admins who can operate anywhere).
+        // Filter by outlet: the POS login panel must only show staff explicitly
+        // assigned to this terminal's outlet. Property-wide staff and managers
+        // without an outlet assignment belong in management workflows, not in
+        // the operator authentication panel.
         if (isPosContext && !string.IsNullOrWhiteSpace(outletId))
         {
-            allStaff = allStaff.Where(s =>
-            {
-                if (string.IsNullOrWhiteSpace(s.AllowedOutletIds) || s.AllowedOutletIds == "[]") 
-                    return true; // unrestricted staff always visible
-                try
-                {
-                    var ids = System.Text.Json.JsonSerializer.Deserialize<List<string>>(s.AllowedOutletIds) ?? new List<string>();
-                    return ids.Count == 0 || ids.Contains(outletId, StringComparer.OrdinalIgnoreCase);
-                }
-                catch { return true; }
-            }).ToList();
+            allStaff = allStaff.Where(s => HasExplicitOutletAccess(s, outletId)).ToList();
         }
 
         if (string.IsNullOrWhiteSpace(roleScope)) return allStaff;

@@ -195,6 +195,13 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyPosProductImageSchemaAsync()
+    {
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE PosProducts ADD COLUMN ImageUrl TEXT NULL"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex)
+            when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
     public async Task ApplyEntitlementSchemaAsync()
     {
         var columns = new[]

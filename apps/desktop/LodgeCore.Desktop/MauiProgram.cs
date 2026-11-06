@@ -114,6 +114,7 @@ public static class MauiProgram
             db.Database.EnsureCreated();
             db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
             db.ApplyReachRoomTypeSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyPosProductImageSchemaAsync().GetAwaiter().GetResult();
             db.ApplyEntitlementSchemaAsync().GetAwaiter().GetResult();
             db.ApplyFinancialControlSchemaAsync().GetAwaiter().GetResult();
             db.ApplyManagerOverrideSchemaAsync().GetAwaiter().GetResult();

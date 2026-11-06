@@ -27,7 +27,7 @@
  *   POS_OPERATOR → Shift float entry (SERVER_BANKING) or Central Till error
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   ArrowLeft, X, Banknote, ShieldAlert, Loader2,
   Check, RefreshCw, Wifi, WifiOff, Lock,
@@ -172,6 +172,7 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
     auth.step === 'pin'           ? `Enter PIN — ${auth.selectedStaff?.firstName}` :
     auth.step === 'shift'         ? 'Open POS Cash Bank' :
     auth.step === 'shift_blocked' ? 'Shift Awaiting Approval' :
+    auth.step === 'audit_blocked' ? 'Night Audit Controls' :
     auth.step === 'error_central' ? 'Central POS Bank Not Open' :
     '';
 
@@ -179,6 +180,7 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
     auth.step === 'pin' ||
     auth.step === 'shift' ||
     auth.step === 'shift_blocked' ||
+    auth.step === 'audit_blocked' ||
     auth.step === 'error_central';
 
   return (
@@ -239,8 +241,6 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
         {auth.step === 'shift' && (
           <ShiftPanel
             operator={auth.verifiedOperator}
-            openingFloat={auth.openingFloat}
-            onFloatChange={auth.setOpeningFloat}
             error={auth.error}
             isLoading={auth.isLoading}
             onConfirm={auth.confirmStartShift}
@@ -251,6 +251,14 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
           <ShiftApprovalBlockedPanel
             operator={auth.verifiedOperator}
             status={auth.shiftBlockStatus}
+            onBack={auth.goBack}
+          />
+        )}
+
+        {auth.step === 'audit_blocked' && (
+          <AuditBlockedPanel
+            operator={auth.verifiedOperator}
+            message={auth.shiftBlockStatus}
             onBack={auth.goBack}
           />
         )}
@@ -540,25 +548,15 @@ function NumKey({ label, onClick, disabled }: { label: string; onClick: () => vo
 
 function ShiftPanel({
   operator,
-  openingFloat,
-  onFloatChange,
   error,
   isLoading,
   onConfirm,
 }: {
   operator: StaffProfile | null;
-  openingFloat: string;
-  onFloatChange: (v: string) => void;
   error: string | null;
   isLoading: boolean;
   onConfirm: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, []);
-
   return (
     <div className="flex flex-col gap-4 p-5 flex-1">
       {/* Verified identity badge */}
@@ -582,7 +580,7 @@ function ShiftPanel({
         </div>
         <h3 className="font-black text-slate-800 text-lg">Shift Starting</h3>
         <p className="text-sm text-slate-500 mt-2 max-w-[250px]">
-          Click below to open your shift and enter the POS.
+          Your opening cash is set automatically to ₦0. Confirm below to open your shift and enter the POS.
         </p>
       </div>
 
@@ -644,6 +642,39 @@ function ShiftApprovalBlockedPanel({
         <p className="text-sm text-slate-500 mt-1 max-w-xs leading-relaxed">
           {operator?.firstName} {operator?.lastName}, your previous shift is {status.replaceAll('_', ' ').toLowerCase()}.
           You cannot open another shift until an auditor approves or completes it.
+        </p>
+      </div>
+      <button
+        onClick={onBack}
+        className="px-5 py-2 rounded-xl border-2 border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors touch-manipulation"
+      >
+        Back to Staff List
+      </button>
+    </div>
+  );
+}
+
+function AuditBlockedPanel({
+  operator,
+  message,
+  onBack,
+}: {
+  operator: StaffProfile | null;
+  message: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center gap-4 flex-1">
+      <div className="w-14 h-14 rounded-full bg-violet-50 flex items-center justify-center">
+        <ShieldAlert className="w-7 h-7 text-violet-600" />
+      </div>
+      <div>
+        <h3 className="text-base font-black text-slate-800">Shift Opening Is Temporarily Locked</h3>
+        <p className="text-sm text-slate-500 mt-1 max-w-xs leading-relaxed">
+          {operator?.firstName} {operator?.lastName}, the hotel business date is under Night Audit control. Complete or wait for Night Audit before opening a new POS shift.
+        </p>
+        <p className="mt-3 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold leading-5 text-violet-700">
+          {message}
         </p>
       </div>
       <button

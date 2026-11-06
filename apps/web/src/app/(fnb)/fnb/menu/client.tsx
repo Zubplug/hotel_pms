@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Filter, MoreHorizontal, Loader2, Tags, ShieldCheck, Check, X, AlertCircle, BarChart3, CircleDollarSign, Layers3, PackageCheck, Store, TrendingUp, Utensils } from 'lucide-react';
+import { Search, Plus, Filter, MoreHorizontal, Loader2, Tags, ShieldCheck, Check, X, AlertCircle, BarChart3, CircleDollarSign, Layers3, PackageCheck, Store, TrendingUp, Utensils, ImagePlus, Trash2 } from 'lucide-react';
 
 type AnyRecord = Record<string, any>;
 const money = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -50,7 +50,9 @@ export function FnbMenuClient() {
   const [priceProduct, setPriceProduct] = useState<AnyRecord | null>(null);
   const [modifierProduct, setModifierProduct] = useState<AnyRecord | null>(null);
   const [modifierEditing, setModifierEditing] = useState<AnyRecord | null>(null);
-  const [item, setItem] = useState({ name: '', price: '', taxRate: '0', categoryId: '', inventoryMode: 'NON_STOCK', stockItemId: '' });
+  const [item, setItem] = useState({ name: '', price: '', taxRate: '0', categoryId: '', inventoryMode: 'NON_STOCK', stockItemId: '', image: '' });
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [newPrice, setNewPrice] = useState('');
   const [modifier, setModifier] = useState({ name: '', price: '0', quantity: '1', unitOfMeasure: '' });
   const [categoryDraft, setCategoryDraft] = useState({ name: '', outletId: '', productionStation: 'KITCHEN' });
@@ -128,8 +130,19 @@ export function FnbMenuClient() {
   };
   const productIds = (product: AnyRecord) => (product.locations || [{ id: product.id }]).map((location: AnyRecord) => location.id);
 
-  const openAdd = () => { setEditing(null); setItem({ name: '', price: '', taxRate: '0', categoryId: categoryOptions[0]?.id || '', inventoryMode: 'NON_STOCK', stockItemId: '' }); setDialog('item'); };
-  const openEdit = (product: AnyRecord) => { const productCategory = categories.find((category) => category.id === product.categoryId); const groupedCategory = productCategory ? categoryOptions.find((category) => categoryKey(category.name) === categoryKey(productCategory.name)) : null; const linkedStock = (product.stockItems || []).find((stock: AnyRecord) => stock.warehouse?.posOutletId == null) || product.stockItems?.[0]; setEditing(product); setItem({ name: product.name, price: String(product.price), taxRate: String(product.taxRate || 0), categoryId: groupedCategory?.id || product.categoryId, inventoryMode: product.inventoryMode, stockItemId: linkedStock?.id || '' }); setDialog('item'); };
+  const openAdd = () => { setEditing(null); setItem({ name: '', price: '', taxRate: '0', categoryId: categoryOptions[0]?.id || '', inventoryMode: 'NON_STOCK', stockItemId: '', image: '' }); setDialog('item'); };
+  const openEdit = (product: AnyRecord) => { const productCategory = categories.find((category) => category.id === product.categoryId); const groupedCategory = productCategory ? categoryOptions.find((category) => categoryKey(category.name) === categoryKey(productCategory.name)) : null; const linkedStock = (product.stockItems || []).find((stock: AnyRecord) => stock.warehouse?.posOutletId == null) || product.stockItems?.[0]; setEditing(product); setItem({ name: product.name, price: String(product.price), taxRate: String(product.taxRate || 0), categoryId: groupedCategory?.id || product.categoryId, inventoryMode: product.inventoryMode, stockItemId: linkedStock?.id || '', image: String(product.image || '') }); setDialog('item'); };
+  const uploadMenuImage = async (file: File) => {
+    setImageUploading(true); setMessage('');
+    try {
+      const form = new FormData(); form.append('file', file); form.append('propertyId', propertyId || '');
+      const response = await fetch('/api/v1/pos/products/image', { method: 'POST', body: form });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error?.message || json.error || 'Unable to upload menu image');
+      setItem((current) => ({ ...current, image: json.data?.url || '' }));
+    } catch (err: any) { setMessage(err.message || 'Unable to upload menu image'); }
+    finally { setImageUploading(false); }
+  };
   const openModifiers = (product: AnyRecord) => { setModifierProduct(product); setModifierEditing(null); setModifier({ name: '', price: '0', quantity: '1', unitOfMeasure: '' }); setDialog('modifier'); };
 
   const saveItem = async () => {
@@ -143,14 +156,14 @@ export function FnbMenuClient() {
           const targetCategory = selectedCategory?.categoryIds
             .map((categoryId: string) => categories.find((category) => category.id === categoryId))
             .find((category: AnyRecord | undefined) => !location.outletId || category?.outletId === location.outletId);
-          await request(`/api/v1/pos/products/${location.id}`, 'PATCH', { name: item.name, categoryId: targetCategory?.id || item.categoryId, taxRate: Number(item.taxRate), inventoryMode: item.inventoryMode });
+          await request(`/api/v1/pos/products/${location.id}`, 'PATCH', { name: item.name, categoryId: targetCategory?.id || item.categoryId, taxRate: Number(item.taxRate), inventoryMode: item.inventoryMode, image: item.image || null });
         }
         if (Number(item.price) !== Number(editing.price)) await request(`/api/v1/pos/products/${editing.id}/price-request`, 'POST', { price: Number(item.price), reason: 'Price change submitted from menu management' });
         setMessage(Number(item.price) !== Number(editing.price) ? 'Details saved; price is awaiting approval.' : 'Menu item updated.');
       } else {
         const selectedCategory = categories.find((category) => category.id === item.categoryId);
         const categoryIds = selectedCategory?.categoryIds || [item.categoryId];
-        await request('/api/v1/pos/products/menu-request', 'POST', { propertyId, name: item.name, price: Number(item.price), taxRate: Number(item.taxRate), categoryId: item.categoryId, categoryIds, inventoryMode: item.inventoryMode, stockItemId: item.stockItemId || undefined });
+        await request('/api/v1/pos/products/menu-request', 'POST', { propertyId, name: item.name, price: Number(item.price), taxRate: Number(item.taxRate), categoryId: item.categoryId, categoryIds, inventoryMode: item.inventoryMode, stockItemId: item.stockItemId || undefined, image: item.image || null });
         setMessage('New item submitted for approval.');
       }
       setDialog(null); await load();
@@ -462,6 +475,21 @@ export function FnbMenuClient() {
                         value={item.name} 
                         onChange={(e) => setItem({ ...item, name: e.target.value })} 
                       />
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">Menu image <span className="font-normal text-slate-400">· optional</span></p>
+                          <p className="mt-1 text-xs text-slate-500">Uploaded immediately for POS display. It does not require approval.</p>
+                        </div>
+                        <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadMenuImage(file); event.target.value = ''; }} />
+                        <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={imageUploading} className="shrink-0 border-slate-300 bg-white">
+                          {imageUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImagePlus className="mr-2 h-4 w-4" />}
+                          {imageUploading ? 'Uploading…' : item.image ? 'Replace image' : 'Upload image'}
+                        </Button>
+                      </div>
+                      {item.image ? <div className="mt-4 flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2"><img src={item.image} alt="Menu item preview" className="h-16 w-16 rounded-md object-cover" /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-slate-700">Image ready</p><p className="truncate text-[11px] text-slate-400">Shown on POS menus when available</p></div><button type="button" onClick={() => setItem((current) => ({ ...current, image: '' }))} className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove menu image"><Trash2 className="h-4 w-4" /></button></div> : <p className="mt-3 text-[11px] text-slate-400">JPG, PNG or WebP · maximum 10 MB</p>}
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">

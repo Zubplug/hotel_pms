@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
   const name = String(body.name || '').trim();
   const price = Number(body.price);
   const taxRate = Number(body.taxRate || 0);
+  const image = body.image ? String(body.image).trim() : null;
+  if (image && !/^https?:\/\//i.test(image)) return errorResponse('BAD_REQUEST', 'Menu image must be a valid uploaded URL', 400);
   if (!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) return errorResponse('BAD_REQUEST', 'Name, valid price, and tax rate are required', 400);
   if (body.productionStation && !STATIONS.includes(body.productionStation)) return errorResponse('BAD_REQUEST', 'Invalid production station', 400);
   const category = await prisma.productCategory.findFirst({
@@ -45,6 +47,6 @@ export async function POST(req: NextRequest) {
   }
   const duplicate = await prisma.approvalRequest.findFirst({ where: { propertyId: category.outlet.propertyId, type: 'POS_MENU_CREATE', status: 'PENDING', details: { path: ['name'], equals: name } } });
   if (duplicate) return errorResponse('CONFLICT', 'A menu request with this name is already pending', 409);
-  const approval = await prisma.approvalRequest.create({ data: { propertyId: category.outlet.propertyId, type: 'POS_MENU_CREATE', status: 'PENDING', requestedBy: user.id, amount: price, currency: 'NGN', reason: String(body.reason || `New menu item requested: ${name}`), details: { stage: 'ACCOUNTANT_REVIEW', name, categoryId: category.id, categoryIds: categories.map((candidate) => candidate.id), categoryName: category.name, price, taxRate, inventoryMode: body.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', stockItemId, productionStation: body.productionStation || null } } });
+  const approval = await prisma.approvalRequest.create({ data: { propertyId: category.outlet.propertyId, type: 'POS_MENU_CREATE', status: 'PENDING', requestedBy: user.id, amount: price, currency: 'NGN', reason: String(body.reason || `New menu item requested: ${name}`), details: { stage: 'ACCOUNTANT_REVIEW', name, categoryId: category.id, categoryIds: categories.map((candidate) => candidate.id), categoryName: category.name, price, taxRate, image, inventoryMode: body.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', stockItemId, productionStation: body.productionStation || null } } });
   return successResponse(approval, 201);
 }

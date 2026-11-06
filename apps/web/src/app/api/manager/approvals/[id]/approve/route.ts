@@ -126,7 +126,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!categories.length || categories.length !== categoryIds.length || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MENU_REQUEST');
         const products = [];
         for (const category of categories) {
-          products.push(await tx.posProduct.create({ data: { propertyId: approval.propertyId, categoryId: category.id, name: details.name, price: Number(details.price), taxRate: Number(details.taxRate || 0), inventoryMode: details.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', productionStation: details.productionStation || null, createdBy: user.id } }));
+          products.push(await tx.posProduct.create({ data: { propertyId: approval.propertyId, categoryId: category.id, name: details.name, price: Number(details.price), taxRate: Number(details.taxRate || 0), image: details.image || null, inventoryMode: details.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', productionStation: details.productionStation || null, createdBy: user.id } }));
         }
         if (details.stockItemId) {
           const stock = await tx.stockItem.findUnique({ where: { id: details.stockItemId } });

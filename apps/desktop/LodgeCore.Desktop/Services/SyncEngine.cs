@@ -16,6 +16,42 @@ namespace LodgeCore.Desktop.Services;
 /// </summary>
 public class SyncEngine : BackgroundService
 {
+    private const long MaxCachedMenuImageBytes = 10 * 1024 * 1024;
+
+    private static string GetMenuImageCacheDirectory()
+        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCore", "pos-menu-images");
+
+    private static string GetMenuImageCachePath(string productId, string imageUrl)
+    {
+        var extension = Path.GetExtension(new Uri(imageUrl).AbsolutePath).ToLowerInvariant();
+        if (extension is not ".jpg" and not ".jpeg" and not ".png" and not ".webp") extension = ".img";
+        return Path.Combine(GetMenuImageCacheDirectory(), $"{productId}{extension}");
+    }
+
+    private async Task<string?> CacheMenuImageAsync(string productId, string? imageUrl, string? existingPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(imageUrl) || !Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return null;
+        var cachePath = GetMenuImageCachePath(productId, imageUrl);
+        if (string.Equals(existingPath, cachePath, StringComparison.OrdinalIgnoreCase) && File.Exists(cachePath)) return cachePath;
+
+        try
+        {
+            using var response = await _httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode) return File.Exists(existingPath) ? existingPath : null;
+            if (response.Content.Headers.ContentLength is > MaxCachedMenuImageBytes) return File.Exists(existingPath) ? existingPath : null;
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            if (bytes.Length == 0 || bytes.Length > MaxCachedMenuImageBytes) return File.Exists(existingPath) ? existingPath : null;
+            Directory.CreateDirectory(GetMenuImageCacheDirectory());
+            await File.WriteAllBytesAsync(cachePath, bytes, cancellationToken);
+            return cachePath;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
+        {
+            _logger.LogDebug(ex, "Unable to cache menu image for product {ProductId}; keeping the previous cache when available", productId);
+            return File.Exists(existingPath) ? existingPath : null;
+        }
+    }
+
     private static DateTime ParseSyncDate(JsonElement element, string propertyName, DateTime fallback)
     {
         return element.TryGetProperty(propertyName, out var value)
@@ -679,12 +715,25 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         }
                         else if (result.Rejected?.Contains(evt.OperationId) == true)
                         {
-                            evt.Status = "FAILED";
                             var rejectionError = result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Error
                                 ?? "Rejected by cloud validation";
-                            evt.ErrorMessage = rejectionError.StartsWith("RETRYABLE_", StringComparison.OrdinalIgnoreCase)
-                                ? $"TRANSIENT: {rejectionError}"
-                                : rejectionError;
+                            if (rejectionError.Contains("SHIFT_LOCKED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // The shift was closed before this offline
+                                // transaction arrived. Retrying cannot fix a
+                                // business-state conflict; preserve it for a
+                                // controlled reconciliation workflow.
+                                evt.Status = "CONFLICT";
+                                evt.ErrorCode = "SHIFT_LOCKED";
+                                evt.ErrorMessage = rejectionError;
+                            }
+                            else
+                            {
+                                evt.Status = "FAILED";
+                                evt.ErrorMessage = rejectionError.StartsWith("RETRYABLE_", StringComparison.OrdinalIgnoreCase)
+                                    ? $"TRANSIENT: {rejectionError}"
+                                    : rejectionError;
+                            }
                         }
                         else if (result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Status == "RETRY")
                         {
@@ -2149,8 +2198,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     prod.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     prod.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? desc.GetString() : null;
-                    prod.Image = el.TryGetProperty("image", out var img) && img.ValueKind != System.Text.Json.JsonValueKind.Null
+                    var remoteImage = el.TryGetProperty("image", out var img) && img.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? img.GetString() : null;
+                    var imageChanged = !string.Equals(prod.ImageUrl, remoteImage, StringComparison.Ordinal);
+                    prod.ImageUrl = remoteImage;
+                    if (imageChanged || !File.Exists(prod.Image))
+                        prod.Image = await CacheMenuImageAsync(id, remoteImage, prod.Image, stoppingToken);
                     prod.Price = el.TryGetProperty("price", out var pr) 
                         ? (pr.ValueKind == System.Text.Json.JsonValueKind.Number ? pr.GetDecimal() : (pr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(pr.GetString(), out var dp) ? dp : 0m)) 
                         : 0m;

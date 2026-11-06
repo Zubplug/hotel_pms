@@ -34,7 +34,13 @@ public class LocalPosProduct
     public string CategoryId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public string? Image { get; set; }  // URL only — offline image caching is deferred
+    // Image is the local cached file path used by the offline POS.
+    public string? Image { get; set; }
+    // The cloud URL is retained separately so sync can detect replacements.
+    public string? ImageUrl { get; set; }
+    // Data URL supplied only to the embedded offline WebView.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? OfflineImage { get; set; }
     public decimal Price { get; set; }
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
