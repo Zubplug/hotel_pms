@@ -123,32 +123,6 @@ public class LocalRepository
             evt.Status != "SYNCED");
     }
 
-    private static bool HasExplicitOutletAccess(LocalStaff staff, string outletId)
-    {
-        if (string.IsNullOrWhiteSpace(staff.AllowedOutletIds)
-            || staff.AllowedOutletIds.Trim() == "[]")
-            return false;
-
-        try
-        {
-            var outletIds = JsonSerializer.Deserialize<List<string>>(staff.AllowedOutletIds) ?? new List<string>();
-            return outletIds.Contains(outletId, StringComparer.OrdinalIgnoreCase);
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    public async Task<bool> IsStaffAuthorizedForOutletAsync(string staffId, string propertyId, string outletId)
-    {
-        if (string.IsNullOrWhiteSpace(outletId)) return false;
-
-        var staff = await _dbContext.Staff.FirstOrDefaultAsync(item =>
-            item.Id == staffId && item.PropertyId == propertyId && item.IsActive && item.HasPosAccess);
-        return staff != null && HasExplicitOutletAccess(staff, outletId);
-    }
-
     /// <summary>
     /// Repairs an order left on a stale local shift after a terminal reinstall.
     /// The repair is deliberately narrow: the replacement shift must be open,
@@ -7804,13 +7778,22 @@ public class LocalRepository
 
         var allStaff = await allStaffQuery.ToListAsync();
 
-        // Filter by outlet: the POS login panel must only show staff explicitly
-        // assigned to this terminal's outlet. Property-wide staff and managers
-        // without an outlet assignment belong in management workflows, not in
-        // the operator authentication panel.
+        // Filter by outlet: if staff has explicit outlet assignments, only show them
+        // for their allowed outlets. An empty AllowedOutletIds means unrestricted
+        // (e.g. managers, admins who can operate anywhere).
         if (isPosContext && !string.IsNullOrWhiteSpace(outletId))
         {
-            allStaff = allStaff.Where(s => HasExplicitOutletAccess(s, outletId)).ToList();
+            allStaff = allStaff.Where(s =>
+            {
+                if (string.IsNullOrWhiteSpace(s.AllowedOutletIds) || s.AllowedOutletIds == "[]")
+                    return true; // unrestricted staff always visible
+                try
+                {
+                    var ids = System.Text.Json.JsonSerializer.Deserialize<List<string>>(s.AllowedOutletIds) ?? new List<string>();
+                    return ids.Count == 0 || ids.Contains(outletId, StringComparer.OrdinalIgnoreCase);
+                }
+                catch { return true; }
+            }).ToList();
         }
 
         if (string.IsNullOrWhiteSpace(roleScope)) return allStaff;

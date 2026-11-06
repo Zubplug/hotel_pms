@@ -2697,9 +2697,6 @@ public class OfflinePMSInterop
                 outletId ??= localTerminal.OutletId;
             }
 
-            if (!await _repo.IsStaffAuthorizedForOutletAsync(staffId, propertyId, outletId ?? string.Empty))
-                throw new UnauthorizedAccessException("This staff member is not assigned to the POS outlet on this terminal.");
-            
             var property = await _repo.GetPropertyAsync(propertyId);
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
 
