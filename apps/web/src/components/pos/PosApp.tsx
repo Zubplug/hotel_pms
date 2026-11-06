@@ -441,7 +441,10 @@ export default function PosApp() {
             id: product.id ?? product.Id,
             name: product.name ?? product.Name ?? 'Unnamed product',
             categoryId: product.categoryId ?? product.CategoryId ?? '',
-            image: product.offlineImage ?? product.image ?? product.Image ?? null,
+            // Desktop returns the cached image as a data URL. Never pass the
+            // local Windows cache path to the WebView because <img> cannot
+            // render filesystem paths and will show a broken-image state.
+            image: product.offlineImage ?? (isDesktopMode ? null : product.image ?? product.Image ?? null),
             price: Number(product.price ?? product.Price ?? 0),
             taxRate: Number(product.taxRate ?? product.TaxRate ?? 0),
           })));
@@ -560,6 +563,7 @@ export default function PosApp() {
             id: product.id ?? product.Id,
             name: product.name ?? product.Name ?? 'Unnamed product',
             categoryId: product.categoryId ?? product.CategoryId ?? '',
+            image: product.offlineImage ?? (isDesktopMode ? null : product.image ?? product.Image ?? null),
             price: Number(product.price ?? product.Price ?? 0),
             taxRate: Number(product.taxRate ?? product.TaxRate ?? 0),
           })));
