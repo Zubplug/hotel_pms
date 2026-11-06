@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     
     const isSystemAdmin = user.isSuperAdmin || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
     
-    if (!isSystemAdmin && !['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE', 'NIGHT_AUDITOR'].includes(user.role)) {
+    if (!isSystemAdmin && !['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'].includes(user.role)) {
       return errorResponse('FORBIDDEN', 'Executive or Management access required', 403);
     }
 
