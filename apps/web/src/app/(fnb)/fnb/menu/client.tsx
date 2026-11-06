@@ -318,7 +318,8 @@ export function FnbMenuClient() {
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
                 <tr>
-                  <th className="px-6 py-4 rounded-tl-2xl">Item & Description</th>
+                  <th className="px-6 py-4 rounded-tl-2xl">Image</th>
+                  <th className="px-6 py-4">Item & Description</th>
                   <th className="px-6 py-4">Locations</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Price</th>
@@ -331,6 +332,12 @@ export function FnbMenuClient() {
                     key={product.id} 
                     className={`group transition-colors duration-150 hover:bg-slate-50/80 ${!product.isActive ? 'opacity-75 bg-slate-50/50' : ''}`}
                   >
+                    <td className="px-6 py-4 align-top">
+                      <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 text-slate-400 shadow-sm">
+                        <Utensils className="h-5 w-5" />
+                        {product.image && <img src={product.image} alt={`${product.name} menu item`} className="absolute inset-0 h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 align-top">
                       <div className="flex flex-col">
                         <span className={`font-medium ${!product.isActive ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>
@@ -410,7 +417,7 @@ export function FnbMenuClient() {
                 ))}
                 {!filteredProducts.length && !loading && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-16 text-center">
+                    <td colSpan={6} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center justify-center text-slate-500">
                         <Search className="h-8 w-8 mb-3 text-slate-300" />
                         <p className="text-base font-medium text-slate-700">No menu items found</p>
@@ -421,7 +428,7 @@ export function FnbMenuClient() {
                 )}
                 {loading && !filteredProducts.length && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-16 text-center">
+                    <td colSpan={6} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center justify-center text-slate-500">
                         <Loader2 className="h-8 w-8 mb-3 animate-spin text-emerald-500" />
                         <p className="text-sm">Loading menu items...</p>
