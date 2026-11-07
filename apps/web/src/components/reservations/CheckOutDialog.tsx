@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowRight, FileCheck2, Building2, X, Wallet } from 'lucide-react';
+import { Loader2, ArrowRight, FileCheck2, Building2, X, Wallet, ShieldCheck } from 'lucide-react';
 import { getFolioBalance } from '@/lib/finance/folio-balance';
 
 export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { open: boolean, onOpenChange: (open: boolean) => void, reservation: any, folio: any }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [reason, setReason] = useState('Guest departed with an outstanding balance; transfer approved to City Ledger.');
   
   const queryClient = useQueryClient();
 
@@ -16,6 +17,11 @@ export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { ope
   const currency = folio?.currency || 'NGN';
 
   const handleCheckOut = async () => {
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 10) {
+      setError('Add a clear transfer reason of at least 10 characters.');
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
 
@@ -23,8 +29,7 @@ export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { ope
       const res = await fetch(`/api/v1/reservations/${reservation.id}/check-out`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Always force skipper logic to route to city ledger
-        body: JSON.stringify({ forceSkipper: true }),
+        body: JSON.stringify({ forceSkipper: true, reason: trimmedReason }),
       });
 
       const data = await res.json();
@@ -129,6 +134,20 @@ export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { ope
                     <p className="leading-relaxed">Guest room will be marked dirty and reservation status set to CHECKED_OUT.</p>
                   </div>
                 </div>
+                <label className="mt-4 block text-left">
+                  <span className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-indigo-300">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Transfer reason
+                  </span>
+                  <textarea
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    rows={3}
+                    disabled={isSubmitting}
+                    placeholder="Explain why the outstanding balance is being transferred."
+                    className="w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-slate-500 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
+                  />
+                  <span className="mt-1 block text-[11px] text-slate-500">This note will be recorded with the City Ledger transfer and checkout audit.</span>
+                </label>
               </div>
             )}
           </div>

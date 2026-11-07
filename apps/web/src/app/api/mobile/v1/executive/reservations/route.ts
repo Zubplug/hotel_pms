@@ -106,11 +106,15 @@ async function getGuestCreditAvailable(guestId: string | null | undefined) {
 function serializeReservation(reservation: any, detailed = false, guestCreditAvailable = 0) {
   const guest = reservation.primaryGuest;
   const folios = reservation.folios || [];
+  // Closed folios remain visible in the detail history, but they must not be
+  // counted as current checkout debt. Only open folios represent the amount
+  // that can still be settled or transferred at departure.
+  const openFolios = folios.filter((folio: any) => folio.status === 'OPEN');
   const category = reservation.status === 'CHECKED_IN' ? 'CHECKED_IN' : reservation.status === 'NO_SHOW' ? 'NO_SHOW' : 'RESERVED';
-  const totalCharges = folios.reduce((sum: number, folio: any) => sum + asNumber(folio.totalCharges), 0);
-  const totalPayments = folios.reduce((sum: number, folio: any) => sum + asNumber(folio.totalPayments), 0);
+  const totalCharges = openFolios.reduce((sum: number, folio: any) => sum + asNumber(folio.totalCharges), 0);
+  const totalPayments = openFolios.reduce((sum: number, folio: any) => sum + asNumber(folio.totalPayments), 0);
   const signedBalance = Math.round((totalCharges - totalPayments) * 100) / 100;
-  const availableFolioCredit = folios.reduce((sum: number, folio: any) => sum + (folio.credits || []).reduce((creditSum: number, credit: any) => creditSum + asNumber(credit.remainingAmount), 0), 0);
+  const availableFolioCredit = openFolios.reduce((sum: number, folio: any) => sum + (folio.credits || []).reduce((creditSum: number, credit: any) => creditSum + asNumber(credit.remainingAmount), 0), 0);
   return {
     id: reservation.id,
     confirmationNumber: reservation.confirmationNumber,

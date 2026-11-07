@@ -27,7 +27,7 @@ type Room = {
   id: string; number: string; code: string; status: string; isActive: boolean;
   maintenanceStatus: string | null; roomType: { name: string; code: string } | null;
   building: { name: string } | null; floor: { number: number; name?: string | null } | null;
-  reservationRooms?: Array<{ reservation: { id: string; corporateAccountId?: string | null; primaryGuest?: { firstName?: string; lastName?: string } | null; folios?: Array<{ balance: string | number; currency?: string }> } }>;
+  reservationRooms?: Array<{ status: string; roomId?: string | null; reservation: { id: string; status: string; corporateAccountId?: string | null; primaryGuest?: { firstName?: string; lastName?: string } | null; folios?: Array<{ balance: string | number; currency?: string }> } }>;
 };
 
 const colors = ['#34d399', '#60a5fa', '#fbbf24', '#a78bfa', '#fb7185', '#f97316'];
@@ -72,7 +72,11 @@ export default function RoomsPage() {
   const statusData = useMemo(() => Object.entries(rooms.reduce((result: Record<string, number>, room) => { result[room.status] = (result[room.status] || 0) + 1; return result; }, {})).map(([name, value]) => ({ name: statusLabel(name), value })), [rooms]);
   const buildingData = useMemo(() => buildings.map((name) => ({ name, rooms: rooms.filter((room) => room.building?.name === name).length, ready: rooms.filter((room) => room.building?.name === name && room.status === 'AVAILABLE').length })), [buildings, rooms]);
   const readiness = counts.total ? Math.round((counts.available / counts.total) * 100) : 0;
-  const activeReservation = (room: Room): any => room.reservationRooms?.[0]?.reservation;
+  const activeReservation = (room: Room): any => room.reservationRooms?.find((assignment) =>
+    assignment.status === 'ACTIVE' &&
+    assignment.roomId === room.id &&
+    assignment.reservation.status === 'CHECKED_IN'
+  )?.reservation;
   const roomDebt = (room: Room) => Number(activeReservation(room)?.folios?.reduce((total: number, folio: { balance?: string | number }) => total + Number(folio.balance || 0), 0) || 0);
   const canForceCheckout = (room: Room) => Boolean(activeReservation(room) && !activeReservation(room)?.corporateAccountId && roomDebt(room) > 0.01);
   const openCreateRoom = () => { setEditingRoomId(null); setRoomEditorOpen(true); };

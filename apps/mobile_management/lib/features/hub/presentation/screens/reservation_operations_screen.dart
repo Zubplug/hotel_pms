@@ -576,8 +576,11 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
         confirmationNumber: confirmationNumber,
         amount: amount,
         currency: currency,
-        onConfirm: () async {
-          await widget.repository.checkoutToCityLedger(widget.id);
+        onConfirm: (reason) async {
+          await widget.repository.checkoutToCityLedger(
+            widget.id,
+            reason: reason,
+          );
           if (mounted) Navigator.of(context).pop(true);
         },
       ),
@@ -1416,7 +1419,7 @@ class _CityLedgerCheckoutSheet extends StatefulWidget {
   final String confirmationNumber;
   final double amount;
   final String currency;
-  final Future<void> Function() onConfirm;
+  final Future<void> Function(String reason) onConfirm;
 
   const _CityLedgerCheckoutSheet({
     required this.guestName,
@@ -1435,14 +1438,37 @@ class _CityLedgerCheckoutSheetState extends State<_CityLedgerCheckoutSheet> {
   bool _reviewing = false;
   bool _submitting = false;
   String? _error;
+  late final TextEditingController _reasonController;
+
+  @override
+  void initState() {
+    super.initState();
+    _reasonController = TextEditingController(
+      text:
+          'Guest departed with an outstanding balance; transfer approved to City Ledger.',
+    );
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
+    final reason = _reasonController.text.trim();
+    if (reason.length < 10) {
+      setState(
+        () => _error = 'Add a clear transfer reason of at least 10 characters.',
+      );
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
     });
     try {
-      await widget.onConfirm();
+      await widget.onConfirm(reason);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -1570,6 +1596,48 @@ class _CityLedgerCheckoutSheetState extends State<_CityLedgerCheckoutSheet> {
                   ? 'Confirming will create the City Ledger receivable, close the guest folio, check the guest out, and release the room for housekeeping.'
                   : 'The outstanding balance will be moved to the property City Ledger for controlled recovery. No payment will be recorded as received.',
               style: const TextStyle(color: _muted, fontSize: 12, height: 1.45),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'TRANSFER REASON',
+              style: TextStyle(
+                color: _red,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 7),
+            TextField(
+              controller: _reasonController,
+              enabled: !_submitting,
+              minLines: 2,
+              maxLines: 4,
+              style: const TextStyle(color: _white, fontSize: 13, height: 1.35),
+              decoration: InputDecoration(
+                hintText: 'Explain why the balance is being transferred.',
+                hintStyle: const TextStyle(color: _muted, fontSize: 12),
+                filled: true,
+                fillColor: _raised,
+                contentPadding: const EdgeInsets.all(13),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(13),
+                  borderSide: const BorderSide(color: _line),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(13),
+                  borderSide: const BorderSide(color: _line),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(13),
+                  borderSide: const BorderSide(color: _red),
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
+            const Text(
+              'This note is saved with the City Ledger entry and checkout audit.',
+              style: TextStyle(color: _muted, fontSize: 10, height: 1.35),
             ),
             const SizedBox(height: 18),
             Row(

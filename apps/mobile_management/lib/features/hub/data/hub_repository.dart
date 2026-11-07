@@ -102,11 +102,14 @@ class HubRepository {
     );
   }
 
-  Future<void> checkoutToCityLedger(String reservationId) async {
+  Future<void> checkoutToCityLedger(
+    String reservationId, {
+    required String reason,
+  }) async {
     try {
       await _dio.post(
         '/v1/reservations/$reservationId/check-out',
-        data: {'forceSkipper': true},
+        data: {'forceSkipper': true, 'reason': reason},
       );
     } on DioException catch (error) {
       final body = error.response?.data;

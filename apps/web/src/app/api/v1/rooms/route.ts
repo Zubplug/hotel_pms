@@ -78,11 +78,19 @@ export async function GET(req: NextRequest) {
           building: { select: { name: true } },
           floor: { select: { name: true, number: true } },
           reservationRooms: {
-            where: { reservation: { status: 'CHECKED_IN' } },
+            // Only expose a room assignment that can actually be checked out.
+            // Historical ReservationRoom rows can remain attached to a room
+            // after the parent reservation has been checked out.
+            where: {
+              status: 'ACTIVE',
+              reservation: { status: 'CHECKED_IN', deletedAt: null },
+            },
+            orderBy: { updatedAt: 'desc' },
             include: {
               reservation: {
                 include: {
                   folios: {
+                    where: { status: 'OPEN' },
                     select: { balance: true }
                   }
                 }

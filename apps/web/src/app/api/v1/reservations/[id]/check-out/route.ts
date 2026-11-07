@@ -38,6 +38,10 @@ export async function POST(
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const forceSkipper = body.forceSkipper === true;
+    const skipperReason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (forceSkipper && skipperReason.length < 10) {
+      return errorResponse('INVALID_REQUEST', 'A clear reason of at least 10 characters is required for a City Ledger transfer.', 400);
+    }
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
@@ -86,12 +90,25 @@ export async function POST(
 
     // Run the operational checkout transaction
     const txResult = await prisma.$transaction(async (tx: any) => {
+      // Serialize checkout attempts for this reservation. This prevents two
+      // rapid clicks (or two terminals) from creating duplicate City Ledger
+      // transfers before either request changes the reservation status.
+      const lockedReservation = await tx.$queryRaw<any[]>`
+        SELECT id, status
+        FROM "Reservation"
+        WHERE id = ${id}::uuid
+        FOR UPDATE
+      `;
+      if (!lockedReservation[0] || lockedReservation[0].status !== 'CHECKED_IN') {
+        throw new Error('RESERVATION_STATE_CHANGED');
+      }
+
       // 1. Verify and Lock Financial State (Check Folios)
       // Note: In Postgres, FOR UPDATE ensures that concurrent transactions modifying these folios are blocked.
       let folios = await tx.$queryRaw<any[]>`
         SELECT id, balance, version, currency
         FROM "Folio" 
-        WHERE "reservationId" = ${id}::uuid 
+        WHERE "reservationId" = ${id}::uuid AND status = 'OPEN'
         FOR UPDATE
       `;
 
@@ -384,6 +401,7 @@ export async function POST(
           guestPhone: (routeToSkipper || routeToGuestLedger) && reservation.primaryGuest?.phone ? reservation.primaryGuest.phone : undefined,
           confirmationNumber: reservation.confirmationNumber,
           createdBy: actorId,
+          reason: skipperReason || undefined,
           keepFolioOpen: Boolean(reservation.corporateAccountId),
         });
       } else if (totalBalance > 0) {
@@ -552,6 +570,12 @@ export async function POST(
     }
     if (message === 'NO_SKIPPER_ACCOUNT') {
       return errorResponse('BAD_REQUEST', 'No active City Ledger account found for Skippers. Please create one first.', 400);
+    }
+    if (message === 'RESERVATION_STATE_CHANGED') {
+      return errorResponse('INVALID_STATE', 'This reservation is no longer checked in. Refresh the room list before trying again.', 409);
+    }
+    if (message.includes('RETRYABLE_ACCOUNTING_CONFIG') || message.includes('No open accounting period found')) {
+      return errorResponse('ACCOUNTING_NOT_READY', 'City Ledger checkout is temporarily unavailable because the property accounting setup is not ready. Ask an accountant to open the business-date period and verify the City Ledger mappings.', 409);
     }
 
     return errorResponse('INTERNAL_ERROR', message, 500);

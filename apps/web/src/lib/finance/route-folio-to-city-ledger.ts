@@ -21,6 +21,7 @@ type RouteInput = {
   guestPhone?: string;
   confirmationNumber: string;
   createdBy: string;
+  reason?: string;
   keepFolioOpen?: boolean;
 };
 
@@ -30,7 +31,7 @@ type RouteInput = {
  * credit and is recorded as a city-ledger payment/credit.
  */
 export async function routeFoliosToCityLedger(input: RouteInput) {
-  const { tx, folios, reservationId, propertyId, corporateAccountId, targetAccountId, guestName, guestPhone, confirmationNumber, createdBy } = input;
+  const { tx, folios, reservationId, propertyId, corporateAccountId, targetAccountId, guestName, guestPhone, confirmationNumber, createdBy, reason } = input;
   
   let accountId = targetAccountId;
   
@@ -138,7 +139,7 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
           currency,
           type: 'TRANSFER_IN',
           status: remainingInvoiceBalance <= 0.01 ? 'SETTLED' : 'OPEN',
-          reason: 'Auto-routed outstanding balance to City Ledger upon checkout',
+          reason: reason || 'Auto-routed outstanding balance to City Ledger upon checkout',
           reference: invoiceNumber,
           invoiceId: invoice.id,
           createdBy,

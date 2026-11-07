@@ -41,8 +41,11 @@ type Room = {
   building?: { name?: string | null } | null;
   floor?: { name?: string | null; number?: number | null } | null;
   reservationRooms?: Array<{
+    status: string;
+    roomId?: string | null;
     reservation: {
       id: string;
+      status: string;
       folios: Array<{ balance: string | number }>;
     }
   }>;
@@ -157,8 +160,14 @@ export function RoomAnalysisClient() {
       {showRooms ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onClick={() => setShowRooms(false)}><div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-[#0a1020] px-6 py-5 text-white"><div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-indigo-300"><Eye className="h-4 w-4" /> Room directory</div><h2 className="mt-2 text-xl font-bold">Current room status</h2><p className="mt-1 text-xs text-slate-400">View · {visibleRooms.length} of {rooms.length} rooms shown</p></div><button onClick={() => setShowRooms(false)} className="rounded-xl border border-white/10 bg-white/10 p-2 text-slate-300 hover:bg-white/15 hover:text-white" aria-label="Close room directory"><X className="h-5 w-5" /></button></div><div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={roomSearch} onChange={(event) => setRoomSearch(event.target.value)} placeholder="Search room, type, or building…" className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" /></div><select value={roomStatusFilter} onChange={(event) => setRoomStatusFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"><option value="ALL">All statuses</option>{statusGroups.map(({ status }) => <option key={status} value={status}>{label(status)}</option>)}</select></div><div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visibleRooms.map((room) => { 
         const unavailable = ['OUT_OF_ORDER', 'OUT_OF_SERVICE', 'MAINTENANCE', 'BLOCKED'].includes(room.status); 
         
-        // Find if this room has an active reservation with debit
-        const activeRes = room.reservationRooms?.[0]?.reservation;
+        // The API returns only active assignments for checked-in reservations,
+        // but keep the guard here as a second line of defence for stale data.
+        const activeAssignment = room.reservationRooms?.find((assignment) =>
+          assignment.status === 'ACTIVE' &&
+          assignment.roomId === room.id &&
+          assignment.reservation.status === 'CHECKED_IN'
+        );
+        const activeRes = activeAssignment?.reservation;
         let debitBalance = 0;
         if (activeRes) {
           debitBalance = activeRes.folios?.reduce((acc: number, folio: any) => acc + Number(folio.balance || 0), 0) || 0;
