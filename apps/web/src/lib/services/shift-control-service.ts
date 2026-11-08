@@ -116,8 +116,8 @@ export class ShiftControlService {
 
   // ─── submitShift ──────────────────────────────────────────────────────────
   /**
-   * Transitions a shift from OPEN → SUBMITTED (or RETURNED → SUBMITTED for
-   * re-declarations). Called INTERNALLY by the close/settle endpoints inside
+   * Transitions a shift from OPEN → SUBMITTED after normal work (including
+   * work on a manager-reopened shift). Called INTERNALLY by the close/settle endpoints inside
    * their own transaction — it is NOT a standalone public API.
    *
    * Status model:
@@ -140,17 +140,19 @@ export class ShiftControlService {
     if (!ctx.propertyIds.includes(params.propertyId)) {
       throw new ShiftControlError('Access denied to property.', 'FORBIDDEN', 403);
     }
-    const fromControlStatus = await (async () => {
+    const submissionState = await (async () => {
       if (type === 'POS') {
-        const s = await tx.posSession.findUnique({ where: { id: shiftId }, select: { controlStatus: true } });
-        return s?.controlStatus ?? 'OPEN';
+        const s = await tx.posSession.findUnique({ where: { id: shiftId }, select: { controlStatus: true, approvalDecision: true } });
+        return { controlStatus: s?.controlStatus ?? 'OPEN', approvalDecision: s?.approvalDecision };
       } else {
-        const s = await tx.frontdeskSession.findUnique({ where: { id: shiftId }, select: { controlStatus: true } });
-        return s?.controlStatus ?? 'OPEN';
+        const s = await tx.frontdeskSession.findUnique({ where: { id: shiftId }, select: { controlStatus: true, approvalDecision: true } });
+        return { controlStatus: s?.controlStatus ?? 'OPEN', approvalDecision: s?.approvalDecision };
       }
     })();
+    const fromControlStatus = submissionState.controlStatus;
 
-    // Allow re-submission from RETURNED state (operator re-declared cash)
+    // OPEN is the operational state after a manager returns a shift. Keep
+    // RETURNED accepted for compatibility with older returned sessions.
     const allowedFrom = ['OPEN', 'RETURNED'];
     if (!allowedFrom.includes(fromControlStatus)) {
       throw new ShiftControlError(
@@ -200,7 +202,9 @@ export class ShiftControlService {
       propertyId: params.propertyId,
       posSessionId: type === 'POS' ? shiftId : undefined,
       frontdeskSessionId: type === 'FRONT_DESK' ? shiftId : undefined,
-      action: fromControlStatus === 'RETURNED' ? 'SHIFT_RESUBMITTED' : 'SHIFT_SUBMITTED',
+      action: fromControlStatus === 'RETURNED' || submissionState.approvalDecision === 'REJECTED'
+        ? 'SHIFT_RESUBMITTED'
+        : 'SHIFT_SUBMITTED',
       fromStatus: fromControlStatus,
       toStatus: 'SUBMITTED',
       performedBy: ctx.userId,
@@ -525,12 +529,12 @@ export class ShiftControlService {
   /**
    * Finance returns a shift for correction.
    *
-   * Two-dimension model:
-   *   status        = CLOSED    — the operational session stays locked (no new transactions)
-   *   controlStatus = RETURNED  — Finance rejected the declaration; operator must re-declare
-   *
-   * The operator re-declares by calling the close/settle endpoint again, which
-   * calls ShiftControlService.submitShift() and advances controlStatus → SUBMITTED.
+   * A returned shift is fully reopened for correction. This is intentional:
+   * pending offline work may include ordinary front-desk operations, not only
+   * cash declarations. Reopening the operational session makes all normal
+   * guards see status/controlStatus OPEN again. The return and its reason stay
+   * in the append-only shift-control audit, and the next submission clears the
+   * old approval fields and creates a fresh submission audit.
    */
   static async returnShift(
     ctx: TenantContext,
@@ -543,21 +547,39 @@ export class ShiftControlService {
       assertShiftTransition(shift.controlStatus, 'RETURNED');
       if (!notes) throw new ShiftControlError('Notes are required to return a shift', 'BAD_REQUEST');
 
-      // status stays CLOSED — the session is operationally done.
-      // controlStatus = RETURNED signals Finance rejected the cash declaration.
-      const updateData = {
-        controlStatus: 'RETURNED' as const,
-        approvalDecision: 'REJECTED',
-        approvalNotes: notes,
-      };
-
       let updated;
       if (type === 'POS') {
-        updated = await tx.posSession.update({ where: { id: shiftId }, data: updateData });
+        updated = await tx.posSession.update({
+          where: { id: shiftId },
+          data: {
+            status: PosSessionStatus.OPEN,
+            controlStatus: 'OPEN',
+            approvalDecision: 'REJECTED',
+            approvalNotes: notes,
+            closedAt: null,
+            submittedAt: null,
+            submittedBy: null,
+            approvedBy: null,
+            approvedAt: null,
+          },
+        });
         const settlement = await tx.posSettlement.findFirst({ where: { sessionId: shiftId }, orderBy: { settledAt: 'desc' } });
         if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'REJECTED', authorizerId: ctx.userId } });
       } else {
-        updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: updateData });
+        updated = await tx.frontdeskSession.update({
+          where: { id: shiftId },
+          data: {
+            status: FrontdeskSessionStatus.OPEN,
+            controlStatus: 'OPEN',
+            approvalDecision: 'REJECTED',
+            approvalNotes: notes,
+            closedAt: null,
+            submittedAt: null,
+            submittedBy: null,
+            approvedBy: null,
+            approvedAt: null,
+          },
+        });
       }
 
       await this.audit(tx, {
@@ -566,9 +588,10 @@ export class ShiftControlService {
         frontdeskSessionId: type === 'FRONT_DESK' ? shiftId : undefined,
         action: 'SHIFT_RETURNED',
         fromStatus: shift.controlStatus,
-        toStatus: 'RETURNED',
+        toStatus: 'OPEN',
         performedBy: ctx.userId,
-        metadata: { notes },
+        reason: notes,
+        metadata: { notes, reopenedForOperationalCorrection: true },
       });
 
       return updated;

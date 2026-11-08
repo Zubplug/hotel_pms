@@ -24,8 +24,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const current = await prisma.frontdeskSession.findUnique({ where: { id }, include: { cashMovements: true } });
     if (!current) return errorResponse('NOT_FOUND', 'Session not found', 404);
     if (await isNightAuditTransactionLocked(current.propertyId, current.businessDate)) return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Cashier shift changes are temporarily paused while Night Audit is posting.', 409);
-    // A returned shift stays operationally CLOSED; RETURNED control status is
-    // the explicit permission for the operator to correct and resubmit it.
+    // A manager-returned shift is reopened operationally. The operator can
+    // perform normal front-desk work and then submit a fresh close.
     if (current.status !== 'OPEN' && current.controlStatus !== 'RETURNED') {
       return errorResponse('BAD_REQUEST', `Cannot close session in status ${current.status}`, 400);
     }
