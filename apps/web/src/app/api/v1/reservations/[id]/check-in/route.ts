@@ -7,6 +7,7 @@ import { hasPermission } from '@/lib/rbac';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
+import { findCheckInBypassSession } from '@/lib/frontdesk/checkin-bypass-session';
 
 export async function POST(
   req: NextRequest,
@@ -186,11 +187,14 @@ export async function POST(
              }
 
              // Find currently open frontdesk session for the operator
-             const operatorSession = await tx.frontdeskSession.findFirst({
-               where: { propertyId, staffId: currentStaff.id, controlStatus: 'OPEN' }
-             });
+             const { session: operatorSession, recovery } = await findCheckInBypassSession(
+               tx,
+               propertyId,
+               currentStaff.id,
+               reservation.property.businessDate || undefined,
+             );
              if (!operatorSession) {
-               throw new Error('BAD_REQUEST: You must have an open Front Desk shift to bypass deposit.');
+               throw new Error('BAD_REQUEST: You must have an open or recoverable same-day Front Desk shift to bypass deposit.');
              }
 
              // Idempotency check for bypass
@@ -212,6 +216,17 @@ export async function POST(
                    businessDate: operatorSession.businessDate,
                  }
                });
+               if (recovery) {
+                 await tx.frontdeskSessionAudit.create({
+                   data: {
+                     frontdeskSessionId: operatorSession.id,
+                     action: 'CHECKIN_BYPASS_AFTER_SHIFT_CLOSE',
+                     performedBy: currentStaff.id,
+                     notes: 'Pending check-in completed after operator shift close; financial bypass remains pending manager review.',
+                     metadata: { reservationId, operationId: generatedOpId },
+                   },
+                 });
+               }
              }
            } else {
              throw new Error('PAYMENT_REQUIRED: Insufficient Deposit to cover Check-In.');
