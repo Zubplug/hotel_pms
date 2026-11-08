@@ -59,12 +59,12 @@ export function ProductCardStepper({
         onClick={onClick}
         className="flex-1 flex flex-col items-center justify-center text-center px-2 pt-3 pb-2 gap-1.5 focus:outline-none touch-manipulation"
       >
-        <span className="relative flex h-20 w-full items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+        <span className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-lg bg-slate-50 p-1.5 sm:h-28">
           {imageUrl && !imageFailed ? (
             <img
               src={imageUrl}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+              className="h-full w-full object-contain"
               loading="lazy"
               onError={() => setImageFailed(true)}
             />
