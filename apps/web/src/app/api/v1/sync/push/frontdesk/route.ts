@@ -27,7 +27,6 @@ import { QueuePublisher } from "@/lib/integrations/ota/queue";
 import { fulfilReachBooking } from "@/lib/reach-commission";
 import { emitShiftDecisionNotification } from '@/lib/services/shift-notification-service';
 import { isConcessionManagementPosition } from '@/lib/concession-accountability';
-import { findCheckInBypassSession } from '@/lib/frontdesk/checkin-bypass-session';
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -1585,18 +1584,12 @@ export async function POST(req: NextRequest) {
             });
 
             if (!existingBypass) {
-              const propertyBusinessDate = parseLocalDateString(payload.businessDate)
-                ?? (await tx.property.findUnique({ where: { id: propertyId }, select: { businessDate: true } }))?.businessDate
-                ?? undefined;
-              const { session: operatorSession, recovery } = await findCheckInBypassSession(
-                tx,
-                propertyId,
-                operatorId,
-                propertyBusinessDate,
-              );
+              const operatorSession = await tx.frontdeskSession.findFirst({
+                where: { propertyId, staffId: operatorId, controlStatus: 'OPEN' }
+              });
 
               if (!operatorSession) {
-                throw new Error("No open or recoverable same-day FrontdeskSession found for operator to bypass checkin.");
+                throw new Error("No open FrontdeskSession found for operator to bypass checkin.");
               }
 
               await tx.checkInBypass.create({
@@ -1612,17 +1605,6 @@ export async function POST(req: NextRequest) {
                   businessDate: operatorSession.businessDate,
                 }
               });
-              if (recovery) {
-                await tx.frontdeskSessionAudit.create({
-                  data: {
-                    frontdeskSessionId: operatorSession.id,
-                    action: 'CHECKIN_BYPASS_AFTER_SHIFT_CLOSE',
-                    performedBy: operatorId,
-                    notes: 'Offline pending check-in completed after operator shift close; financial bypass remains pending manager review.',
-                    metadata: { reservationId: aggregateId, operationId: bypassOpId, source: 'SYNC_PUSH' },
-                  },
-                });
-              }
             }
           } else if (aggregateType === "RESERVATION" && eventType === "CHECK_IN") {
             const reservation = await tx.reservation.findUnique({

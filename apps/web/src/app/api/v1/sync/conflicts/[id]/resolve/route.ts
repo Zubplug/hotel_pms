@@ -8,7 +8,6 @@ import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import type { PaymentMethod } from '@hotel-pms/db';
-import { findCheckInBypassSession } from '@/lib/frontdesk/checkin-bypass-session';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -214,22 +213,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                    });
                    if (!staff) throw new Error("Staff record not found for operator");
 
-                   const eventBusinessDate = edgeEvent.payload && typeof edgeEvent.payload === 'object'
-                     ? (edgeEvent.payload as any).businessDate
-                     : undefined;
-                   const propertyBusinessDate = eventBusinessDate
-                     ? new Date(String(eventBusinessDate).split('T')[0] + 'T00:00:00.000Z')
-                     : (await tx.property.findUnique({ where: { id: conflict.propertyId }, select: { businessDate: true } }))?.businessDate
-                       ?? undefined;
-                   const { session: operatorSession, recovery } = await findCheckInBypassSession(
-                     tx,
-                     conflict.propertyId,
-                     staff.id,
-                     propertyBusinessDate,
-                   );
+                   const operatorSession = await tx.frontdeskSession.findFirst({
+                     where: { propertyId: conflict.propertyId, staffId: staff.id, controlStatus: 'OPEN' }
+                   });
 
                    if (!operatorSession) {
-                     throw new Error("No open or recoverable same-day FrontdeskSession found for operator to bypass checkin.");
+                     throw new Error("No open FrontdeskSession found for operator to bypass checkin.");
                    }
 
                    await tx.checkInBypass.create({
@@ -246,17 +235,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                        createdAt: new Date(),
                      },
                    });
-                   if (recovery) {
-                     await tx.frontdeskSessionAudit.create({
-                       data: {
-                         frontdeskSessionId: operatorSession.id,
-                         action: 'CHECKIN_BYPASS_AFTER_SHIFT_CLOSE',
-                         performedBy: staff.id,
-                         notes: 'Conflict resolution completed a pending check-in after operator shift close; financial bypass remains pending manager review.',
-                         metadata: { reservationId: r.id, operationId: bypassOpId, source: 'CONFLICT_RESOLUTION' },
-                       },
-                     });
-                   }
                  }
                  await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
              } else {
