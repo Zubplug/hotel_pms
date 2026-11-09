@@ -63,9 +63,9 @@ export default function DemoPage() {
             <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6 }}>They work for the web portal and the mobile management app until {new Date(credentials.expiresAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}.</p>
             <p style={{ color: credentials.emailSent ? "var(--mint)" : "#fbbf24", fontSize: 13, lineHeight: 1.6 }}>{credentials.emailSent ? "Your access details were sent to your email address." : "We could not send the email, so copy these credentials before leaving this page."}</p>
             <div style={{ display: "grid", gap: 10, marginTop: 20 }}>
-              {[["Email", credentials.email], ["Password", credentials.password], ["Mobile PIN", credentials.pin]].map(([label, value]) => <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 20, padding: "12px 14px", borderRadius: 10, background: "var(--bg-overlay)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12 }}><span style={{ color: "var(--text-muted)" }}>{label}</span><strong>{value}</strong></div>)}
+              {[["Email", credentials.email], ["Password", credentials.password], ["Mobile PIN", credentials.pin]].map(([label, value]) => <div key={label} className="demo-credential-row" style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-overlay)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12 }}><span style={{ color: "var(--text-muted)" }}>{label}</span><strong>{value}</strong></div>)}
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}><Link href={credentials.managementLoginUrl} className="btn btn-primary">Open management portal →</Link><Link href={credentials.playStoreUrl} className="btn btn-outline">Get mobile app →</Link></div>
+            <div className="demo-success-actions"><Link href={credentials.managementLoginUrl} className="btn btn-primary">Open management portal →</Link><Link href={credentials.playStoreUrl} className="btn btn-outline">Get mobile app →</Link></div>
           </div>
         ) : (
           <form onSubmit={submit} className="portal-card" style={{ marginTop: 32, padding: 28, display: "grid", gap: 16 }}>

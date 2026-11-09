@@ -94,8 +94,12 @@ ul, ol { list-style: none; }
 }
 .site-input:focus { border-color: rgba(0,212,232,.65); box-shadow: 0 0 0 3px rgba(0,212,232,.1); }
 .demo-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.demo-credential-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.demo-credential-row strong { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+.demo-success-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 @media (max-width: 760px) {
   .book-demo-grid, .book-demo-paths, .demo-form-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
+  .demo-success-actions .btn { flex: 1 1 100%; justify-content: center; }
 }
 .section-gap { padding: 120px 0; }
 .section-gap-sm { padding: 80px 0; }
@@ -1238,6 +1242,25 @@ code, .mono { font-family: var(--font-mono); font-size: .9em; }
   background: #03080f;
   border-top: 1px solid var(--border);
 }
+.footer-cta {
+  max-width: 1184px;
+  margin: 0 auto;
+  padding: 42px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  border-bottom: 1px solid var(--border);
+}
+.footer-cta h2 {
+  margin-top: 10px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  letter-spacing: -.05em;
+}
+.footer-cta p { margin-top: 8px; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.footer-cta-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .footer-upper {
   max-width: 1240px;
   margin: 0 auto;
@@ -1642,6 +1665,9 @@ textarea.form-input { resize: vertical; min-height: 90px; }
   .demo-form-card { padding: 24px 18px; }
   .form-row { grid-template-columns: 1fr; }
   .footer-upper { grid-template-columns: 1fr; gap: 36px; }
+  .footer-cta { align-items: flex-start; flex-direction: column; padding: 38px 18px; }
+  .footer-cta-actions { justify-content: flex-start; width: 100%; }
+  .footer-cta-actions .btn { flex: 1 1 100%; justify-content: center; }
   .footer-lower { flex-direction: column; align-items: flex-start; }
   .feature-grid { grid-template-columns: 1fr; }
   .cta-section { padding: 100px 0; }

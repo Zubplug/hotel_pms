@@ -238,9 +238,6 @@ export function PublicHeader({ onSignIn }: { onSignIn?: () => void } = {}) {
           {/* Desktop Actions */}
           <div className="header-actions">
             {onSignIn ? <button type="button" className="header-signin" onClick={onSignIn}>Sign in</button> : <Link href="/portal" className="header-signin">Sign in</Link>}
-            <Link href="/demo" className="header-signin">Try the demo</Link>
-            <a href={PLAY_STORE_URL} className="header-signin" target="_blank" rel="noreferrer">Get the mobile app</a>
-            <Link href="/partners" className="header-signin">Become a partner</Link>
             <Link href="/book-demo" className="btn btn-primary btn-sm">
               Talk to LodgeCore <span className="btn-arrow">→</span>
             </Link>
@@ -304,6 +301,7 @@ export function PublicHeader({ onSignIn }: { onSignIn?: () => void } = {}) {
           ]} />
           <Link href="/integrations" className="drawer-link" onClick={closeDrawer}>Integrations <span>→</span></Link>
           <div className="drawer-actions">
+            <Link href="/demo" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Try the demo →</Link>
             <a href={PLAY_STORE_URL} className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} target="_blank" rel="noreferrer" onClick={closeDrawer}>Get the mobile app →</a>
             <Link href="/partners" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Become a partner →</Link>
             {onSignIn ? <button type="button" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={() => { closeDrawer(); onSignIn(); }}>Sign in</button> : <Link href="/portal" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Sign in</Link>}
@@ -321,6 +319,18 @@ export function PublicFooter() {
   return (
     <footer className="site-footer">
       <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(0,212,232,.3), rgba(167,139,250,.2), transparent)" }} />
+      <div className="footer-cta">
+        <div>
+          <span className="section-kicker">Start with LodgeCore</span>
+          <h2>See the platform in action.</h2>
+          <p>Explore a live demo, get the mobile app, or speak with our team about your property.</p>
+        </div>
+        <div className="footer-cta-actions">
+          <Link href="/demo" className="btn btn-primary">Try the demo <span className="btn-arrow">→</span></Link>
+          <a href={PLAY_STORE_URL} className="btn btn-outline" target="_blank" rel="noreferrer">Get the mobile app</a>
+          <Link href="/partners" className="btn btn-outline">Become a partner</Link>
+        </div>
+      </div>
       <div className="footer-upper">
         <div className="footer-brand">
           <Link href="/" className="brand" style={{ marginBottom: 14, display: "inline-block" }}>Lodge<span className="brand-core">Core</span></Link>
