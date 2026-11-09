@@ -630,6 +630,37 @@ export async function POST(req: NextRequest) {
             });
             updatedCount = res.count;
 
+            // Checkout can authoritatively repair/post the day-use breakdown
+            // while an offline terminal is still holding the older folio
+            // version. The terminal then replays the same POST_CHARGE (for
+            // example the FNB allocation) and would otherwise be recorded as
+            // an OCC conflict before the charge handler gets to its normal
+            // idempotency check. If the exact operation is already present,
+            // accept the replay as a harmless no-op; do not increment the
+            // folio or create another financial line.
+            if (
+              updatedCount === 0 &&
+              (eventType === "POST_CHARGE" || eventType === "ROOM_CHARGE")
+            ) {
+              const replayedCharge = await tx.folioItem.findFirst({
+                where: {
+                  folioId: aggregateId,
+                  OR: [
+                    { posTransactionId: idempotencyKey },
+                    { operationId: idempotencyKey },
+                  ],
+                  voidedAt: null,
+                },
+                select: { id: true },
+              });
+              if (replayedCharge) {
+                updatedCount = 1;
+                console.log(
+                  `[sync/push] ${eventType} idempotent accept for already-posted charge ${idempotencyKey}`
+                );
+              }
+            }
+
             // Safe fallback & idempotency bypass for offline folios (e.g. CITY_LEDGER_SETTLEMENT, ADVANCE_DEPOSIT)
             if (updatedCount === 0 && eventType === "CITY_LEDGER_SETTLEMENT") {
               const amount = Number(payload.amount ?? payload.Amount);
