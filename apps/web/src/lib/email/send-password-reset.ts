@@ -2,7 +2,7 @@ type PasswordResetEmail = { to: string; resetUrl: string; expiresAt: Date };
 
 export async function sendPasswordResetEmail(input: PasswordResetEmail) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const from = process.env.LODGECORE_FROM_EMAIL;
   if (!apiKey || !from) throw new Error('Transactional email is not configured.');
   const expires = input.expiresAt.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' });
   const response = await fetch('https://api.resend.com/emails', {
@@ -20,7 +20,7 @@ export async function sendPasswordResetEmail(input: PasswordResetEmail) {
 
 export async function sendRecoveryCodeEmail(input: { to: string; code: string; purpose: 'PASSWORD' | 'PIN'; expiresAt: Date }) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const from = process.env.LODGECORE_FROM_EMAIL;
   if (!apiKey || !from) throw new Error('Transactional email is not configured.');
   const expires = input.expiresAt.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' });
   const label = input.purpose === 'PIN' ? 'login PIN' : 'password';

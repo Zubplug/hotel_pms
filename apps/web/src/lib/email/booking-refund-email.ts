@@ -20,7 +20,7 @@ export async function sendBookingRefundCompletedEmail(input: {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL ?? 'no-reply@lodgecore.com', to: [input.to], subject, html }),
+    body: JSON.stringify({ from: process.env.LODGECORE_FROM_EMAIL ?? 'no-reply@lodgecore.com', to: [input.to], subject, html }),
   });
   if (!response.ok) throw new Error(`Resend failed: ${response.status}`);
 }
