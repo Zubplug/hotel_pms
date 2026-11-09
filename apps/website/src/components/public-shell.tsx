@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.lodgecore.management";
+
 /* ─── Nav data ──────────────────────────────────────────── */
 const NAV = [
   {
@@ -237,6 +239,7 @@ export function PublicHeader({ onSignIn }: { onSignIn?: () => void } = {}) {
           <div className="header-actions">
             {onSignIn ? <button type="button" className="header-signin" onClick={onSignIn}>Sign in</button> : <Link href="/portal" className="header-signin">Sign in</Link>}
             <Link href="/demo" className="header-signin">Try the demo</Link>
+            <a href={PLAY_STORE_URL} className="header-signin" target="_blank" rel="noreferrer">Get the mobile app</a>
             <Link href="/partners" className="header-signin">Become a partner</Link>
             <Link href="/book-demo" className="btn btn-primary btn-sm">
               Talk to LodgeCore <span className="btn-arrow">→</span>
@@ -301,6 +304,7 @@ export function PublicHeader({ onSignIn }: { onSignIn?: () => void } = {}) {
           ]} />
           <Link href="/integrations" className="drawer-link" onClick={closeDrawer}>Integrations <span>→</span></Link>
           <div className="drawer-actions">
+            <a href={PLAY_STORE_URL} className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} target="_blank" rel="noreferrer" onClick={closeDrawer}>Get the mobile app →</a>
             <Link href="/partners" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Become a partner →</Link>
             {onSignIn ? <button type="button" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={() => { closeDrawer(); onSignIn(); }}>Sign in</button> : <Link href="/portal" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Sign in</Link>}
             <Link href="/book-demo" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Talk to LodgeCore →</Link>
@@ -338,6 +342,7 @@ export function PublicFooter() {
         <div className="footer-col">
           <h4>Company</h4>
           {([["/about","About LodgeCore"],["/partners","Partners"],["/pricing","Pricing"],["/integrations","Integrations"],["/book-demo","Contact"],["/portal","Customer Portal"],["/privacy","Privacy"],["/terms","Terms"]] as [string,string][]).map(([h,l])=><Link key={h} href={h}>{l}</Link>)}
+          <a href={PLAY_STORE_URL} target="_blank" rel="noreferrer">Get the mobile app</a>
         </div>
       </div>
       <div className="footer-lower">

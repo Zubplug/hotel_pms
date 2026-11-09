@@ -15,7 +15,7 @@ const roles = [
 export default function DemoPage() {
   const [status, setStatus] = useState<"idle" | "working" | "success" | "error">("idle");
   const [error, setError] = useState("");
-  const [credentials, setCredentials] = useState<{ email: string; password: string; pin: string; expiresAt: string } | null>(null);
+  const [credentials, setCredentials] = useState<{ email: string; password: string; pin: string; expiresAt: string; emailSent: boolean; managementLoginUrl: string; playStoreUrl: string } | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,7 +40,7 @@ export default function DemoPage() {
       setError(body.error || "Unable to create the demo account.");
       return;
     }
-    setCredentials({ ...body.credentials, expiresAt: body.expiresAt });
+    setCredentials({ ...body.credentials, expiresAt: body.expiresAt, emailSent: body.emailSent === true, managementLoginUrl: body.links?.managementLoginUrl || body.managementLoginUrl, playStoreUrl: body.links?.playStoreUrl || "https://play.google.com/store/apps/details?id=com.lodgecore.management" });
     setStatus("success");
   }
 
@@ -61,10 +61,11 @@ export default function DemoPage() {
             <div className="section-kicker" style={{ color: "var(--mint)" }}>Demo access ready</div>
             <h2 style={{ color: "var(--text-primary)", fontFamily: "var(--font-display)", margin: "10px 0" }}>Keep these credentials secure</h2>
             <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6 }}>They work for the web portal and the mobile management app until {new Date(credentials.expiresAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}.</p>
+            <p style={{ color: credentials.emailSent ? "var(--mint)" : "#fbbf24", fontSize: 13, lineHeight: 1.6 }}>{credentials.emailSent ? "Your access details were sent to your email address." : "We could not send the email, so copy these credentials before leaving this page."}</p>
             <div style={{ display: "grid", gap: 10, marginTop: 20 }}>
               {[["Email", credentials.email], ["Password", credentials.password], ["Mobile PIN", credentials.pin]].map(([label, value]) => <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 20, padding: "12px 14px", borderRadius: 10, background: "var(--bg-overlay)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12 }}><span style={{ color: "var(--text-muted)" }}>{label}</span><strong>{value}</strong></div>)}
             </div>
-            <Link href="https://lodgecore.vercel.app/login" className="btn btn-primary" style={{ display: "inline-block", marginTop: 22 }}>Open management portal →</Link>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}><Link href={credentials.managementLoginUrl} className="btn btn-primary">Open management portal →</Link><Link href={credentials.playStoreUrl} className="btn btn-outline">Get mobile app →</Link></div>
           </div>
         ) : (
           <form onSubmit={submit} className="portal-card" style={{ marginTop: 32, padding: 28, display: "grid", gap: 16 }}>

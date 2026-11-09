@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@hotel-pms/db';
 import { DEMO_ROLES, provisionDemoAccount } from '@/lib/demo-accounts';
+import { sendDemoCredentialsEmail } from '@/lib/email/send-demo-credentials';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,12 +45,33 @@ export async function POST(request: NextRequest) {
       roleName: parsed.data.roleName,
       createdIp: ip,
     });
+    let emailSent = false;
+    try {
+      await sendDemoCredentialsEmail({
+        to: result.email,
+        firstName: parsed.data.firstName,
+        roleName: parsed.data.roleName,
+        organizationName: result.organization.name,
+        propertyName: result.property.name,
+        password: result.password,
+        pin: result.pin,
+        expiresAt: result.demoAccount.expiresAt,
+      });
+      emailSent = true;
+    } catch (emailError) {
+      console.error('[public.demo] credentials email failed', emailError);
+    }
     return NextResponse.json({
       ok: true,
       expiresAt: result.demoAccount.expiresAt,
       propertyName: result.property.name,
       organizationName: result.organization.name,
       credentials: { email: result.email, password: result.password, pin: result.pin },
+      emailSent,
+      links: {
+        managementLoginUrl: `${process.env.MANAGEMENT_APP_URL || 'https://lodgecore.vercel.app'}/login`,
+        playStoreUrl: process.env.PLAY_STORE_URL || 'https://play.google.com/store/apps/details?id=com.lodgecore.management',
+      },
       managementLoginUrl: `${process.env.MANAGEMENT_APP_URL || 'https://lodgecore.vercel.app'}/login`,
     }, { status: 201 });
   } catch (error) {
