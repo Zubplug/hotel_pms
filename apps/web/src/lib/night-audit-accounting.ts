@@ -155,7 +155,6 @@ export async function postNightAuditJournal(tx: any, input: {
     serviceCharge: byCode.get(ACCOUNT_CODES.serviceCharge),
   };
   const missingAccounts = Object.entries(resolved).filter(([, account]) => !account).map(([key]) => key);
-  if (missingAccounts.length) return { status: 'MISSING_MAPPING', journalEntryId: null, missingAccounts, lineCount: 0 };
   const account = (key: keyof typeof resolved) => resolved[key]!;
 
   const period = await ensureAccountingPeriod(tx, {
@@ -197,6 +196,20 @@ export async function postNightAuditJournal(tx: any, input: {
       select: { id: true, totalValue: true, stockItem: { select: { name: true } } },
     }),
   ]);
+
+  // A property can legitimately have a quiet business day. Do not require a
+  // complete revenue chart for a day on which there is nothing to post; the
+  // audit still records a zero-activity journal below. Real activity must
+  // still pass through the normal account-mapping controls.
+  const hasSourceActivity = [
+    ...folioItems.map((item: any) => Number(item.amount)),
+    ...payments.map((payment: any) => Number(payment.amount)),
+    ...refunds.map((refund: any) => Number(refund.amount)),
+    ...guestAmenityTransactions.map((transaction: any) => Number(transaction.totalValue)),
+  ].some((amount) => Number.isFinite(amount) && Math.abs(amount) > 0.0001);
+  if (missingAccounts.length && hasSourceActivity) {
+    return { status: 'MISSING_MAPPING', journalEntryId: null, missingAccounts, lineCount: 0 };
+  }
   const outletTypes = new Map(posOutlets.map((o: any) => [o.id, o.type]));
 
   const lines: PostingLine[] = [];
@@ -343,7 +356,7 @@ export async function postNightAuditJournal(tx: any, input: {
 
   const totalDebit = lines.reduce((sum, line) => sum + line.debit, 0);
   const totalCredit = lines.reduce((sum, line) => sum + line.credit, 0);
-  if (!lines.length || Math.abs(totalDebit - totalCredit) > 0.01) return { status: 'UNBALANCED_SOURCE', journalEntryId: null, missingAccounts: ['SOURCE_TOTALS_DO_NOT_BALANCE'], lineCount: lines.length };
+  if (Math.abs(totalDebit - totalCredit) > 0.01) return { status: 'UNBALANCED_SOURCE', journalEntryId: null, missingAccounts: ['SOURCE_TOTALS_DO_NOT_BALANCE'], lineCount: lines.length };
   const entry = await tx.journalEntry.create({
     data: {
       propertyId: input.propertyId,
@@ -351,7 +364,9 @@ export async function postNightAuditJournal(tx: any, input: {
       nightAuditId: input.auditId,
       entryNumber: `NA-${input.propertyId.slice(0, 8)}-${input.businessDate.toISOString().slice(0, 10)}-${input.auditId.slice(0, 8)}`,
       entryDate: input.businessDate,
-      description: `Night Audit close ${input.businessDate.toISOString().slice(0, 10)}`,
+      description: lines.length
+        ? `Night Audit close ${input.businessDate.toISOString().slice(0, 10)}`
+        : `Night Audit close ${input.businessDate.toISOString().slice(0, 10)} — no financial activity`,
       reference: input.auditId,
       source: 'AUTO_NIGHT_AUDIT',
       status: 'POSTED',
