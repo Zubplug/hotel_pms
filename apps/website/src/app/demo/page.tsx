@@ -6,6 +6,9 @@ import { PublicHeader, PublicFooter } from "@/components/public-shell";
 
 const roles = [
   ["GENERAL_MANAGER", "General Manager", "Executive dashboards, approvals and property oversight"],
+  ["FRONT_DESK", "Front Desk / Receptionist", "Reservations, arrivals, departures and guest service"],
+  ["HR_MANAGER", "HR Manager", "People operations, employee records and workforce workflows"],
+  ["STOCK_MANAGER", "Stock Manager", "Inventory, stock control, transfers and purchasing"],
   ["GENERAL_CASHIER", "General Cashier", "Cash management, shifts and reconciliation"],
   ["NIGHT_AUDITOR", "Night Auditor", "Audit readiness, controls and business-date close"],
   ["ACCOUNTANT", "Accountant", "Ledger, journals and financial reporting"],

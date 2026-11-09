@@ -10,7 +10,7 @@ export async function createDemoUserFromHQ(formData: FormData) {
   const lastName = String(formData.get('lastName') || '').trim();
   const email = String(formData.get('email') || '').trim().toLowerCase();
   const roleName = String(formData.get('roleName') || '').trim();
-  if (!firstName || !lastName || !/^\S+@\S+\.\S+$/.test(email) || !['GENERAL_MANAGER', 'GENERAL_CASHIER', 'NIGHT_AUDITOR', 'ACCOUNTANT', 'FNB_MANAGER'].includes(roleName)) throw new Error('Complete the demo user details and select a valid role.');
+  if (!firstName || !lastName || !/^\S+@\S+\.\S+$/.test(email) || !['GENERAL_MANAGER', 'FRONT_DESK', 'HR_MANAGER', 'STOCK_MANAGER', 'GENERAL_CASHIER', 'NIGHT_AUDITOR', 'ACCOUNTANT', 'FNB_MANAGER'].includes(roleName)) throw new Error('Complete the demo user details and select a valid role.');
 
   const websiteOrigin = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app';
   const response = await fetch(`${websiteOrigin.replace(/\/$/, '')}/api/demo`, {

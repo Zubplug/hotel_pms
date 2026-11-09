@@ -4,6 +4,9 @@ import prisma from '@hotel-pms/db';
 
 export const DEMO_ROLES = [
   'GENERAL_MANAGER',
+  'FRONT_DESK',
+  'HR_MANAGER',
+  'STOCK_MANAGER',
   'GENERAL_CASHIER',
   'NIGHT_AUDITOR',
   'ACCOUNTANT',
