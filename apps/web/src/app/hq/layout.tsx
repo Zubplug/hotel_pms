@@ -4,6 +4,7 @@ import { Shield, Building2, Package, Activity, FileText, Target, Globe, Network,
 import { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { HQLogoutButton } from './HQLogoutButton';
+import { HQMobileNav } from './HQMobileNav';
 
 export default async function HQLayout({
   children,
@@ -29,7 +30,7 @@ export default async function HQLayout({
   ];
 
   return (
-    <div className="flex h-screen bg-[#07111f] text-slate-200">
+    <div className="hq-shell flex h-screen min-w-0 overflow-hidden bg-[#07111f] text-slate-200">
       {/* HQ Sidebar */}
       <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0b1628] text-slate-300 lg:flex lg:flex-col">
         <div className="border-b border-white/10 px-6 py-6">
@@ -55,7 +56,8 @@ export default async function HQLayout({
       </aside>
 
       {/* Main Content */}
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <HQMobileNav admin={admin} />
         <Suspense fallback={<div className="p-8 text-slate-500">Loading control plane…</div>}>
           {children}
         </Suspense>

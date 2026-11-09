@@ -2,6 +2,20 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* HQ is a dense administrative workspace. Keep the shared shell constrained
+   on small screens so wide tables remain locally scrollable instead of
+   widening the entire viewport. */
+.hq-shell { min-width: 0; }
+.hq-shell main { min-width: 0; overscroll-behavior-x: none; }
+.hq-shell table { max-width: 100%; }
+@media (max-width: 639px) {
+  .hq-shell input:not([type='checkbox']):not([type='radio']),
+  .hq-shell textarea,
+  .hq-shell select { font-size: 16px; }
+  .hq-shell main > div,
+  .hq-shell main > section { max-width: 100%; }
+}
+
 /* Employee self-service visual system. Scoped to the employee portal so the
    HR redesign can evolve independently from the operational PMS surfaces. */
 .ess-shell {
