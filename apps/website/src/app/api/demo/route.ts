@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
   const demoStore = (prisma as any).demoAccount;
   const [existingUser, recentEmail, recentIp] = await Promise.all([
     prisma.user.findUnique({ where: { email }, select: { id: true } }),
-    demoStore.count({ where: { email, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
-    demoStore.count({ where: { createdIp: ip, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } }),
+    demoStore.count({ where: { email, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }),
+    demoStore.count({ where: { createdIp: ip, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } } }),
   ]);
   if (existingUser) return NextResponse.json({ error: 'This email already has an account. Use a different email for the demo.' }, { status: 409 });
   if (recentEmail > 0) return NextResponse.json({ error: 'A demo account was already created for this email in the last 24 hours.' }, { status: 429 });
