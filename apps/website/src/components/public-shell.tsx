@@ -236,6 +236,7 @@ export function PublicHeader({ onSignIn }: { onSignIn?: () => void } = {}) {
           {/* Desktop Actions */}
           <div className="header-actions">
             {onSignIn ? <button type="button" className="header-signin" onClick={onSignIn}>Sign in</button> : <Link href="/portal" className="header-signin">Sign in</Link>}
+            <Link href="/demo" className="header-signin">Try the demo</Link>
             <Link href="/partners" className="header-signin">Become a partner</Link>
             <Link href="/book-demo" className="btn btn-primary btn-sm">
               Talk to LodgeCore <span className="btn-arrow">→</span>

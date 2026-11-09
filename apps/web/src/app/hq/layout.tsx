@@ -1,6 +1,6 @@
 import { requireHQAdmin } from '@/lib/auth/hq';
 import Link from 'next/link';
-import { Shield, Building2, Package, Activity, FileText, Target, Globe, Network, ClipboardCheck } from 'lucide-react';
+import { Shield, Building2, Package, Activity, FileText, Target, Globe, Network, ClipboardCheck, FlaskConical } from 'lucide-react';
 import { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { HQLogoutButton } from './HQLogoutButton';
@@ -18,6 +18,7 @@ export default async function HQLayout({
     { href: '/hq', label: 'Command centre', icon: Activity },
     { href: '/hq/organizations', label: 'Organisations', icon: Building2 },
     { href: '/hq/approvals', label: 'Approval centre', icon: ClipboardCheck },
+    { href: '/hq/demo', label: 'Demo access', icon: FlaskConical },
     { href: '/hq/leads', label: 'Sales leads', icon: Target },
     { href: '/hq/products', label: 'Products & pricing', icon: Package },
     { href: '/hq/reach', label: 'Reach network', icon: Network },

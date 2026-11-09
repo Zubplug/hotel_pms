@@ -75,6 +75,17 @@ export async function POST(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid credentials', 401);
     }
 
+    // Demo accounts are time-limited independently of the shared HQ demo
+    // organization and property. Enforce expiry before either password or PIN
+    // authentication succeeds so an expired account cannot obtain a new token.
+    const demoAccount = await (prisma as any).demoAccount.findUnique({
+      where: { userId: user.id },
+      select: { status: true, expiresAt: true },
+    });
+    if (demoAccount && (demoAccount.status !== 'ACTIVE' || demoAccount.expiresAt <= new Date())) {
+      return errorResponse('DEMO_EXPIRED', 'This demo account has expired. Request a new demo account to continue.', 410);
+    }
+
     if (pinLogin) {
       if (user.mobilePinLockedUntil && user.mobilePinLockedUntil > new Date()) {
         return errorResponse('TOO_MANY_REQUESTS', 'PIN temporarily locked. Try again later or use your password.', 429);

@@ -71,6 +71,7 @@ model Organization {
   websiteProjects                  WebsiteProject[]
   usageRecords                     Usage[]
   posActivationKeys                PosActivationKey[]
+  demoAccounts                     DemoAccount[]
 
   // Booking Engine
   bookingEngineConfigs       BookingEngineConfig[]
@@ -153,6 +154,8 @@ model Property {
   locale            String @default("en-NG")
   settings          Json?
   lockConfiguration Json? // { provider: "DELUNS", dlsCoID: 12345, encoderPort: 1 }
+
+  demoAccounts DemoAccount[]
 
   cashVarianceGeneralCashierLimit   Decimal?                                   @db.Decimal(18, 4)
   cashVarianceFinanceManagerLimit   Decimal?                                   @db.Decimal(18, 4)
@@ -2462,6 +2465,49 @@ model Staff {
   compensationChangeRequests   CompensationChangeRequest[]
   employeeMovements            EmployeeMovement[]
   policyAcknowledgements       PolicyAcknowledgement[]
+  demoAccount                  DemoAccount?
+}
+
+/// Temporary management accounts provisioned from the public demo request.
+/// The organization and property are HQ-owned; only the account is temporary.
+model DemoAccount {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  propertyId     String   @db.Uuid
+  userId         String   @unique @db.Uuid
+  staffId        String   @unique @db.Uuid
+  email          String
+  roleName       String
+  status         String   @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
+  createdIp      String?
+  expiresAt      DateTime @db.Timestamptz
+  expiredAt      DateTime? @db.Timestamptz
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staff        Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@index([createdIp, createdAt])
+  @@index([organizationId, propertyId, status])
+}
+
+/// HQ-controlled target for public temporary demo accounts.
+model DemoConfiguration {
+  id             String   @id @default(uuid()) @db.Uuid
+  configKey      String   @unique @default("default")
+  enabled        Boolean  @default(false)
+  organizationId String?  @db.Uuid
+  propertyId     String?  @db.Uuid
+  grantorUserId  String?  @db.Uuid
+  updatedById    String?  @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  @@index([enabled])
 }
 
 model StaffPosOutletAccess {
@@ -2509,6 +2555,7 @@ model User {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   membership                            OrganizationMembership?
+  demoAccount                           DemoAccount?
   portalOwnerOrganizations             Organization[]              @relation("OrganizationPortalOwner")
   requestedOrganizationApprovals       OrganizationApprovalRequest[] @relation("OrganizationApprovalRequestedBy")
   reviewedOrganizationApprovals        OrganizationApprovalRequest[] @relation("OrganizationApprovalReviewedBy")

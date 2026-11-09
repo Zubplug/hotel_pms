@@ -111,6 +111,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        const demoAccount = await (prisma as any).demoAccount.findUnique({
+          where: { userId: user.id },
+          select: { status: true, expiresAt: true },
+        });
+        if (demoAccount && (demoAccount.status !== 'ACTIVE' || demoAccount.expiresAt <= new Date())) {
+          return null;
+        }
+
         if (!staff) {
           staff = await prisma.staff.findFirst({
             where: {
@@ -242,9 +250,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { sessionVersion: true }
+            select: {
+              sessionVersion: true,
+              demoAccount: { select: { status: true, expiresAt: true } },
+            }
           });
-          if (!dbUser || dbUser.sessionVersion !== token.sessionVersion) {
+          if (!dbUser || dbUser.sessionVersion !== token.sessionVersion || (dbUser.demoAccount && (dbUser.demoAccount.status !== 'ACTIVE' || dbUser.demoAccount.expiresAt <= new Date()))) {
             // Revoke session if user was deleted or sessionVersion bumped
             return null as any; 
           }
