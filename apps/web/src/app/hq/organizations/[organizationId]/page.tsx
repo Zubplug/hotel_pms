@@ -37,9 +37,9 @@ export default async function OrganizationDetailsPage({ params }: { params: Prom
   const trialEligible = !organization.trialHistory && !existingSubscription;
   const planTargets = plans.map((plan) => {
     const prices = plan.items.filter((item) => item.product.code.toUpperCase().startsWith('PLAN_')).flatMap((item) => item.product.prices.filter((price) => price.catalogVersion === item.product.catalogVersion));
-    return { id: plan.id, name: plan.name, code: plan.code, prices: Object.values(prices.reduce<Record<string, { amount: number; currency: string; interval: string }>>((result, price) => { const key = `${price.currency}:${price.interval}`; result[key] = { amount: (result[key]?.amount ?? 0) + price.amount, currency: price.currency, interval: price.interval }; return result; }, {})) };
+    return { id: plan.id, name: plan.name, code: plan.code, prices: Object.values(prices.reduce<Record<string, { amount: number; currency: string; interval: string }>>((result, price) => { const key = `${price.currency}:${price.interval}`; result[key] = { amount: (result[key]?.amount ?? 0) + Number(price.amount), currency: price.currency, interval: price.interval }; return result; }, {})) };
   });
-  const addOnTargets = addOns.map((addOn) => ({ id: addOn.id, name: addOn.name, code: addOn.code, prices: addOn.prices.filter((price) => price.catalogVersion === addOn.catalogVersion).map(({ amount, currency, interval }) => ({ amount, currency, interval })) }));
+  const addOnTargets = addOns.map((addOn) => ({ id: addOn.id, name: addOn.name, code: addOn.code, prices: addOn.prices.filter((price) => price.catalogVersion === addOn.catalogVersion).map(({ amount, currency, interval }) => ({ amount: Number(amount), currency, interval })) }));
 
   return <main className="min-h-full bg-[#07111f] p-5 text-slate-200 sm:p-8 xl:p-10"><div className="mx-auto max-w-[1500px] space-y-6">
     <div className="flex flex-wrap items-center justify-between gap-4"><Link href="/hq/organizations" className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 transition hover:text-white"><ArrowLeft className="size-4" /> Back to organisations</Link><span className="rounded-full border border-emerald-300/15 bg-emerald-300/[.06] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.14em] text-emerald-200">HQ detail view</span></div>
