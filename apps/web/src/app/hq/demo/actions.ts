@@ -4,6 +4,27 @@ import prisma from '@hotel-pms/db';
 import { requireHQAdmin } from '@/lib/auth/hq';
 import { revalidatePath } from 'next/cache';
 
+export async function createDemoUserFromHQ(formData: FormData) {
+  await requireHQAdmin();
+  const firstName = String(formData.get('firstName') || '').trim();
+  const lastName = String(formData.get('lastName') || '').trim();
+  const email = String(formData.get('email') || '').trim().toLowerCase();
+  const roleName = String(formData.get('roleName') || '').trim();
+  if (!firstName || !lastName || !/^\S+@\S+\.\S+$/.test(email) || !['GENERAL_MANAGER', 'GENERAL_CASHIER', 'NIGHT_AUDITOR', 'ACCOUNTANT', 'FNB_MANAGER'].includes(roleName)) throw new Error('Complete the demo user details and select a valid role.');
+
+  const websiteOrigin = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app';
+  const response = await fetch(`${websiteOrigin.replace(/\/$/, '')}/api/demo`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': 'hq-admin' },
+    body: JSON.stringify({ firstName, lastName, email, roleName, website: '', consent: true }),
+    cache: 'no-store',
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Unable to create the demo user.');
+  revalidatePath('/hq/demo');
+  return body;
+}
+
 export async function saveDemoConfiguration(formData: FormData) {
   const admin = await requireHQAdmin();
   const organizationId = String(formData.get('organizationId') || '').trim();
