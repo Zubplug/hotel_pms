@@ -168,6 +168,7 @@ function PremiumDropdown({
   dark = false,
   emptyMessage = 'No options available',
   loading = false,
+  inputClassName = '',
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -177,6 +178,7 @@ function PremiumDropdown({
   dark?: boolean;
   emptyMessage?: string;
   loading?: boolean;
+  inputClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
@@ -299,6 +301,7 @@ function PremiumDropdown({
           'flex h-12 w-full items-center justify-between gap-3 rounded-xl border px-4 text-left text-sm font-medium transition-all duration-200',
           open ? triggerOpen : triggerBase,
           disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+          inputClassName,
         ].join(' ')}
       >
         {loading ? (

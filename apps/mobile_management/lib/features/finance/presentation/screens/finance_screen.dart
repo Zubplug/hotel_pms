@@ -250,6 +250,18 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
             _AuditStatusBanner(data: data),
             const SizedBox(height: 16),
 
+            // The latest completed audit is the controlled default. Other
+            // ranges are explicit read-only reporting views.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _PeriodSelector(
+                selected: period,
+                onChanged: (value) =>
+                    ref.read(financePeriodProvider.notifier).state = value,
+              ),
+            ),
+            const SizedBox(height: 18),
+
             // ── Hero Revenue Cards ──
             _HeroRevenueRow(data: data, fmt: fmt),
             const SizedBox(height: 20),
@@ -405,8 +417,10 @@ class _PeriodSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final periods = ['TODAY', 'WEEK', 'MONTH'];
-    final labels = compact ? ['D', 'W', 'M'] : ['Today', 'Week', 'Month'];
+    final periods = ['LAST_AUDIT', '7D', 'MTD', 'YTD'];
+    final labels = compact
+        ? ['Audit', '7D', 'MTD', 'YTD']
+        : ['Last audit', '7 days', 'MTD', 'YTD'];
 
     return Container(
       height: 32,
@@ -427,7 +441,7 @@ class _PeriodSelector extends StatelessWidget {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 12),
               decoration: BoxDecoration(
                 color: active ? _gold : Colors.transparent,
                 borderRadius: BorderRadius.circular(7),

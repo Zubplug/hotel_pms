@@ -4,7 +4,7 @@ import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { getPropertyBusinessDate, calculateDailyRevenue } from '@/lib/kpi';
 import { prisma } from '@hotel-pms/db';
-import { addDays, endOfDay, format, startOfDay, startOfMonth, startOfYear } from 'date-fns';
+import { addDays, endOfDay, format, startOfDay, startOfMonth, startOfYear, subDays } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { DailyAccountingService } from '@/lib/services/daily-accounting-service';
 import { getReceivablesPosition } from '@/lib/services/receivables-position-service';
@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     let calendarStartDate = businessDayStart;
     const calendarEndDate = now;
+    if (period === '7D') calendarStartDate = propertyDayStart(subDays(businessDate, 6));
     if (period === 'MTD') calendarStartDate = propertyDayStart(startOfMonth(businessDate));
     if (period === 'YTD') calendarStartDate = propertyDayStart(startOfYear(businessDate));
 
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
     // For TODAY: show only live sessions (businessDate >= liveBusinessDateStart)
     // For MTD/YTD: show sessions for the entire period up to now
     let sessionStartDate = liveBusinessDateStart;
+    if (period === '7D') sessionStartDate = propertyDayStart(subDays(businessDate, 6));
     if (period === 'MTD') sessionStartDate = propertyDayStart(startOfMonth(businessDate));
     if (period === 'YTD') sessionStartDate = propertyDayStart(startOfYear(businessDate));
     const sessionEndDate = businessDayEnd;
@@ -224,7 +226,7 @@ export async function GET(req: NextRequest) {
     };
 
     // ── 5. Transaction Controls (Using exact dates) ────────────────────────
-    const controlStartDate = period === 'TODAY' ? liveBusinessDateStart : sessionStartDate;
+    const controlStartDate = period === 'LAST_AUDIT' || period === 'TODAY' ? liveBusinessDateStart : sessionStartDate;
     const controlEndDate = sessionEndDate;
 
     const [discountAgg, voidedItemsControl, refundAgg, overrideCount] = await Promise.all([
