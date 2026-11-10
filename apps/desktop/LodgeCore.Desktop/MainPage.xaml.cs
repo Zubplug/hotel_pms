@@ -217,10 +217,13 @@ public partial class MainPage : ContentPage
                     break;
                 case "system.forceSync":
                     var syncEngine = LodgeCore.Desktop.Services.SyncEngine.Instance;
-                    var syncCompleted = syncEngine != null
-                        && await syncEngine.ForceSyncAsync();
+                    // The WebView IPC request has a 30-second timeout, while
+                    // a full initial sync can take longer. The setup screen
+                    // polls system.getSyncHealth, so only queue the cycle
+                    // here and return immediately.
+                    syncEngine?.TriggerManualSync();
                     responseData = System.Text.Json.JsonSerializer.Serialize(
-                        new { success = syncCompleted },
+                        new { success = syncEngine != null, started = syncEngine != null },
                         new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                     break;
                 case "system.getSyncHealth":
