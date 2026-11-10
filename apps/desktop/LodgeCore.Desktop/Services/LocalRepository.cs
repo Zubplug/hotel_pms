@@ -3851,6 +3851,7 @@ public class LocalRepository
                     existing.LastName = guest.LastName;
                     existing.Email = guest.Email;
                     existing.Phone = guest.Phone;
+                    existing.Gender = guest.Gender;
                     existing.CompanyName = guest.CompanyName;
                     existing.IsVip = guest.IsVip;
                     existing.UpdatedAt = guest.UpdatedAt;
