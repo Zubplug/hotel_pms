@@ -24,7 +24,11 @@ export async function POST(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
-    const canExecute = await hasPermission(user.id, 'night_audit', 'execute', propertyId);
+    // Keep mobile parity with the web cashier audit workflow. General Cashier
+    // is an explicit operational fallback when the Night Auditor is absent;
+    // all other roles still require the dedicated permission.
+    const canExecute = await hasPermission(user.id, 'night_audit', 'execute', propertyId)
+      || user.role === 'GENERAL_CASHIER';
     if (!canExecute) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     }

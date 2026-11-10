@@ -81,7 +81,7 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 30),
             children: [
-              _hero(data),
+              _hero(),
               const SizedBox(height: 18),
               _filterBar(),
               const SizedBox(height: 14),
@@ -98,14 +98,7 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
     );
   }
 
-  Widget _hero(CashExpenseData data) {
-    final pending = data.expenses
-        .where((e) => e.status == 'PENDING_APPROVAL')
-        .length;
-    final approved = data.expenses.where((e) => e.status == 'APPROVED').length;
-    final paid = data.expenses
-        .where((e) => e.status == 'PAID')
-        .fold<double>(0, (sum, e) => sum + e.amount);
+  Widget _hero() {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -159,9 +152,9 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
           const SizedBox(height: 18),
           Row(
             children: [
-              _metric('Pending', '$pending', _gold),
-              _metric('Ready to pay', '$approved', _teal),
-              _metric('Paid', _money(paid), _text),
+              _heroPill(Icons.verified_user_outlined, 'Approval-first'),
+              const SizedBox(width: 8),
+              _heroPill(Icons.receipt_long_outlined, 'Audit-ready'),
             ],
           ),
         ],
@@ -169,27 +162,24 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
     );
   }
 
-  Widget _metric(String label, String value, Color color) => Expanded(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _heroPill(IconData icon, String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .055),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: Colors.white.withValues(alpha: .08)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
+        Icon(icon, size: 14, color: _teal),
+        const SizedBox(width: 6),
         Text(
-          label.toUpperCase(),
+          label,
           style: const TextStyle(
             color: _muted,
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: FontWeight.w700,
-            letterSpacing: .7,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          value,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: color,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -209,19 +199,42 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
         ])
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(item.$2),
-              selected: _filter == item.$1,
-              onSelected: (_) => setState(() => _filter = item.$1),
-              selectedColor: _gold.withValues(alpha: .18),
-              backgroundColor: _panel,
-              side: BorderSide(
-                color: _filter == item.$1 ? _gold.withValues(alpha: .5) : _line,
-              ),
-              labelStyle: TextStyle(
-                color: _filter == item.$1 ? _gold : _muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+            child: GestureDetector(
+              onTap: () => setState(() => _filter = item.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: _filter == item.$1
+                      ? _gold.withValues(alpha: .18)
+                      : _panel,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _filter == item.$1
+                        ? _gold.withValues(alpha: .7)
+                        : _line,
+                  ),
+                  boxShadow: _filter == item.$1
+                      ? [
+                          BoxShadow(
+                            color: _gold.withValues(alpha: .08),
+                            blurRadius: 12,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Text(
+                  item.$2,
+                  style: TextStyle(
+                    color: _filter == item.$1 ? _gold : _muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .1,
+                  ),
+                ),
               ),
             ),
           ),
@@ -878,6 +891,9 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
     final selected = options.any((item) => '${(item as dynamic).id}' == value)
         ? value
         : null;
+    final selectedOption = selected == null
+        ? null
+        : options.firstWhere((item) => '${(item as dynamic).id}' == selected);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -890,39 +906,80 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: selected,
-          dropdownColor: _raised,
-          style: const TextStyle(color: _text, fontSize: 12),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: _raised,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 13,
-              vertical: 3,
+        InkWell(
+          onTap: options.isEmpty
+              ? null
+              : () async {
+                  final choice = await showModalBottomSheet<String>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => _PremiumOptionSheet<T>(
+                      label: label,
+                      options: options,
+                      selected: selected,
+                      labelOf: labelOf,
+                    ),
+                  );
+                  if (choice != null) onChanged(choice);
+                },
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: _raised,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected == null ? _line : _gold.withValues(alpha: .55),
+              ),
+              boxShadow: selected == null
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: _gold.withValues(alpha: .06),
+                        blurRadius: 14,
+                      ),
+                    ],
             ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: _line),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: _line),
-            ),
-          ),
-          hint: const Text(
-            'Select option',
-            style: TextStyle(color: Color(0xFF536783), fontSize: 12),
-          ),
-          items: options
-              .map(
-                (item) => DropdownMenuItem(
-                  value: '${(item as dynamic).id}',
-                  child: Text(labelOf(item), overflow: TextOverflow.ellipsis),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: selected == null
+                        ? _muted.withValues(alpha: .08)
+                        : _gold.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    Icons.layers_rounded,
+                    size: 16,
+                    color: selected == null ? _muted : _gold,
+                  ),
                 ),
-              )
-              .toList(),
-          onChanged: onChanged,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    selectedOption == null
+                        ? 'Select option'
+                        : labelOf(selectedOption),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: selectedOption == null ? _muted : _text,
+                      fontSize: 12,
+                      fontWeight: selectedOption == null
+                          ? FontWeight.w500
+                          : FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.unfold_more_rounded, color: _muted, size: 19),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -958,6 +1015,216 @@ class _CashierExpensesScreenState extends ConsumerState<CashierExpensesScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PremiumOptionSheet<T> extends StatefulWidget {
+  final String label;
+  final List<T> options;
+  final String? selected;
+  final String Function(T) labelOf;
+
+  const _PremiumOptionSheet({
+    required this.label,
+    required this.options,
+    required this.selected,
+    required this.labelOf,
+  });
+
+  @override
+  State<_PremiumOptionSheet<T>> createState() => _PremiumOptionSheetState<T>();
+}
+
+class _PremiumOptionSheetState<T> extends State<_PremiumOptionSheet<T>> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredOptions = widget.options.where((option) {
+      final search = _query.trim().toLowerCase();
+      return search.isEmpty ||
+          widget.labelOf(option).toLowerCase().contains(search);
+    }).toList();
+    return SafeArea(
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 520),
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+        decoration: BoxDecoration(
+          color: _panel,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: _line),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .35),
+              blurRadius: 28,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _line,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _gold.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.tune_rounded, color: _gold, size: 19),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Choose ${widget.label}',
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${widget.options.length} configured options',
+                        style: const TextStyle(color: _muted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              onChanged: (value) => setState(() => _query = value),
+              style: const TextStyle(color: _text, fontSize: 12),
+              decoration: InputDecoration(
+                hintText: 'Search ${widget.label.toLowerCase()}…',
+                hintStyle: const TextStyle(color: _muted, fontSize: 12),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: _muted,
+                  size: 19,
+                ),
+                filled: true,
+                fillColor: _raised,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _line),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _line),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _gold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: filteredOptions.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 7),
+                itemBuilder: (_, index) {
+                  final option = filteredOptions[index];
+                  final id = '${(option as dynamic).id}';
+                  final active = id == widget.selected;
+                  return InkWell(
+                    onTap: () => Navigator.pop(context, id),
+                    borderRadius: BorderRadius.circular(15),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? _gold.withValues(alpha: .1)
+                            : _raised.withValues(alpha: .6),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: active
+                              ? _gold.withValues(alpha: .5)
+                              : _line.withValues(alpha: .7),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? _gold.withValues(alpha: .15)
+                                  : _muted.withValues(alpha: .07),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              active
+                                  ? Icons.check_rounded
+                                  : Icons.chevron_right_rounded,
+                              color: active ? _gold : _muted,
+                              size: 17,
+                            ),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text(
+                              widget.labelOf(option),
+                              style: TextStyle(
+                                color: active ? _text : _muted,
+                                fontSize: 12,
+                                fontWeight: active
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (active)
+                            const Text(
+                              'SELECTED',
+                              style: TextStyle(
+                                color: _gold,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: .7,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
