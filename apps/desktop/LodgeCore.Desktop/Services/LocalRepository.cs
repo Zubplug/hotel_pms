@@ -3833,67 +3833,70 @@ public class LocalRepository
 
     public async Task UpsertGuestPageTransactionAsync(List<LocalGuest> guests, string? nextCursor)
     {
-        // A guest can be removed locally by a database repair/upgrade while a
-        // sync page is being materialized.  In that case EF may still have the
-        // old entity tracked and SaveChanges reports a zero-row update.  Retry
-        // the page with a clean tracker so the guest is treated as an insert.
-        for (var attempt = 0; attempt < 2; attempt++)
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        try
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
-            try
+            // Guest pages are authoritative cloud data. Use SQLite's atomic
+            // upsert instead of EF tracked UPDATEs: a stale/missing local row
+            // must never abort the whole sync cycle with a concurrency error.
+            const string guestSql = """
+                INSERT INTO Guests
+                    (Id, OrganizationId, PropertyId, FirstName, LastName, Email, Phone,
+                     Gender, CompanyName, IsVip, UpdatedAt, DeletedAt, Version, IsDirty, CreatedAt)
+                VALUES
+                    (@id, @organizationId, @propertyId, @firstName, @lastName, @email, @phone,
+                     @gender, @companyName, @isVip, @updatedAt, @deletedAt, @version, 0, @createdAt)
+                ON CONFLICT(Id) DO UPDATE SET
+                    FirstName = excluded.FirstName,
+                    LastName = excluded.LastName,
+                    Email = excluded.Email,
+                    Phone = excluded.Phone,
+                    Gender = excluded.Gender,
+                    CompanyName = excluded.CompanyName,
+                    IsVip = excluded.IsVip,
+                    UpdatedAt = excluded.UpdatedAt,
+                    DeletedAt = excluded.DeletedAt,
+                    Version = excluded.Version
+                WHERE Guests.IsDirty = 0;
+                """;
+
+            foreach (var guest in guests)
             {
-                foreach (var guest in guests)
-                {
-                    var existing = await _dbContext.Guests.FirstOrDefaultAsync(g => g.Id == guest.Id);
-                    if (existing == null)
-                    {
-                        _dbContext.Guests.Add(guest);
-                    }
-                    else
-                    {
-                        if (existing.IsDirty) continue; // Race-safe: skip overwriting local dirty state
-
-                        existing.FirstName = guest.FirstName;
-                        existing.LastName = guest.LastName;
-                        existing.Email = guest.Email;
-                        existing.Phone = guest.Phone;
-                        existing.Gender = guest.Gender;
-                        existing.CompanyName = guest.CompanyName;
-                        existing.IsVip = guest.IsVip;
-                        existing.UpdatedAt = guest.UpdatedAt;
-                        existing.DeletedAt = guest.DeletedAt;
-                        existing.Version = guest.Version;
-                        // The entity was loaded by this context, so letting EF
-                        // detect changes avoids forcing a stale UPDATE state.
-                    }
-                }
-
-                var meta = await _dbContext.SyncMetadata.FirstOrDefaultAsync();
-                if (meta == null)
-                {
-                    meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "1" };
-                    _dbContext.SyncMetadata.Add(meta);
-                }
-
-                meta.LastGuestSyncCursor = nextCursor;
-
-                await _dbContext.SaveChangesAsync();
-                await transaction.CommitAsync();
-                return;
+                await _dbContext.Database.ExecuteSqlRawAsync(guestSql,
+                    new Microsoft.Data.Sqlite.SqliteParameter("@id", guest.Id),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@organizationId", guest.OrganizationId),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@propertyId", guest.PropertyId),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@firstName", guest.FirstName),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@lastName", guest.LastName),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@email", (object?)guest.Email ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@phone", (object?)guest.Phone ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@gender", (object?)guest.Gender ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@companyName", (object?)guest.CompanyName ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@isVip", guest.IsVip ? 1 : 0),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@updatedAt", guest.UpdatedAt),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@deletedAt", (object?)guest.DeletedAt ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@version", guest.Version),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@createdAt", guest.CreatedAt));
             }
-            catch (DbUpdateConcurrencyException) when (attempt == 0)
-            {
-                await transaction.RollbackAsync();
-                _dbContext.ChangeTracker.Clear();
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception($"Failed to process guest page: {ex.Message}", ex);
-            }
+
+            var meta = await _dbContext.SyncMetadata.AsNoTracking().FirstOrDefaultAsync();
+            var metaId = meta?.Id ?? "singleton";
+            const string metaSql = """
+                INSERT INTO SyncMetadata (Id, LastGuestSyncCursor)
+                VALUES (@id, @cursor)
+                ON CONFLICT(Id) DO UPDATE SET LastGuestSyncCursor = excluded.LastGuestSyncCursor;
+                """;
+            await _dbContext.Database.ExecuteSqlRawAsync(metaSql,
+                new Microsoft.Data.Sqlite.SqliteParameter("@id", metaId),
+                new Microsoft.Data.Sqlite.SqliteParameter("@cursor", (object?)nextCursor ?? DBNull.Value));
+
+            await transaction.CommitAsync();
         }
-
-        throw new Exception("Failed to process guest page after retrying a stale local guest record.");
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new Exception($"Failed to process guest page: {ex.Message}", ex);
+        }
     }
 
     public async Task MarkRefundRequestRejectedAsync(string idempotencyKey, string serverMessage)
