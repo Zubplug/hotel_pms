@@ -107,9 +107,11 @@ export default function SetupSyncPage() {
               <div className="w-5 h-5 border-2 border-slate-300 rounded-full flex-shrink-0" />
             )}
             <div className="flex-1">
-              <span className="font-medium text-slate-700">
-                {health?.phase === 'STAFF' ? 'Downloading staff...' :
-                 health?.phase === 'PREP' ? 'Preparing sync...' :
+                <span className="font-medium text-slate-700">
+                  {health?.phase === 'STAFF' ? 'Downloading staff...' :
+                   health?.phase === 'GUESTS' ? 'Downloading guests...' :
+                   health?.phase === 'GUESTS_PAGED' ? 'Saving guests offline...' :
+                   health?.phase === 'PREP' ? 'Preparing sync...' :
                  health?.sync === 'UP_TO_DATE' || health?.sync === 'UpToDate' ? 'Sync complete' :
                  'Synchronizing database'}
               </span>
