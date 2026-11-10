@@ -179,6 +179,18 @@ public class LocalDbContext : DbContext
         }
     }
 
+    /// <summary>
+    /// Adds guest profile columns introduced after the original desktop
+    /// database was created. EnsureCreated does not alter existing SQLite
+    /// tables, so this must run during startup for upgraded terminals.
+    /// </summary>
+    public async Task ApplyGuestProfileSchemaAsync()
+    {
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE Guests ADD COLUMN Gender TEXT NULL"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex)
+            when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
     public async Task ApplyReachRoomTypeSchemaAsync()
     {
         var columns = new[]
