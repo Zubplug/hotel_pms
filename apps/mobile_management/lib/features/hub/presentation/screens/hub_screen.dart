@@ -11,6 +11,7 @@ import '../../../rooms/presentation/screens/rooms_screen.dart';
 import '../widgets/property_filter_dropdown.dart';
 import 'global_search_screen.dart';
 import 'reservation_operations_screen.dart';
+import '../../../dashboard/presentation/screens/main_screen.dart';
 
 const _ink = Color(0xFF070D1A);
 const _panel = Color(0xFF101B30);
@@ -151,7 +152,9 @@ class _HubBodyState extends State<_HubBody> {
           const SizedBox(height: 10),
           _buildWorkspaces(
             context,
-            data.modules.where((module) => module.id != 'sync').toList(),
+            data.modules
+                .where((module) => module.id != 'sync' && module.id != 'approvals')
+                .toList(),
             data.systemStatus,
           ),
           const SizedBox(height: 22),
@@ -375,7 +378,7 @@ class _HubBodyState extends State<_HubBody> {
           color: _red,
           onTap: () => Navigator.of(
             context,
-          ).push(MaterialPageRoute(builder: (_) => const RoomsScreen())),
+          ).push(MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 1))),
         ),
       );
     }

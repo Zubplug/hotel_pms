@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../hub/presentation/screens/hub_screen.dart';
-import '../../../rooms/presentation/screens/rooms_screen.dart';
 import 'cash_custody_screen.dart';
 import 'general_cashier_dashboard_screen.dart';
 import 'cashier_shifts_screen.dart';
+import 'cashier_expenses_screen.dart';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
-const _navBg     = Color(0xFF07111E);
+const _navBg = Color(0xFF07111E);
 const _navBorder = Color(0xFF18304D);
-const _navGold   = Color(0xFFD4A843);
-const _navMuted  = Color(0xFF4D6480);
+const _navGold = Color(0xFFD4A843);
+const _navMuted = Color(0xFF4D6480);
 
 class GeneralCashierMainScreen extends StatefulWidget {
-  const GeneralCashierMainScreen({super.key});
+  final int initialIndex;
+  const GeneralCashierMainScreen({super.key, this.initialIndex = 0});
 
   @override
   State<GeneralCashierMainScreen> createState() =>
@@ -23,12 +24,12 @@ class GeneralCashierMainScreen extends StatefulWidget {
 
 class _GeneralCashierMainScreenState extends State<GeneralCashierMainScreen>
     with TickerProviderStateMixin {
-  int _currentIndex = 0;
+  late int _currentIndex;
   late final List<AnimationController> _controllers;
 
   static const _screens = <Widget>[
     GeneralCashierDashboardScreen(),
-    RoomsScreen(),
+    CashierExpensesScreen(),
     CashCustodyScreen(),
     CashierShiftsScreen(),
     HubScreen(),
@@ -40,8 +41,16 @@ class _GeneralCashierMainScreenState extends State<GeneralCashierMainScreen>
       Icons.account_balance_wallet_rounded,
       'Cash',
     ),
-    _NavItem(Icons.king_bed_outlined, Icons.king_bed_rounded, 'Rooms'),
-    _NavItem(Icons.account_balance_rounded, Icons.account_balance_rounded, 'Cash'),
+    _NavItem(
+      Icons.receipt_long_outlined,
+      Icons.receipt_long_rounded,
+      'Expenses',
+    ),
+    _NavItem(
+      Icons.account_balance_rounded,
+      Icons.account_balance_rounded,
+      'Custody',
+    ),
     _NavItem(Icons.swap_vert_outlined, Icons.swap_vert_rounded, 'Shift'),
     _NavItem(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Hub'),
   ];
@@ -49,11 +58,15 @@ class _GeneralCashierMainScreenState extends State<GeneralCashierMainScreen>
   @override
   void initState() {
     super.initState();
-    _controllers = List.generate(_items.length, (i) => AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    ));
-    _controllers[0].forward();
+    _currentIndex = widget.initialIndex.clamp(0, _items.length - 1);
+    _controllers = List.generate(
+      _items.length,
+      (i) => AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 300),
+      ),
+    );
+    _controllers[_currentIndex].forward();
   }
 
   @override
@@ -114,9 +127,7 @@ class _PremiumNavBar extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: _navBg,
-          border: const Border(
-            top: BorderSide(color: _navBorder, width: 0.8),
-          ),
+          border: const Border(top: BorderSide(color: _navBorder, width: 0.8)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: .4),
@@ -158,12 +169,14 @@ class _NavTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scale = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(parent: controller, curve: Curves.easeOutBack),
-    );
-    final bgOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: controller, curve: Curves.easeOut),
-    );
+    final scale = Tween<double>(
+      begin: 1.0,
+      end: 1.08,
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.easeOutBack));
+    final bgOpacity = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.easeOut));
 
     return Expanded(
       child: GestureDetector(

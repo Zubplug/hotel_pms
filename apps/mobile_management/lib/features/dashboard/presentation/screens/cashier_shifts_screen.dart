@@ -113,14 +113,6 @@ class _CashierShiftsScreenState extends ConsumerState<CashierShiftsScreen> {
           const Text('Cash Accountability',
               style: TextStyle(color: _text, fontSize: 15, fontWeight: FontWeight.w800)),
         ]),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(cashierShiftsProvider),
-            icon: const Icon(Icons.refresh_rounded, color: _textSub, size: 22),
-          ),
-          const SizedBox(width: 6),
-        ],
       );
 
   Widget _buildError() => Center(

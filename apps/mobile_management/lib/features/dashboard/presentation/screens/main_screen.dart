@@ -61,7 +61,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         }
 
         if (userRole == 'GENERAL_CASHIER') {
-          return const GeneralCashierMainScreen();
+          return GeneralCashierMainScreen(initialIndex: widget.initialIndex);
         }
 
         // Only executive roles receive the executive KPI dashboard. Other

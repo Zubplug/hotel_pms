@@ -15,13 +15,16 @@ const RESERVATION_OVERSIGHT_ROLES = [
   'CEO',
   'SUPER_ADMIN',
   'NIGHT_AUDITOR',
+  // Cashiers need reservation visibility from the operational Hub. Any
+  // reservation mutations remain protected by their dedicated endpoints.
+  'GENERAL_CASHIER',
 ];
 
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (user.isSuperAdmin !== true && !RESERVATION_OVERSIGHT_ROLES.includes(user.role)) return errorResponse('FORBIDDEN', 'Executive or Management access required', 403);
+    if (user.isSuperAdmin !== true && !RESERVATION_OVERSIGHT_ROLES.includes(user.role)) return errorResponse('FORBIDDEN', 'Executive, Management, or Cashier access required', 403);
     const ctx = await requireOrganizationContext(user.id);
     const params = new URL(req.url).searchParams;
     const requestedPropertyId = params.get('propertyId');

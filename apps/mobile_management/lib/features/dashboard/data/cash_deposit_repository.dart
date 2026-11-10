@@ -2,9 +2,103 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 
-class CashBankAccount { final String id, name, bankName, accountNumber; const CashBankAccount({required this.id, required this.name, required this.bankName, required this.accountNumber}); factory CashBankAccount.fromJson(Map<String, dynamic> json) => CashBankAccount(id: '${json['id'] ?? ''}', name: '${json['name'] ?? 'Bank account'}', bankName: '${json['bankName'] ?? ''}', accountNumber: '${json['accountNumber'] ?? ''}'); }
-class PendingCashDeposit { final String id, reference, status; final double amount; final DateTime? createdAt; final int sessionCount; const PendingCashDeposit({required this.id, required this.reference, required this.status, required this.amount, required this.createdAt, required this.sessionCount}); factory PendingCashDeposit.fromJson(Map<String, dynamic> json) => PendingCashDeposit(id: '${json['id'] ?? ''}', reference: '${json['reference'] ?? 'Deposit'}', status: '${json['status'] ?? 'PENDING_HANDOVER'}', amount: json['amount'] is num ? (json['amount'] as num).toDouble() : double.tryParse('${json['amount']}') ?? 0, createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'), sessionCount: int.tryParse('${json['sessionCount'] ?? 0}') ?? 0); }
-class CashDepositData { final List<PendingCashDeposit> deposits; final List<CashBankAccount> bankAccounts; const CashDepositData({required this.deposits, required this.bankAccounts}); factory CashDepositData.fromJson(Map<String, dynamic> json) => CashDepositData(deposits: (json['deposits'] as List? ?? []).map((row) => PendingCashDeposit.fromJson(Map<String, dynamic>.from(row as Map))).toList(), bankAccounts: (json['bankAccounts'] as List? ?? []).map((row) => CashBankAccount.fromJson(Map<String, dynamic>.from(row as Map))).toList()); }
-class CashDepositRepository { final Dio _dio; CashDepositRepository(this._dio); Future<CashDepositData> fetch() async { final response = await _dio.get('/mobile/v1/cashier/custody/deposits'); final data = response.data is Map ? response.data['data'] : null; return CashDepositData.fromJson(data is Map ? Map<String, dynamic>.from(data) : {}); } Future<void> submit(String id, String bankAccountId, {String? bankReference, String? receiptUrl}) async { await _dio.post('/mobile/v1/cashier/custody/deposits/$id/submit', data: {'bankAccountId': bankAccountId, 'bankReference': bankReference, 'bankReceiptUrl': receiptUrl}); } }
-final cashDepositRepositoryProvider = Provider((ref) => CashDepositRepository(ref.watch(dioProvider)));
-final pendingCashDepositsProvider = FutureProvider<CashDepositData>((ref) => ref.watch(cashDepositRepositoryProvider).fetch());
+class CashBankAccount {
+  final String id, name, bankName, accountNumber;
+  const CashBankAccount({
+    required this.id,
+    required this.name,
+    required this.bankName,
+    required this.accountNumber,
+  });
+  factory CashBankAccount.fromJson(Map<String, dynamic> json) =>
+      CashBankAccount(
+        id: '${json['id'] ?? ''}',
+        name: '${json['name'] ?? 'Bank account'}',
+        bankName: '${json['bankName'] ?? ''}',
+        accountNumber: '${json['accountNumber'] ?? ''}',
+      );
+}
+
+class PendingCashDeposit {
+  final String id, reference, status;
+  final double amount;
+  final DateTime? createdAt;
+  final int sessionCount;
+  const PendingCashDeposit({
+    required this.id,
+    required this.reference,
+    required this.status,
+    required this.amount,
+    required this.createdAt,
+    required this.sessionCount,
+  });
+  factory PendingCashDeposit.fromJson(Map<String, dynamic> json) =>
+      PendingCashDeposit(
+        id: '${json['id'] ?? ''}',
+        reference: '${json['reference'] ?? 'Deposit'}',
+        status: '${json['status'] ?? 'PENDING_HANDOVER'}',
+        amount: json['amount'] is num
+            ? (json['amount'] as num).toDouble()
+            : double.tryParse('${json['amount']}') ?? 0,
+        createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
+        sessionCount: int.tryParse('${json['sessionCount'] ?? 0}') ?? 0,
+      );
+}
+
+class CashDepositData {
+  final List<PendingCashDeposit> deposits;
+  final List<CashBankAccount> bankAccounts;
+  const CashDepositData({required this.deposits, required this.bankAccounts});
+  factory CashDepositData.fromJson(
+    Map<String, dynamic> json,
+  ) => CashDepositData(
+    deposits: (json['deposits'] as List? ?? [])
+        .map(
+          (row) => PendingCashDeposit.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList(),
+    bankAccounts: (json['bankAccounts'] as List? ?? [])
+        .map(
+          (row) =>
+              CashBankAccount.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
+        .toList(),
+  );
+}
+
+class CashDepositRepository {
+  final Dio _dio;
+  CashDepositRepository(this._dio);
+  Future<CashDepositData> fetch() async {
+    final response = await _dio.get('/mobile/v1/cashier/custody/deposits');
+    final data = response.data is Map ? response.data['data'] : null;
+    return CashDepositData.fromJson(
+      data is Map ? Map<String, dynamic>.from(data) : {},
+    );
+  }
+
+  Future<void> submit(
+    String id,
+    String bankAccountId, {
+    String? bankReference,
+    String? receiptUrl,
+  }) async {
+    await _dio.post(
+      '/mobile/v1/cashier/custody/deposits/$id/submit',
+      data: {
+        'bankAccountId': bankAccountId,
+        'bankReference': bankReference,
+        'bankReceiptUrl': receiptUrl,
+      },
+    );
+  }
+}
+
+final cashDepositRepositoryProvider = Provider(
+  (ref) => CashDepositRepository(ref.watch(dioProvider)),
+);
+final pendingCashDepositsProvider = FutureProvider<CashDepositData>(
+  (ref) => ref.watch(cashDepositRepositoryProvider).fetch(),
+);
