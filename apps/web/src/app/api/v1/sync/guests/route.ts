@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
         lastName: true,
         email: true,
         phone: true,
+        gender: true,
         companyName: true,
         isVip: true,
         vipLevel: true,

@@ -12,6 +12,7 @@ export interface CreateReservationParams {
     lastName: string;
     email?: string;
     phone?: string;
+    gender?: string;
     country?: string;
   };
   checkIn: Date;
@@ -148,6 +149,7 @@ export const SharedReservationService = {
             lastName: guestDetails.lastName,
             email: guestDetails.email,
             phone: guestDetails.phone,
+            gender: guestDetails.gender,
             country: guestDetails.country,
           },
         });

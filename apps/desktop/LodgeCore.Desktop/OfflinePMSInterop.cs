@@ -1430,6 +1430,7 @@ public class OfflinePMSInterop
                     LastName = guestDetails.GetProperty("lastName").GetString() ?? "",
                     Email = guestDetails.TryGetProperty("email", out var email) ? email.GetString() : null,
                     Phone = guestDetails.TryGetProperty("phone", out var phone) ? phone.GetString() : null,
+                    Gender = guestDetails.TryGetProperty("gender", out var gender) ? gender.GetString() : null,
                 };
                 res.GuestId = newGuest.Id;
                 res.Guest = newGuest;

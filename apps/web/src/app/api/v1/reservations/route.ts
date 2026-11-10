@@ -114,6 +114,9 @@ export async function POST(req: NextRequest) {
     if (!propertyId || (!guestId && !guestDetails) || !checkIn || !checkOut || !roomTypeId || !roomId) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
+    if (!guestId && (!guestDetails?.phone || String(guestDetails.phone).trim().length < 7)) {
+      return errorResponse('BAD_REQUEST', 'A phone number is required for a new guest profile', 400);
+    }
     if ((adjustmentType === 'COMP_FULL' || adjustmentType === 'COMP_PARTIAL') && !acknowledgedByStaffId) {
       return errorResponse('BAD_REQUEST', 'Acknowledging staff is required for complimentary reservations', 400);
     }

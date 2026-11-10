@@ -1267,6 +1267,7 @@ export async function POST(req: NextRequest) {
                     lastName: payload.Guest.LastName || "Guest",
                     email: payload.Guest.Email,
                     phone: payload.Guest.Phone,
+                    gender: payload.Guest.Gender,
                   },
                 });
               } else if (!existingGuest) {
@@ -1285,6 +1286,7 @@ export async function POST(req: NextRequest) {
                   lastName: payload.Guest.LastName || "Guest",
                   email: payload.Guest.Email,
                   phone: payload.Guest.Phone,
+                  gender: payload.Guest.Gender,
                 },
               });
               finalGuestId = g.id;

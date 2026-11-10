@@ -39,7 +39,8 @@ const formSchema = z.object({
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     email: z.string().email('Invalid email').optional().or(z.literal('')),
-    phone: z.string().optional(),
+    phone: z.string().trim().min(7, 'A valid phone number is required'),
+    gender: z.enum(['MALE', 'FEMALE', 'NON_BINARY', 'PREFER_NOT_TO_SAY']).optional().or(z.literal('')),
   }).optional(),
   roomTypeId: z.string().min(1, 'Please select a room type'),
   roomId: z.string().min(1, 'Please select an available room'),
@@ -361,7 +362,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
     defaultValues: {
       isNewGuest: false,
       guestId: '',
-      guestDetails: { firstName: '', lastName: '', email: '', phone: '' },
+      guestDetails: { firstName: '', lastName: '', email: '', phone: '', gender: '' },
       roomTypeId: '',
       roomId: '',
       corporateAccountId: 'none',
@@ -400,6 +401,8 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
 
   /* ── Watchers ── */
   const isNewGuest = form.watch('isNewGuest');
+  const guestEmail = form.watch('guestDetails.email') || '';
+  const guestPhone = form.watch('guestDetails.phone') || '';
   const checkIn = form.watch('checkIn');
   const checkOut = form.watch('checkOut');
   const roomTypeId = form.watch('roomTypeId');
@@ -466,6 +469,27 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
   });
   const filteredGuests = (guestsRes as any)?.data || [];
   const visibleGuests = filteredGuests.slice(0, 8);
+
+  // New-guest mode is still checked against the local guest directory. This
+  // works fully offline because DesktopDataProvider searches the SQLite guest
+  // cache; the same provider contract also works against the cloud API.
+  const duplicateSearchTerms = useMemo(() => {
+    const terms = new Set<string>();
+    if (guestEmail.trim().length >= 5) terms.add(guestEmail.trim());
+    if (guestPhone.trim().length >= 4) terms.add(guestPhone.trim());
+    return Array.from(terms);
+  }, [guestEmail, guestPhone]);
+
+  const { data: duplicateGuests = [], isFetching: checkingGuestDuplicates } = useQuery({
+    queryKey: ['guest-duplicates', duplicateSearchTerms],
+    queryFn: async () => {
+      const responses = await Promise.all(duplicateSearchTerms.map((term) => provider.guests.search(term)));
+      const matches = responses.flatMap((response: any) => Array.isArray(response) ? response : (response?.data || []));
+      return Array.from(new Map(matches.map((guest: any) => [guest.id, guest])).values()).slice(0, 5);
+    },
+    enabled: isNewGuest && duplicateSearchTerms.length > 0,
+    staleTime: 10_000,
+  });
 
   /* ── Room types & rooms ── */
   const { data: roomTypesRes, isLoading: loadingRoomTypes } = useQuery({
@@ -754,7 +778,44 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                   />
                 ) : (
                   /* New guest fields */
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {duplicateGuests.length > 0 && (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-amber-900">Possible existing guest profile</p>
+                            <p className="mt-1 text-xs leading-5 text-amber-800">This match is based on phone or email. Use the existing profile to keep the guest&apos;s stay history together.</p>
+                            <div className="mt-3 space-y-2">
+                              {duplicateGuests.map((guest: any) => (
+                                <button
+                                  key={guest.id}
+                                  type="button"
+                                  onClick={() => {
+                                    form.setValue('isNewGuest', false);
+                                    form.setValue('guestId', guest.id, { shouldValidate: true });
+                                    setSelectedGuest(guest);
+                                    setGuestSearch('');
+                                    setGuestDropdownOpen(false);
+                                  }}
+                                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-left transition hover:border-indigo-300 hover:bg-indigo-50"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold text-slate-900">{guest.firstName} {guest.lastName}</span>
+                                    <span className="mt-0.5 block truncate text-xs text-slate-500">{guest.phone || guest.email || 'Existing guest profile'}</span>
+                                  </span>
+                                  <span className="shrink-0 text-xs font-bold text-indigo-600">Use profile</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {checkingGuestDuplicates && duplicateSearchTerms.length > 0 && (
+                      <p className="text-xs text-slate-400">Checking the offline guest directory…</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
                     <FormField control={form.control} name="guestDetails.firstName" render={({ field }) => (
                       <FormItem><FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">First Name</FormLabel>
                         <FormControl><Input className="h-12 rounded-xl border-slate-200 bg-slate-50 focus:bg-white" {...field} /></FormControl>
@@ -773,12 +834,33 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                         <FormMessage />
                       </FormItem>
                     )} />
+                    <FormField control={form.control} name="guestDetails.gender" render={({ field }) => (
+                      <FormItem><FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Gender <span className="font-normal normal-case text-slate-400">(optional)</span></FormLabel>
+                        <FormControl>
+                          <PremiumDropdown
+                            value={field.value || 'none'}
+                            onChange={(value) => field.onChange(value === 'none' ? '' : value)}
+                            placeholder="Not specified"
+                            inputClassName="h-12 rounded-xl border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:bg-white"
+                            options={[
+                              { value: 'none', label: 'Not specified', sublabel: 'Leave gender undisclosed' },
+                              { value: 'MALE', label: 'Male' },
+                              { value: 'FEMALE', label: 'Female' },
+                              { value: 'NON_BINARY', label: 'Non-binary' },
+                              { value: 'PREFER_NOT_TO_SAY', label: 'Prefer not to say' },
+                            ]}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
                     <FormField control={form.control} name="guestDetails.phone" render={({ field }) => (
-                      <FormItem><FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Phone <span className="font-normal normal-case text-slate-400">(optional)</span></FormLabel>
+                      <FormItem><FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Phone <span className="font-normal normal-case text-rose-500">(required)</span></FormLabel>
                         <FormControl><Input type="tel" className="h-12 rounded-xl border-slate-200 bg-slate-50 focus:bg-white" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
+                    </div>
                   </div>
                 )}
               </div>

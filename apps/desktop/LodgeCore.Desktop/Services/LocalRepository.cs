@@ -540,7 +540,8 @@ public class LocalRepository
                     reservation.Guest.FirstName,
                     reservation.Guest.LastName,
                     reservation.Guest.Email,
-                    reservation.Guest.Phone
+                    reservation.Guest.Phone,
+                    reservation.Guest.Gender
                 },
                 RoomId = reservation.RoomId,
                 RoomNumber = reservation.RoomNumber,
