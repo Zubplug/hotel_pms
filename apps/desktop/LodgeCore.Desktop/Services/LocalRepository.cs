@@ -3833,52 +3833,67 @@ public class LocalRepository
 
     public async Task UpsertGuestPageTransactionAsync(List<LocalGuest> guests, string? nextCursor)
     {
-        using var transaction = await _dbContext.Database.BeginTransactionAsync();
-        try
+        // A guest can be removed locally by a database repair/upgrade while a
+        // sync page is being materialized.  In that case EF may still have the
+        // old entity tracked and SaveChanges reports a zero-row update.  Retry
+        // the page with a clean tracker so the guest is treated as an insert.
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            foreach (var guest in guests)
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
             {
-                var existing = await _dbContext.Guests.FirstOrDefaultAsync(g => g.Id == guest.Id);
-                if (existing == null)
+                foreach (var guest in guests)
                 {
-                    _dbContext.Guests.Add(guest);
-                }
-                else
-                {
-                    if (existing.IsDirty) continue; // Race-safe: skip overwriting local dirty state
+                    var existing = await _dbContext.Guests.FirstOrDefaultAsync(g => g.Id == guest.Id);
+                    if (existing == null)
+                    {
+                        _dbContext.Guests.Add(guest);
+                    }
+                    else
+                    {
+                        if (existing.IsDirty) continue; // Race-safe: skip overwriting local dirty state
 
-                    existing.FirstName = guest.FirstName;
-                    existing.LastName = guest.LastName;
-                    existing.Email = guest.Email;
-                    existing.Phone = guest.Phone;
-                    existing.Gender = guest.Gender;
-                    existing.CompanyName = guest.CompanyName;
-                    existing.IsVip = guest.IsVip;
-                    existing.UpdatedAt = guest.UpdatedAt;
-                    existing.DeletedAt = guest.DeletedAt;
-                    existing.Version = guest.Version;
-                    _dbContext.Guests.Update(existing);
+                        existing.FirstName = guest.FirstName;
+                        existing.LastName = guest.LastName;
+                        existing.Email = guest.Email;
+                        existing.Phone = guest.Phone;
+                        existing.Gender = guest.Gender;
+                        existing.CompanyName = guest.CompanyName;
+                        existing.IsVip = guest.IsVip;
+                        existing.UpdatedAt = guest.UpdatedAt;
+                        existing.DeletedAt = guest.DeletedAt;
+                        existing.Version = guest.Version;
+                        // The entity was loaded by this context, so letting EF
+                        // detect changes avoids forcing a stale UPDATE state.
+                    }
                 }
+
+                var meta = await _dbContext.SyncMetadata.FirstOrDefaultAsync();
+                if (meta == null)
+                {
+                    meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "1" };
+                    _dbContext.SyncMetadata.Add(meta);
+                }
+
+                meta.LastGuestSyncCursor = nextCursor;
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return;
             }
-
-            var meta = await _dbContext.SyncMetadata.FirstOrDefaultAsync();
-            if (meta == null)
+            catch (DbUpdateConcurrencyException) when (attempt == 0)
             {
-                meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "1" };
-                _dbContext.SyncMetadata.Add(meta);
+                await transaction.RollbackAsync();
+                _dbContext.ChangeTracker.Clear();
             }
-            
-            meta.LastGuestSyncCursor = nextCursor;
-            _dbContext.SyncMetadata.Update(meta);
-            
-            await _dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new Exception($"Failed to process guest page: {ex.Message}", ex);
+            }
         }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new Exception($"Failed to process guest page: {ex.Message}");
-        }
+
+        throw new Exception("Failed to process guest page after retrying a stale local guest record.");
     }
 
     public async Task MarkRefundRequestRejectedAsync(string idempotencyKey, string serverMessage)
