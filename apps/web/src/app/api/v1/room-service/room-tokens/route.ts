@@ -4,6 +4,7 @@ import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import prisma from '@hotel-pms/db';
 import { signRoomQrToken } from '@/lib/room-service/qrToken';
 import { successResponse, errorResponse } from '@/lib/api-response';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 /**
  * POST /api/v1/room-service/room-tokens
@@ -17,6 +18,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 export async function POST(req: NextRequest) {
   try {
     let propertyId: string | null = null;
+    let sessionUserId: string | null = null;
 
     // Prefer operator token (desktop POS context), fall back to web session
     const authHeader = req.headers.get('Authorization');
@@ -34,13 +36,24 @@ export async function POST(req: NextRequest) {
         return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
       }
       propertyId = (session.user as any).propertyId ?? null;
-    }
-
-    if (!propertyId) {
-      return errorResponse('BAD_REQUEST', 'Could not determine property from credentials', 400);
+      sessionUserId = session.user.id;
     }
 
     const body = await req.json();
+    // A staff member may be working in a selected property that differs from
+    // the default property on the session. Resolve that selection only after
+    // checking organization-level property access. Operator-token requests
+    // remain pinned to the property embedded in the operator token.
+    if (!bearerToken && body?.propertyId && sessionUserId) {
+      const ctx = await requireOrganizationContext(sessionUserId);
+      if (!ctx.propertyIds.includes(String(body.propertyId))) {
+        return errorResponse('FORBIDDEN', 'No access to the selected property', 403);
+      }
+      propertyId = String(body.propertyId);
+    }
+    if (!propertyId) {
+      return errorResponse('BAD_REQUEST', 'Could not determine property from credentials', 400);
+    }
     const roomIds: string[] = Array.isArray(body?.roomIds) ? body.roomIds : [];
 
     if (roomIds.length === 0) {

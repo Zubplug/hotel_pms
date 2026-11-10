@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowRight, Loader2, Key, AlertTriangle, ShieldCheck, Sparkles, Wind } from 'lucide-react';
 import { toast } from 'sonner';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 import { getAllowedTransitions, RoomStatus } from '@/lib/room-state-machine';
 import { formatRoomNumber } from '@/lib/format-room';
 
@@ -74,7 +75,10 @@ export function FrontDeskRoomStatusDialog({
       if (res?.error) {
         throw new Error(res.error.message || res.error || 'Failed to update status');
       }
-      toast.success(`Room ${formatRoomNumber(room!.number)} status updated to ${selectedStatus}`);
+      showActionSuccess({
+        title: 'Room status updated',
+        description: `Room ${formatRoomNumber(room!.number)} is now ${selectedStatus.replaceAll('_', ' ').toLowerCase()}.`,
+      });
       onSuccess?.();
       onClose();
     } catch (err) {

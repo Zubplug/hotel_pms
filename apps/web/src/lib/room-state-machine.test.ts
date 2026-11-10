@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { isValidTransition, getAllowedTransitions } from './room-state-machine';
 
 describe('Room State Machine', () => {
-  it('allows transition from AVAILABLE to RESERVED', () => {
-    expect(isValidTransition('AVAILABLE', 'RESERVED')).toBe(true);
+  it('does not allow an available room to be manually reserved or occupied', () => {
+    expect(isValidTransition('AVAILABLE', 'RESERVED')).toBe(false);
+    expect(isValidTransition('AVAILABLE', 'OCCUPIED')).toBe(false);
   });
 
   it('allows transition from OCCUPIED to DIRTY', () => {
@@ -26,7 +27,8 @@ describe('Room State Machine', () => {
 
   it('returns all allowed transitions for a state', () => {
     const fromAvailable = getAllowedTransitions('AVAILABLE');
-    expect(fromAvailable).toContain('RESERVED');
+    expect(fromAvailable).not.toContain('RESERVED');
+    expect(fromAvailable).not.toContain('OCCUPIED');
     expect(fromAvailable).toContain('MAINTENANCE');
     expect(fromAvailable).toContain('OUT_OF_ORDER');
     expect(fromAvailable).toContain('OUT_OF_SERVICE');

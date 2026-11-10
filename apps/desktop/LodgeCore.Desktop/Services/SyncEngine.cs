@@ -3665,6 +3665,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                 if (res.Status == "SYNCED") evt.SyncedAt = DateTime.UtcNow;
                                 evt.NextAttemptAt = null;
                                 ClearIsDirtyIfSafe(dbContext, evt);
+                                if (res.Status == "SYNCED" && evt.EventType == "CITY_LEDGER_PAYMENT")
+                                {
+                                    using var innerScope = _serviceProvider.CreateScope();
+                                    var repo = innerScope.ServiceProvider.GetRequiredService<LocalRepository>();
+                                    await repo.MarkCityLedgerPaymentSyncedAsync(evt.IdempotencyKey);
+                                }
                             }
                             else if (res.Status == "CONFLICT")
                             {

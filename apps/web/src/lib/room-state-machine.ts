@@ -14,7 +14,7 @@ type RoomStatus =
 // Authoritative server-side state machine.
 // Any status transition not listed here is FORBIDDEN.
 const TRANSITIONS: Record<RoomStatus, RoomStatus[]> = {
-  AVAILABLE: ['RESERVED', 'MAINTENANCE', 'BLOCKED', 'OUT_OF_ORDER', 'OUT_OF_SERVICE', 'DIRTY'],
+  AVAILABLE: ['MAINTENANCE', 'BLOCKED', 'OUT_OF_ORDER', 'OUT_OF_SERVICE', 'DIRTY'],
   RESERVED: ['OCCUPIED', 'AVAILABLE', 'DIRTY', 'MAINTENANCE'],
   OCCUPIED: ['DIRTY', 'MAINTENANCE', 'AVAILABLE'], // Added AVAILABLE for quick checkout overrides
   DIRTY: ['CLEANING', 'MAINTENANCE', 'CLEAN', 'AVAILABLE'],

@@ -22,6 +22,7 @@ import { FolioSection } from '../reservations/FolioSection';
 import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSection';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 import { formatRoomNumber } from '@/lib/format-room';
 import { getFolioBalance } from '@/lib/finance/folio-balance';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2, Percent, Gift, Building2, BedDouble } from 'lucide-react';
@@ -141,7 +142,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
           propertyAddress: reservation.property?.address,
           printedAt: new Date().toISOString(),
         });
-        if (res?.success) toast.success('Receipt printed successfully');
+        if (res?.success) showActionSuccess({ title: 'Receipt printed successfully', description: 'The guest receipt is ready.' });
         else toast.error(`Printer error: ${res?.error || 'Unknown error'}`);
       } catch (e: any) {
         toast.error(`Printer error: ${e?.message || String(e)}`);

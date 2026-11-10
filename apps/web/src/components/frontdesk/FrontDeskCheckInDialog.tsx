@@ -12,6 +12,7 @@ import { formatRoomNumber } from '@/lib/format-room';
 import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { formatCurrency, cn } from '@/lib/utils';
 import { BypassCheckInModal } from './BypassCheckInModal';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 interface FrontDeskCheckInDialogProps {
   open: boolean;
@@ -83,6 +84,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         const status = data.data.operation.status;
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           setPhase('SUCCESS');
+          showActionSuccess({ title: 'Guest checked in successfully', description: 'The room is now marked in-house.' });
           queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
           queryClient.invalidateQueries({ queryKey: ['reservations'] });
           triggerPrint();
@@ -116,6 +118,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         setOperationId(data.data.operation.id);
       } else {
         setPhase('SUCCESS');
+        showActionSuccess({ title: 'Guest checked in successfully', description: 'The room is now marked in-house.' });
         queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
         triggerPrint();
       }

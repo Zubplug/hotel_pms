@@ -48,8 +48,7 @@ public class LocalRepository
                 && rr.RoomId == roomId
                 && rr.Reservation != null
                 && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
-                && rr.Status != "CANCELLED"
-                && rr.Status != "NO_SHOW"
+                && rr.Status == "ACTIVE"
                 && (blockFutureArrivalBoundary
                     ? rr.CheckInDate <= checkOut
                     : rr.CheckInDate < checkOut)
@@ -471,6 +470,7 @@ public class LocalRepository
                          && r.Status != "NO_SHOW"
                          && r.Status != "CHECKED_OUT")  // checked-out rooms are free to rebook
                 .AnyAsync(r => r.Rooms.Any(rr => rr.RoomId == reservation.RoomId &&
+                    rr.Status == "ACTIVE" &&
                     rr.CheckInDate < reservation.CheckOutDate &&
                     rr.CheckOutDate > reservation.CheckInDate));
             if (roomAlreadyReserved)
@@ -1030,8 +1030,7 @@ public class LocalRepository
             && rr.ReservationId != reservationId
             && rr.Reservation != null
             && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
-            && rr.Status != "CANCELLED"
-            && rr.Status != "NO_SHOW"
+            && rr.Status == "ACTIVE"
             && rr.CheckInDate < availabilityEnd
             && rr.CheckOutDate > availabilityStart);
         if (roomConflict)
@@ -1139,8 +1138,7 @@ public class LocalRepository
             .Where(rr => rr.RoomId == room.Id
                 && rr.Reservation != null
                 && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
-                && rr.Status != "CANCELLED"
-                && rr.Status != "NO_SHOW"
+                && rr.Status == "ACTIVE"
                 && rr.CheckInDate < checkOut
                 && rr.CheckOutDate > checkIn)
             .AnyAsync();
@@ -1195,8 +1193,7 @@ public class LocalRepository
                          && rr.RoomId == assignedRoomId
                          && rr.Reservation != null
                          && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
-                         && rr.Status != "CANCELLED"
-                         && rr.Status != "NO_SHOW"
+                         && rr.Status == "ACTIVE"
                          // Treat the next arrival date as occupied. An
                          // extension ending on that boundary leaves no safe
                          // handover window for the future reservation.
@@ -1284,8 +1281,7 @@ public class LocalRepository
                          && rr.RoomId == assignedRoomId
                          && rr.Reservation != null
                          && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
-                         && rr.Status != "CANCELLED"
-                         && rr.Status != "NO_SHOW"
+                         && rr.Status == "ACTIVE"
                          && rr.CheckInDate <= newCheckOut
                          && rr.CheckOutDate > res.CheckOutDate)
                 .AnyAsync();
@@ -3904,6 +3900,39 @@ public class LocalRepository
         await _dbContext.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Completes the local optimistic state after the cloud accepts a city
+    /// ledger payment. The outbox is marked SYNCED by SyncEngine, but the
+    /// invoice entry is a separate local projection and otherwise remains
+    /// PENDING_SETTLEMENT until a later pull happens to refresh it.
+    /// </summary>
+    public async Task MarkCityLedgerPaymentSyncedAsync(string idempotencyKey)
+    {
+        var evt = await _dbContext.OutboxEvents.FirstOrDefaultAsync(item =>
+            item.IdempotencyKey == idempotencyKey && item.EventType == "CITY_LEDGER_PAYMENT");
+        if (evt == null) return;
+
+        var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(item => item.Id == evt.AggregateId);
+        if (entry == null || !string.Equals(entry.Status, "PENDING_SETTLEMENT", StringComparison.OrdinalIgnoreCase)) return;
+
+        var payload = JsonNode.Parse(evt.PayloadJson)?.AsObject();
+        var invoiceId = entry.InvoiceId ?? payload?["invoiceId"]?.GetValue<string>();
+        decimal paidBefore = 0m;
+        if (!string.IsNullOrWhiteSpace(invoiceId))
+        {
+            paidBefore = (await _dbContext.CityLedgerAllocations
+                .Where(item => item.InvoiceId == invoiceId && item.SyncStatus != "CONFLICTED")
+                .Select(item => (decimal?)item.Amount)
+                .ToListAsync())
+                .Sum() ?? 0m;
+        }
+
+        var paymentAmount = payload?["amount"]?.GetValue<decimal>() ?? 0m;
+        var outstandingAfterPayment = entry.Amount - paidBefore - paymentAmount;
+        entry.Status = outstandingAfterPayment <= 0.01m ? "SETTLED" : "OPEN";
+        await _dbContext.SaveChangesAsync();
+    }
+
     public async Task<bool> UpdateGuestAsync(string guestId, string firstName, string lastName, string? email, string? phone, string operatorId, string deviceId)
     {
         var guest = await _dbContext.Guests.FindAsync(guestId);
@@ -4038,6 +4067,8 @@ public class LocalRepository
 
         newStatus = newStatus.ToUpperInvariant();
         var currentStatus = room.Status.ToUpperInvariant();
+        if (currentStatus == "AVAILABLE" && (newStatus == "RESERVED" || newStatus == "OCCUPIED"))
+            throw new InvalidOperationException("An available room cannot be manually changed to Reserved or Occupied from the Front Desk room status model.");
         if (newStatus == "AVAILABLE" && currentStatus == "DIRTY")
         {
             var hasCheckedInGuest = await _dbContext.Reservations.AnyAsync(reservation =>
@@ -4439,8 +4470,7 @@ public class LocalRepository
                 // ReservationRoom rows are retained after checkout for audit
                 // history. Only live reservations can block a new booking.
                 && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
-                && rr.Status != "CANCELLED"
-                && rr.Status != "NO_SHOW"
+                && rr.Status == "ACTIVE"
                 && rr.CheckInDate < checkOut
                 && rr.CheckOutDate > checkIn)
             .Select(rr => rr.RoomId)

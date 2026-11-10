@@ -88,9 +88,16 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
           setSyncStatus(data.status);
           if (data.status === 'ERROR' || data.status === 'OFFLINE') {
             setIsOnline(false);
-          } else if (data.status === 'UP_TO_DATE' || data.status === 'SYNCING') {
+          } else if (data.status === 'UP_TO_DATE') {
             setIsOnline(navigator.onLine);
+            // A SYNCING notification can be emitted for every queued offline
+            // operation. Do not invalidate the whole active query tree while
+            // a user is typing into a search field or dropdown; the resulting
+            // refresh can make desktop controls lose their local interaction
+            // state. Refresh once the native sync has reached a stable state.
             void queryClient.invalidateQueries({ refetchType: 'active' });
+          } else if (data.status === 'SYNCING') {
+            setIsOnline(navigator.onLine);
           }
         } else if (data.event === 'checkout.restored') {
           window.dispatchEvent(new CustomEvent('checkout.restored', { detail: data }));

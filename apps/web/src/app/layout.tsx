@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
+import { ActionSuccessDialog } from "@/components/ui/action-success-dialog";
 import { PwaRuntime } from "@/lib/pwa/PwaRuntime";
 import { PwaInstallPrompt } from "@/lib/pwa/PwaInstallPrompt";
 
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PwaInstallPrompt />
           {children}
           <Toaster />
+          <ActionSuccessDialog />
         </Providers>
       </body>
     </html>

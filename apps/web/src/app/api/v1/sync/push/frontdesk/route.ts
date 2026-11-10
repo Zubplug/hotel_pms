@@ -3315,7 +3315,12 @@ export async function POST(req: NextRequest) {
               ? [invoice]
               : await tx.cityLedgerInvoice.findMany({ where: { accountId, status: { in: ["OPEN", "PARTIALLY_PAID"] } }, orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }] });
             if (!invoice && account.type !== "CORPORATE") throw new Error("WALKOUT_INVOICE_REQUIRED");
-            const existingPayment = await tx.cityLedgerEntry.findFirst({ where: { reference, accountId, type: "PAYMENT" } });
+            // Idempotency belongs to the immutable offline operation key, not
+            // the human-entered reference. Staff may legitimately use the
+            // same reference (for example, "Transfer") for separate invoices
+            // or collections; treating that text as a dedupe key silently
+            // discards valid payments.
+            const existingPayment = await tx.payment.findUnique({ where: { idempotencyKey } });
             if (existingPayment) return;
             let masterFolio = await tx.folio.findFirst({ where: { propertyId, type: "CITY_LEDGER", corporateAccountId: null, reservationId: null, status: "OPEN" } });
             if (!masterFolio) masterFolio = await tx.folio.create({ data: { propertyId, type: "CITY_LEDGER", status: "OPEN", currency: account.currency, folioNumber: `AR-${propertyId.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}` } });

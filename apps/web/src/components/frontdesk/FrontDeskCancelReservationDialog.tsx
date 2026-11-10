@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 interface FrontDeskCancelReservationDialogProps {
   reservation: any;
@@ -41,6 +42,7 @@ export function FrontDeskCancelReservationDialog({ reservation, open, onOpenChan
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });
+      showActionSuccess({ title: 'Reservation cancelled successfully', description: `Room ${formatRoomNumber(room?.number || '')} has been released.` });
       onOpenChange(false);
       setReason('');
     },

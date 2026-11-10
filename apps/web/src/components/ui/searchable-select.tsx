@@ -50,7 +50,10 @@ export function SearchableSelect({
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const root = rootRef.current;
+      if (!root) return;
+      const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      if (!root.contains(event.target as Node) && !path.includes(root)) setOpen(false);
     };
     document.addEventListener('pointerdown', handlePointerDown);
     return () => document.removeEventListener('pointerdown', handlePointerDown);
@@ -85,7 +88,15 @@ export function SearchableSelect({
         <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-[100] overflow-hidden rounded-xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-2xl ring-1 ring-black/10">
           <div className="flex items-center gap-2 rounded-lg border border-border/70 px-2.5">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+            <input
+              ref={searchRef}
+              value={query}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={searchPlaceholder}
+              className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
           </div>
           <div role="listbox" className="mt-1 max-h-56 overflow-y-auto">
             {filteredOptions.length ? filteredOptions.map((option) => (

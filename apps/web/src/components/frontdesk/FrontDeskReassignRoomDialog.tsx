@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { RefreshCw, MapPin, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 interface FrontDeskReassignRoomDialogProps {
   reservation: any;
@@ -101,6 +102,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });
+      showActionSuccess({ title: 'Room changed successfully', description: 'The reservation has been assigned to the new room.' });
       onOpenChange(false);
       if (result.upgradeAmount > 0 && result.paymentDue > 0) {
         if (!folio?.id) {
@@ -130,7 +132,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
     if (!encodeResult?.success || encodeResult?.error) {
       toast.error(encodeResult?.error?.message || encodeResult?.error || 'Room changed, but new room card encoding failed. Use Retry Card.');
     } else {
-      toast.success('New room card encoding started.');
+      showActionSuccess({ title: 'Room card encoding started', description: 'The new room key is being prepared.' });
     }
     queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
   };

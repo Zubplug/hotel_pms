@@ -278,8 +278,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                if (invoice && amount > Number(invoice.outstandingAmount) + 0.01)
                  throw new Error('DOMAIN_ERROR: PAYMENT_EXCEEDS_INVOICE_BALANCE');
 
-               // Idempotency guard — if a payment entry with this reference already exists, skip silently.
-               const existingPayment = await tx.cityLedgerEntry.findFirst({ where: { reference, accountId, type: 'PAYMENT' } });
+               // Use the immutable edge operation key for idempotency. A
+               // repeated human reference such as "Transfer" is not a
+               // duplicate payment by itself.
+               const existingPayment = await tx.payment.findUnique({ where: { idempotencyKey: edgeEvent.idempotencyKey } });
                if (!existingPayment) {
                  const invoices = invoice
                    ? [invoice]

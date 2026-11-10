@@ -162,7 +162,7 @@ export default function QrRoomServicePage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ roomIds }),
+      body: JSON.stringify({ propertyId, roomIds }),
       signal: controller.signal,
     })
       .then(r => r.json())

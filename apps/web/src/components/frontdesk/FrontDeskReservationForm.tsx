@@ -9,6 +9,7 @@ import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, differenceInCalendarDays, addDays, startOfDay, isBefore } from 'date-fns';
 import { toast } from 'sonner';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 import { formatRoomNumber } from '@/lib/format-room';
 
 import { Button } from '@/components/ui/button';
@@ -555,9 +556,12 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
       return { data: res };
     },
     onSuccess: (data) => {
-      toast.success(prefillGuestId
-        ? 'Reservation created and guest credit applied to the folio'
-        : (isWalkIn ? 'Walk-In Created!' : 'Reservation created successfully'));
+      showActionSuccess({
+        title: prefillGuestId
+          ? 'Reservation created and credit applied'
+          : (isWalkIn ? 'Walk-in created successfully' : 'Reservation created successfully'),
+        description: 'The reservation has been saved and is ready for Front Desk follow-up.',
+      });
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });
       const newId = data.data?.data?.id || data.data?.id;

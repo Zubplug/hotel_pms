@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Edit3, Loader2 } from 'lucide-react';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 interface FrontDeskEditReservationDialogProps {
   reservation: any;
@@ -52,6 +53,7 @@ export function FrontDeskEditReservationDialog({ reservation, open, onOpenChange
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
+      showActionSuccess({ title: 'Reservation updated successfully', description: 'The stay details are now up to date.' });
       onOpenChange(false);
     },
     onError: (err: Error) => {

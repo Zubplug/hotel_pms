@@ -7,6 +7,7 @@ import { useProperty } from '@/components/PropertyProvider';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { COMPLIMENTARY_REASONS, complimentaryReasonLabel } from '@/lib/complimentary-reasons';
 import { isConcessionManagementPosition } from '@/lib/concession-accountability';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM' | 'POS_ORDER';
 
@@ -93,6 +94,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
       if (!res.success) {
         setError(res.error || 'Failed to apply complimentary.');
       } else {
+        showActionSuccess({ title: 'Complimentary request submitted', description: 'The approval workflow has been updated.' });
         onSuccess();
         onClose();
       }

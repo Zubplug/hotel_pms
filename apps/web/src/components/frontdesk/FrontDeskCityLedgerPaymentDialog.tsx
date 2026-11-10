@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Landmark, Loader2, ReceiptText } from 'lucide-react';
 import { toast } from 'sonner';
+import { showActionSuccess } from '@/components/ui/action-success-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -40,7 +41,11 @@ export function FrontDeskCityLedgerPaymentDialog({ entry, onComplete, requireAct
       const result = isAdvance
         ? await provider.cityLedger.advance({ accountId: entry.accountId, amount: numericAmount, method, reference: reference.trim() })
         : await provider.cityLedger.settle({ entryId: entry.entryId, accountId: entry.accountId, invoiceId: isCorporate ? undefined : entry.invoiceId, accountType: entry.accountType, amount: numericAmount, method, reference: reference.trim() });
-      toast.success((result as any)?.pendingSync || !isOnline ? 'City ledger payment queued offline' : 'City ledger payment posted');
+      const queuedOffline = (result as any)?.pendingSync || !isOnline;
+      showActionSuccess({
+        title: queuedOffline ? 'Payment queued for sync' : 'City ledger payment posted',
+        description: `${entry.currency || 'NGN'} ${numericAmount.toLocaleString()} · ${queuedOffline ? 'The payment will sync when the connection returns.' : 'The ledger and invoice have been updated.'}`,
+      });
       setOpen(false);
       await onComplete();
     } catch (error) {
