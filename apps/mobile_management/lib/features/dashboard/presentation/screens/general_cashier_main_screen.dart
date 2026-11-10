@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../fnb/presentation/screens/fnb_screen.dart';
-import '../../../finance/presentation/screens/finance_screen.dart';
 import '../../../hub/presentation/screens/hub_screen.dart';
 import '../../../rooms/presentation/screens/rooms_screen.dart';
+import 'cash_custody_screen.dart';
 import 'general_cashier_dashboard_screen.dart';
+import 'cashier_shifts_screen.dart';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 const _navBg     = Color(0xFF07111E);
@@ -29,8 +29,8 @@ class _GeneralCashierMainScreenState extends State<GeneralCashierMainScreen>
   static const _screens = <Widget>[
     GeneralCashierDashboardScreen(),
     RoomsScreen(),
-    FinanceScreen(),
-    FnbScreen(),
+    CashCustodyScreen(),
+    CashierShiftsScreen(),
     HubScreen(),
   ];
 
@@ -41,8 +41,8 @@ class _GeneralCashierMainScreenState extends State<GeneralCashierMainScreen>
       'Cash',
     ),
     _NavItem(Icons.king_bed_outlined, Icons.king_bed_rounded, 'Rooms'),
-    _NavItem(Icons.bar_chart_outlined, Icons.bar_chart_rounded, 'Finance'),
-    _NavItem(Icons.restaurant_outlined, Icons.restaurant_rounded, 'Ops'),
+    _NavItem(Icons.account_balance_rounded, Icons.account_balance_rounded, 'Cash'),
+    _NavItem(Icons.swap_vert_outlined, Icons.swap_vert_rounded, 'Shift'),
     _NavItem(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Hub'),
   ];
 
