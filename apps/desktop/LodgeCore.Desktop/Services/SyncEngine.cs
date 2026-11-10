@@ -338,7 +338,6 @@ public class SyncEngine : BackgroundService
                     BroadcastHealth(SyncState.SYNCING, null, "PREP", 0, 1, "Preparing sync...");
                     // ── Sync guests FIRST so GuestId FK is satisfied when
                     //    reservations are saved in PullUpdatesAsync below.
-                    BroadcastHealth(SyncState.SYNCING, null, "GUESTS", 0, 1, "Downloading guests...");
                     await SyncGuestsIncrementalAsync(stoppingToken);
 
                     // Pull control state before pushing queued offline events.
@@ -4131,9 +4130,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
             try
             {
-                using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                requestTimeout.CancelAfter(TimeSpan.FromSeconds(60));
-                var response = await _httpClient.SendAsync(request, requestTimeout.Token);
+                var response = await _httpClient.SendAsync(request, stoppingToken);
                 if (!response.IsSuccessStatusCode)
                 {
                     var body = await response.Content.ReadAsStringAsync(stoppingToken);
@@ -4197,10 +4194,6 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 {
                     hasMore = false;
                 }
-            }
-            catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
-            {
-                throw new TimeoutException("Guest sync request timed out after 60 seconds.");
             }
             catch (Exception ex)
             {
