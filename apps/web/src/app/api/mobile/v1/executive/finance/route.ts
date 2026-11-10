@@ -42,6 +42,28 @@ export async function GET(req: NextRequest) {
     });
 
     const auditedBusinessDate = lastAudit?.businessDate ?? null;
+    const reportStartBusinessDate = period === '7D'
+      ? subDays(businessDate, 6)
+      : period === 'MTD'
+        ? startOfMonth(businessDate)
+        : period === 'YTD'
+          ? startOfYear(businessDate)
+          : auditedBusinessDate;
+    const isRangeReport = ['7D', 'MTD', 'YTD'].includes(period);
+    const auditedRows = isRangeReport
+      ? await prisma.nightAudit.findMany({
+          where: {
+            propertyId: primaryPropertyId,
+            status: 'COMPLETED',
+            businessDate: {
+              gte: reportStartBusinessDate ? propertyDayStart(reportStartBusinessDate) : businessDayStart,
+              lte: businessDayEnd,
+            },
+          },
+          orderBy: { businessDate: 'asc' },
+          include: { financialSnapshot: true },
+        })
+      : lastAudit ? [lastAudit] : [];
 
     // B) Live Folio Items & Sessions (businessDate > auditedBusinessDate)
     const liveBusinessDateStart = auditedBusinessDate
@@ -72,21 +94,16 @@ export async function GET(req: NextRequest) {
       discounts: 0, refunds: 0, netRevenue: 0,
     };
 
-    if (lastAudit) {
-      // ── Revenue via exact NightAudit single record (matches home screen exactly) ──
-      // Removed Weekly/Monthly logic per request; this strictly reflects the latest Daily audit.
-      audited.roomRevenue = Number(lastAudit.totalRoomRevenue || 0);
-      
-      if (lastAudit.financialSnapshot) {
-        audited.fbRevenue = Number(lastAudit.financialSnapshot.fnbRevenue || 0);
-        audited.otherRevenue = Number(lastAudit.financialSnapshot.otherRevenue || 0);
-        audited.discounts = Number(lastAudit.financialSnapshot.discounts || 0);
-        audited.refunds = Number(lastAudit.financialSnapshot.refunds || 0);
+    for (const audit of auditedRows) {
+      audited.roomRevenue += Number(audit.totalRoomRevenue || 0);
+      audited.revenue += Number(audit.totalRevenue || 0);
+      audited.netRevenue += Number(audit.totalRevenue || 0);
+      if (audit.financialSnapshot) {
+        audited.fbRevenue += Number(audit.financialSnapshot.fnbRevenue || 0);
+        audited.otherRevenue += Number(audit.financialSnapshot.otherRevenue || 0);
+        audited.discounts += Number(audit.financialSnapshot.discounts || 0);
+        audited.refunds += Number(audit.financialSnapshot.refunds || 0);
       }
-      
-      // Force gross and net to match the top-level totalRevenue of the audit (which the Home screen uses)
-      audited.revenue = Number(lastAudit.totalRevenue || 0);
-      audited.netRevenue = Number(lastAudit.totalRevenue || 0);
     }
 
     // Finance reporting is presented from posted GL revenue accounts. The
@@ -102,11 +119,13 @@ export async function GET(req: NextRequest) {
     const departmentRevenue = Array.from(departmentTotals.entries())
       .map(([department, netRevenue]) => ({ department, netRevenue: Number(netRevenue.toFixed(2)) }))
       .sort((a, b) => Math.abs(b.netRevenue) - Math.abs(a.netRevenue));
-    const auditedOtherItems = lastAudit
+    const auditedOtherItems = auditedRows.length
       ? await prisma.folioItem.findMany({
           where: {
             folio: { propertyId: primaryPropertyId },
-            businessDate: auditedBusinessDate!,
+            businessDate: isRangeReport
+              ? { gte: propertyDayStart(reportStartBusinessDate!), lte: businessDayEnd }
+              : auditedBusinessDate!,
             type: 'CHARGE',
             voidedAt: null,
           },

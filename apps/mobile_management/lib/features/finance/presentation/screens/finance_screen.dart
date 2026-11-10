@@ -421,38 +421,87 @@ class _PeriodSelector extends StatelessWidget {
     final labels = compact
         ? ['Audit', '7D', 'MTD', 'YTD']
         : ['Last audit', '7 days', 'MTD', 'YTD'];
+    final icons = [
+      Icons.history_rounded,
+      Icons.date_range_rounded,
+      Icons.calendar_month_rounded,
+      Icons.event_available_rounded,
+    ];
 
     return Container(
-      height: 32,
-      padding: const EdgeInsets.all(3),
+      width: double.infinity,
+      padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: _bg0,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _border),
+        color: _bg0.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderHi.withValues(alpha: 0.7)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: List.generate(periods.length, (i) {
           final active = periods[i] == selected;
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onChanged(periods[i]);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 12),
-              decoration: BoxDecoration(
-                color: active ? _gold : Colors.transparent,
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Text(
-                labels[i],
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: active ? Colors.black : _textMuted,
-                  letterSpacing: compact ? 0 : 0.3,
+          return Expanded(
+            child: Semantics(
+              button: true,
+              selected: active,
+              label: labels[i],
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onChanged(periods[i]);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    gradient: active
+                        ? const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFF0C76A), _gold],
+                          )
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: active
+                        ? const [
+                            BoxShadow(
+                              color: Color(0x44D4A853),
+                              blurRadius: 12,
+                              offset: Offset(0, 4),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icons[i],
+                        size: 15,
+                        color: active ? _bg0 : _textMuted,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        labels[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: compact ? 10 : 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: active ? _bg0 : _textSecondary,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
