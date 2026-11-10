@@ -4133,8 +4133,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 var response = await _httpClient.SendAsync(request, stoppingToken);
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning($"Guest sync failed with status {(int)response.StatusCode}");
-                    break;
+                    var body = await response.Content.ReadAsStringAsync(stoppingToken);
+                    throw new Exception($"Guest sync failed with HTTP {(int)response.StatusCode}: {body}");
                 }
 
                 var resultStr = await response.Content.ReadAsStringAsync(stoppingToken);
@@ -4198,7 +4198,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error syncing guests.");
-                break;
+                throw new Exception($"Guest sync failed on page {pageCount + 1}: {ex.Message}", ex);
             }
         }
     }
