@@ -8,6 +8,8 @@ class CashierShift {
   final double expected, openingFloat;
   final double? declared, variance;
   final String? approvalNotes;
+  final int paymentCount;
+  final Map<String, double> paymentTotals, cashMovements;
 
   const CashierShift({
     required this.id,
@@ -25,6 +27,9 @@ class CashierShift {
     this.variance,
     required this.openingFloat,
     this.approvalNotes,
+    this.paymentCount = 0,
+    this.paymentTotals = const {},
+    this.cashMovements = const {},
   });
 
   factory CashierShift.fromJson(Map<String, dynamic> json) => CashierShift(
@@ -43,7 +48,14 @@ class CashierShift {
     variance: json['variance'] == null ? null : _number(json['variance']),
     openingFloat: _number(json['openingFloat']),
     approvalNotes: json['approvalNotes']?.toString(),
+    paymentCount: int.tryParse('${json['paymentCount'] ?? 0}') ?? 0,
+    paymentTotals: _numbers(json['paymentTotals']),
+    cashMovements: _numbers(json['cashMovements']),
   );
+  static Map<String, double> _numbers(dynamic value) => value is Map
+      ? value.map((key, amount) => MapEntry('$key', _number(amount)))
+      : <String, double>{};
+
   static double _number(dynamic value) =>
       value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
 }

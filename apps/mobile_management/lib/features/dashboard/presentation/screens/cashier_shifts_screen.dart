@@ -18,6 +18,18 @@ const _amber    = Color(0xFFF59E0B);
 const _rose     = Color(0xFFF43F5E);
 const _violet   = Color(0xFF8B5CF6);
 
+const _varianceReasons = [
+  ('CASH_COUNTING_ERROR', 'Cash counting error'),
+  ('MISSING_RECEIPT', 'Missing receipt'),
+  ('UNAUTHORIZED_PAYOUT', 'Unauthorized payout'),
+  ('REFUND_ERROR', 'Refund error'),
+  ('WRONG_CHANGE', 'Wrong change given'),
+  ('CASH_DROP_ERROR', 'Cash drop error'),
+  ('SYSTEM_ERROR', 'System error'),
+  ('UNKNOWN', 'Unknown'),
+  ('OTHER', 'Other'),
+];
+
 class CashierShiftsScreen extends ConsumerStatefulWidget {
   const CashierShiftsScreen({super.key});
 
@@ -439,14 +451,14 @@ class _ShiftCardState extends State<_ShiftCard> {
       return _ActionChip(
         label: 'Start Review',
         color: _violet,
-        onTap: () => _act(shift, 'START_REVIEW'),
+        onTap: () => _startReview(shift),
       );
     }
     if (shift.controlStatus == 'UNDER_REVIEW') {
       return _ActionChip(
         label: 'Review Shift',
         color: _teal,
-        onTap: () => _review(shift),
+        onTap: () => _openReview(shift),
       );
     }
     if (shift.controlStatus == 'RETURNED') {
@@ -472,30 +484,218 @@ class _ShiftCardState extends State<_ShiftCard> {
     return const SizedBox.shrink();
   }
 
-  Future<void> _act(CashierShift shift, String action) async {
-    await widget.ref.read(cashierShiftsRepositoryProvider).act(shift, action);
-    widget.ref.invalidate(cashierShiftsProvider);
+  Future<void> _startReview(CashierShift shift) async {
+    // The web review workspace opens directly from SUBMITTED. The review
+    // decision itself is the state transition; opening the screen must not
+    // mutate the shift to UNDER_REVIEW.
+    await _openReview(shift);
   }
 
-  Future<void> _review(CashierShift shift) async {
-    final notes  = TextEditingController();
-    final reason = TextEditingController();
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: _surface,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _ReviewSheet(shift: shift, notes: notes, reason: reason),
-    );
-    if (result == null) return;
-    await widget.ref
-        .read(cashierShiftsRepositoryProvider)
-        .act(shift, result, notes: notes.text, reasonCode: reason.text);
+  Future<void> _openReview(CashierShift shift) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => CashierShiftReviewScreen(shift: shift)));
     widget.ref.invalidate(cashierShiftsProvider);
   }
 }
+
+class CashierShiftReviewScreen extends ConsumerStatefulWidget {
+  final CashierShift shift;
+  const CashierShiftReviewScreen({super.key, required this.shift});
+  @override ConsumerState<CashierShiftReviewScreen> createState() => _CashierShiftReviewScreenState();
+}
+
+class _CashierShiftReviewScreenState extends ConsumerState<CashierShiftReviewScreen> {
+  late final TextEditingController _notes;
+  String? _reason;
+  late String _decision;
+  bool _saving = false;
+  CashierShift get shift => widget.shift;
+  double get variance => shift.variance ?? 0;
+  bool get hasVariance => variance.abs() > .01;
+  bool get requiresNotes => _decision != 'APPROVE';
+
+  @override void initState() {
+    super.initState();
+    _notes = TextEditingController();
+    _decision = hasVariance ? 'APPROVE_WITH_VARIANCE' : 'APPROVE';
+  }
+  @override void dispose() { _notes.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _bg,
+    appBar: AppBar(backgroundColor: _bg, foregroundColor: _text, surfaceTintColor: Colors.transparent, title: const Text('Shift review', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+    body: SafeArea(child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+      _ReviewPanel(title: shift.label, icon: Icons.rate_review_rounded, color: _violet, child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${shift.type == 'POS' ? 'POS till' : 'Front desk'} · ${shift.operator}', style: const TextStyle(color: _textSub, fontSize: 12)),
+          const SizedBox(height: 5), Text(shift.businessDate == null ? 'Business date unavailable' : DateFormat('EEE, d MMM yyyy').format(shift.businessDate!.toLocal()), style: const TextStyle(color: _textDim, fontSize: 11)),
+        ])), _Pill(label: _label(shift.controlStatus), color: _violet),
+      ])),
+      const SizedBox(height: 12),
+      _ReviewPanel(title: 'CASH ACCOUNTABILITY', icon: Icons.account_balance_wallet_rounded, child: Column(children: [
+        Row(children: [_ReviewStat('Opening float', shift.openingFloat, _text), _ReviewStat('Expected', shift.expected, _teal)]),
+        const SizedBox(height: 14), Row(children: [_ReviewStat('Declared', shift.declared, _text), _ReviewStat('Variance', variance, hasVariance ? _amber : _emerald)]),
+      ])),
+      const SizedBox(height: 12),
+      _collectionAnalysis(),
+      const SizedBox(height: 12),
+      _ReviewPanel(title: 'REVIEW DECISION', icon: Icons.fact_check_rounded, child: Column(children: [
+        _reviewChoice('APPROVE', 'Approve', 'Balanced shift with no variance.', _emerald, !hasVariance),
+        const SizedBox(height: 8), _reviewChoice('APPROVE_WITH_VARIANCE', 'Approve with variance', 'Accept and document a shortage or overage.', _amber, hasVariance),
+        const SizedBox(height: 8), _reviewChoice('RETURN', 'Return for correction', 'Send the shift back to the operator.', _rose, true),
+      ])),
+      if (_decision == 'APPROVE_WITH_VARIANCE') ...[
+        const SizedBox(height: 12),
+        _ReviewPanel(title: 'VARIANCE REASON · REQUIRED', icon: Icons.warning_amber_rounded, color: _amber, child: DropdownButtonFormField<String>(initialValue: _reason, dropdownColor: _surfaceEl, style: const TextStyle(color: _text, fontSize: 13), decoration: _decoration('Select the root cause'), items: _varianceReasons.map((r) => DropdownMenuItem(value: r.$1, child: Text(r.$2))).toList(), onChanged: (v) => setState(() => _reason = v))),
+      ],
+      const SizedBox(height: 12),
+      _ReviewPanel(title: requiresNotes ? 'INVESTIGATION NOTES · REQUIRED' : 'INVESTIGATION NOTES · OPTIONAL', icon: Icons.notes_rounded, color: requiresNotes ? _amber : _textSub, child: TextField(controller: _notes, maxLines: 4, maxLength: 1000, style: const TextStyle(color: _text, fontSize: 13), decoration: _decoration(requiresNotes ? 'Record what was checked (minimum 10 characters)' : 'Add audit context'))),
+      const SizedBox(height: 16), SizedBox(height: 52, child: ElevatedButton.icon(onPressed: _saving ? null : _submit, icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.shield_rounded), label: Text(_saving ? 'Processing…' : _decision == 'RETURN' ? 'Return for correction' : 'Submit review'), style: ElevatedButton.styleFrom(backgroundColor: _decision == 'RETURN' ? _rose : _teal, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))))),
+    ])),
+  );
+
+  Widget _collectionAnalysis() {
+    final total = shift.paymentTotals.values.fold<double>(0, (sum, amount) => sum + amount);
+    final cash = shift.paymentTotals.entries.where((entry) => entry.key.toUpperCase() == 'CASH').fold<double>(0, (sum, entry) => sum + entry.value);
+    final nonCash = total - cash;
+    return _ReviewPanel(
+      title: 'COLLECTION ANALYSIS',
+      icon: Icons.bar_chart_rounded,
+      color: _teal,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          _ReviewStat('Receipts', total, _text),
+          _ReviewStat('Transactions', shift.paymentCount.toDouble(), _teal),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          _ReviewStat('Cash collected', cash, _emerald),
+          _ReviewStat('Non-cash', nonCash, _violet),
+        ]),
+        const SizedBox(height: 16),
+        const Text('BY PAYMENT METHOD', style: TextStyle(color: _textDim, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+        const SizedBox(height: 8),
+        if (shift.paymentTotals.isEmpty)
+          const Text('No completed collections recorded.', style: TextStyle(color: _textSub, fontSize: 11))
+        else
+          ...shift.paymentTotals.entries.map((entry) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(children: [
+              Expanded(child: Text(entry.key.replaceAll('_', ' '), style: const TextStyle(color: _textSub, fontSize: 11))),
+              Text(_money(entry.value), style: const TextStyle(color: _text, fontSize: 11, fontWeight: FontWeight.w800)),
+            ]),
+          )),
+        if (shift.cashMovements.isNotEmpty) ...[
+          const Divider(color: _border, height: 18),
+          const Text('CASH MOVEMENTS', style: TextStyle(color: _textDim, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+          const SizedBox(height: 8),
+          ...shift.cashMovements.entries.where((entry) => entry.value != 0).map((entry) => Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [Expanded(child: Text(entry.key.replaceAllMapped(RegExp(r'([A-Z])'), (match) => ' ${match.group(1)}').trim(), style: const TextStyle(color: _textSub, fontSize: 11))), Text(_money(entry.value), style: const TextStyle(color: _text, fontSize: 11, fontWeight: FontWeight.w700))]))),
+        ],
+      ]),
+    );
+  }
+
+  Widget _reviewChoice(String value, String title, String description, Color color, bool enabled) {
+    return InkWell(
+      onTap: enabled ? () => setState(() => _decision = value) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _decision == value ? color.withValues(alpha: .12) : _bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _decision == value ? color : _border),
+        ),
+        child: Row(children: [
+          Icon(_decision == value ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: enabled ? color : _textDim, size: 19),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: TextStyle(color: enabled ? _text : _textDim, fontWeight: FontWeight.w700, fontSize: 12)),
+            const SizedBox(height: 3),
+            Text(enabled ? description : value == 'APPROVE' ? 'Only available with no variance.' : 'Only available when a variance exists.', style: const TextStyle(color: _textSub, fontSize: 11)),
+          ])),
+        ]),
+      ),
+    );
+  }
+  Future<void> _submit() async {
+    if (_decision == 'APPROVE_WITH_VARIANCE' && _reason == null) return _message('Select a variance reason before submitting.');
+    if (requiresNotes && _notes.text.trim().length < 10) return _message('Add at least 10 characters to the required investigation notes.');
+    setState(() => _saving = true);
+    try {
+      await ref.read(cashierShiftsRepositoryProvider).act(shift, _decision, notes: _notes.text.trim(), reasonCode: _reason);
+      if (!mounted) return;
+      await _showReviewSuccess();
+      if (mounted) Navigator.pop(context);
+    } catch (error) { if (mounted) _message('Unable to submit review: $error'); }
+    finally { if (mounted) setState(() => _saving = false); }
+  }
+  void _message(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+  Future<void> _showReviewSuccess() async {
+    final returned = _decision == 'RETURN';
+    final withVariance = _decision == 'APPROVE_WITH_VARIANCE';
+    final color = returned ? _rose : withVariance ? _amber : _emerald;
+    final title = returned ? 'Sent for correction' : withVariance ? 'Approved with variance' : 'Shift approved';
+    final description = returned
+        ? 'The shift has been returned to the operator with your review notes.'
+        : withVariance
+            ? 'The variance and its supporting reason have been recorded in the audit trail.'
+            : 'The cashier shift was reconciled successfully with no variance.';
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: color.withValues(alpha: .35)),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: .15), blurRadius: 30, offset: const Offset(0, 14))],
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(color: color.withValues(alpha: .12), shape: BoxShape.circle, border: Border.all(color: color.withValues(alpha: .35))),
+              child: Icon(returned ? Icons.undo_rounded : Icons.check_rounded, color: color, size: 34),
+            ),
+            const SizedBox(height: 18),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text(shift.label, textAlign: TextAlign.center, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            Text(description, textAlign: TextAlign.center, style: const TextStyle(color: _textSub, fontSize: 12, height: 1.45)),
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: _border)),
+              child: Row(children: [
+                Icon(Icons.verified_user_outlined, color: color, size: 17),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Recorded in the shift audit trail', style: TextStyle(color: _textSub, fontSize: 11, fontWeight: FontWeight.w600))),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(width: double.infinity, height: 46, child: ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))), child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w800)))),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  String _label(String value) => value.replaceAll('_', ' ').toLowerCase().split(' ').map((p) => p.isEmpty ? p : '${p[0].toUpperCase()}${p.substring(1)}').join(' ');
+  String _money(double amount) => NumberFormat('#,##0.00').format(amount);
+  InputDecoration _decoration(String hint) => InputDecoration(hintText: hint, hintStyle: const TextStyle(color: _textDim, fontSize: 12), filled: true, fillColor: _bg, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _border)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _border)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _gold, width: 1.5)));
+}
+
+class _ReviewPanel extends StatelessWidget { final String title; final IconData icon; final Widget child; final Color color; const _ReviewPanel({required this.title, required this.icon, required this.child, this.color = _textSub}); @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: _border)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(icon, color: color, size: 16), const SizedBox(width: 8), Text(title, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.1))]), const SizedBox(height: 14), child])); }
+class _ReviewStat extends StatelessWidget { final String label; final double? value; final Color color; const _ReviewStat(this.label, this.value, this.color); @override Widget build(BuildContext context) => Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: _textDim, fontSize: 10)), const SizedBox(height: 5), Text(value == null ? 'Not declared' : NumberFormat('#,##0.00').format(value), style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w800))])); }
 
 // ─── Review Sheet ─────────────────────────────────────────────────────────────
 class _ReviewSheet extends StatelessWidget {

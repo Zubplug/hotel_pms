@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
         include: {
           outlet: { select: { name: true } },
           primaryOperator: { select: { firstName: true, lastName: true } },
+          payments: true,
+          cashMovements: true,
         },
       }),
       prisma.frontdeskSession.findMany({
@@ -34,6 +36,8 @@ export async function GET(req: NextRequest) {
         include: {
           staff: { select: { firstName: true, lastName: true } },
           cashAccount: { select: { name: true } },
+          payments: true,
+          cashMovements: true,
         },
       }),
     ]);
@@ -49,6 +53,18 @@ export async function GET(req: NextRequest) {
           businessDate: shift.businessDate, openedAt: shift.openedAt, closedAt: shift.closedAt, updatedAt: shift.updatedAt,
           expected, declared, variance: declared == null ? null : declared - expected,
           openingFloat: Number(shift.openingCash), approvalNotes: shift.approvalNotes,
+          paymentCount: shift.payments.length,
+          paymentTotals: shift.payments.filter((payment) => ['CONFIRMED', 'PAID'].includes(payment.status)).reduce((result, payment) => {
+            result[payment.method] = (result[payment.method] || 0) + Number(payment.amount);
+            return result;
+          }, {} as Record<string, number>),
+          cashMovements: {
+            cashIn: shift.cashMovements.filter((movement) => ['CASH_TRANSFER_IN', 'CASH_IN'].includes(movement.type)).reduce((sum, movement) => sum + Number(movement.amount), 0),
+            cashDrops: shift.cashMovements.filter((movement) => movement.type === 'CASH_DROP').reduce((sum, movement) => sum + Number(movement.amount), 0),
+            paidOuts: shift.cashMovements.filter((movement) => movement.type === 'PAID_OUT').reduce((sum, movement) => sum + Number(movement.amount), 0),
+            transfersOut: shift.cashMovements.filter((movement) => movement.type === 'CASH_TRANSFER_OUT').reduce((sum, movement) => sum + Number(movement.amount), 0),
+            refunds: shift.cashMovements.filter((movement) => ['REFUND', 'REFUND_CASH'].includes(movement.type)).reduce((sum, movement) => sum + Number(movement.amount), 0),
+          },
         };
       }),
       ...frontDesk.map((shift) => ({
@@ -60,6 +76,18 @@ export async function GET(req: NextRequest) {
         declared: shift.declaredCash == null ? null : Number(shift.declaredCash),
         variance: shift.variance == null ? null : Number(shift.variance),
         openingFloat: Number(shift.openingFloat), approvalNotes: shift.approvalNotes,
+        paymentCount: shift.payments.length,
+        paymentTotals: shift.payments.filter((payment) => ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((result, payment) => {
+          result[payment.method] = (result[payment.method] || 0) + Number(payment.amount);
+          return result;
+        }, {} as Record<string, number>),
+        cashMovements: {
+          cashIn: shift.cashMovements.filter((movement) => ['CASH_TRANSFER_IN', 'CASH_IN'].includes(movement.type)).reduce((sum, movement) => sum + Number(movement.amount), 0),
+          cashDrops: shift.cashMovements.filter((movement) => movement.type === 'CASH_DROP').reduce((sum, movement) => sum + Number(movement.amount), 0),
+          paidOuts: shift.cashMovements.filter((movement) => movement.type === 'PAID_OUT').reduce((sum, movement) => sum + Number(movement.amount), 0),
+          transfersOut: shift.cashMovements.filter((movement) => movement.type === 'CASH_TRANSFER_OUT').reduce((sum, movement) => sum + Number(movement.amount), 0),
+          refunds: shift.cashMovements.filter((movement) => ['REFUND', 'REFUND_CASH'].includes(movement.type)).reduce((sum, movement) => sum + Number(movement.amount), 0),
+        },
       })),
     ].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
