@@ -4121,17 +4121,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
         bool hasMore = true;
         int pageCount = 0;
+        var initialMeta = await dbContext.SyncMetadata
+            .AsNoTracking()
+            .FirstOrDefaultAsync(stoppingToken);
+        string? cursor = initialMeta?.LastGuestSyncCursor;
         
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
-            // Guest pages update the cursor with raw SQL. Do not reuse a
-            // previously tracked metadata entity, or the next request would
-            // send the old cursor and download the same page again.
-            var meta = await dbContext.SyncMetadata
-                .AsNoTracking()
-                .FirstOrDefaultAsync(stoppingToken);
-            var cursor = meta?.LastGuestSyncCursor;
-            
             var url = $"sync/guests?propertyId={identity.PropertyId}&limit=500";
             if (!string.IsNullOrEmpty(cursor))
             {
@@ -4197,6 +4193,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             ? nc.ValueKind == System.Text.Json.JsonValueKind.String ? nc.GetString() : nc.GetRawText()
                             : null;
 
+                        if (hasMore && string.IsNullOrWhiteSpace(nextCursor))
+                        {
+                            throw new InvalidOperationException("Guest sync returned more pages without a next cursor.");
+                        }
+
                         if (hasMore && string.Equals(cursor, nextCursor, StringComparison.Ordinal))
                         {
                             throw new InvalidOperationException("Guest sync cursor did not advance; stopping repeated page requests.");
@@ -4207,6 +4208,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             pageCount++;
                             BroadcastHealth(SyncState.SYNCING, null, "GUESTS_PAGED", pageCount, -1, $"Syncing guests page {pageCount}...");
                             await localRepo.UpsertGuestPageTransactionAsync(guestsToUpsert, nextCursor);
+                            // Advance the current cycle from the cursor that
+                            // was just committed. The next iteration must not
+                            // depend on EF re-reading a tracked metadata row.
+                            cursor = nextCursor;
                         }
                         else
                         {
