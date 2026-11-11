@@ -4125,6 +4125,23 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             .AsNoTracking()
             .FirstOrDefaultAsync(item => item.PropertyId == identity.PropertyId, stoppingToken);
         string? cursor = checkpoint?.Cursor;
+        if (!string.IsNullOrWhiteSpace(cursor))
+        {
+            try
+            {
+                using var cursorDoc = JsonDocument.Parse(cursor);
+                if (!cursorDoc.RootElement.TryGetProperty("mode", out var mode) ||
+                    !string.Equals(mode.GetString(), "id-v1", StringComparison.Ordinal))
+                {
+                    // Discard cursors from the previous timestamp protocol.
+                    cursor = null;
+                }
+            }
+            catch (JsonException)
+            {
+                cursor = null;
+            }
+        }
         
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
@@ -4233,6 +4250,17 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 _logger.LogError(ex, "Error syncing guests.");
                 throw new Exception($"Guest sync failed on page {pageCount + 1}: {ex.Message}", ex);
             }
+        }
+
+        // This protocol is a complete guest sweep. Clear the checkpoint only
+        // after every page has completed so the next cycle captures updates
+        // from the beginning without carrying a stale boundary forward.
+        if (!stoppingToken.IsCancellationRequested)
+        {
+            await localRepo.UpsertGuestPageTransactionAsync(
+                identity.PropertyId,
+                new List<LodgeCore.Desktop.Data.Entities.LocalGuest>(),
+                null);
         }
     }
 

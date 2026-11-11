@@ -19,21 +19,16 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', authResult.error, authResult.status);
     }
 
-    // Parse cursor if provided
-    let cursorUpdatedAt: Date | null = null;
+    // Guest sync uses an immutable ID keyset. This avoids timestamp precision
+    // differences between PostgreSQL and JavaScript Date values.
     let cursorId: string | null = null;
 
     if (cursorStr) {
       try {
         const cursor = JSON.parse(cursorStr);
-        if (!cursor || typeof cursor !== 'object' || !cursor.updatedAt || !cursor.id) {
+        if (!cursor || typeof cursor !== 'object' || cursor.mode !== 'id-v1' || !cursor.id) {
           return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
         }
-        const parsedUpdatedAt = new Date(cursor.updatedAt);
-        if (Number.isNaN(parsedUpdatedAt.getTime())) {
-          return errorResponse('BAD_REQUEST', 'Invalid cursor timestamp', 400);
-        }
-        cursorUpdatedAt = parsedUpdatedAt;
         cursorId = String(cursor.id);
       } catch (e) {
         return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
@@ -46,26 +41,17 @@ export async function GET(req: NextRequest) {
       propertyId: propertyId
     };
 
-    if (cursorUpdatedAt && cursorId) {
+    if (cursorId) {
       whereClause = {
         ...whereClause,
-        OR: [
-          { updatedAt: { gt: cursorUpdatedAt } },
-          { 
-            updatedAt: cursorUpdatedAt,
-            id: { gt: cursorId }
-          }
-        ]
+        id: { gt: cursorId }
       };
     }
 
-    // Query with deterministic order
+    // Query in the same immutable key order used by the cursor.
     const guests = await prisma.guest.findMany({
       where: whereClause,
-      orderBy: [
-        { updatedAt: 'asc' },
-        { id: 'asc' }
-      ],
+      orderBy: { id: 'asc' },
       take: limit + 1, // Fetch one extra to determine hasMore
       select: {
         id: true,
@@ -100,7 +86,7 @@ export async function GET(req: NextRequest) {
     if (paginatedGuests.length > 0) {
       const lastGuest = paginatedGuests[paginatedGuests.length - 1];
       nextCursor = {
-        updatedAt: lastGuest.updatedAt.toISOString(),
+        mode: 'id-v1',
         id: lastGuest.id
       };
     }
