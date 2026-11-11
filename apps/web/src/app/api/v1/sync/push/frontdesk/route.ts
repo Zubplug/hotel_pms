@@ -659,6 +659,26 @@ export async function POST(req: NextRequest) {
                   `[sync/push] ${eventType} idempotent accept for already-posted charge ${idempotencyKey}`
                 );
               }
+
+              // A checkout may have posted another day-use component on the
+              // cloud after this edge event was created. Charges are append-only
+              // operations, so a version mismatch must not discard a valid
+              // component that is not already present. Rebase the event onto
+              // the current folio version; the idempotency check above still
+              // makes retries a no-op and the charge handler below remains the
+              // single place that changes financial totals.
+              if (!replayedCharge && updatedCount === 0) {
+                const rebased = await tx.folio.updateMany({
+                  where: { id: aggregateId, propertyId },
+                  data: { version: { increment: 1 } },
+                });
+                updatedCount = rebased.count;
+                if (updatedCount > 0) {
+                  console.log(
+                    `[sync/push] rebased stale ${eventType} ${idempotencyKey} onto current folio version`
+                  );
+                }
+              }
             }
 
             // Safe fallback & idempotency bypass for offline folios (e.g. CITY_LEDGER_SETTLEMENT, ADVANCE_DEPOSIT)
