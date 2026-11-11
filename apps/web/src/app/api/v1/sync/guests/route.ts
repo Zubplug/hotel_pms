@@ -26,10 +26,15 @@ export async function GET(req: NextRequest) {
     if (cursorStr) {
       try {
         const cursor = JSON.parse(cursorStr);
-        if (cursor.updatedAt && cursor.id) {
-          cursorUpdatedAt = new Date(cursor.updatedAt);
-          cursorId = cursor.id;
+        if (!cursor || typeof cursor !== 'object' || !cursor.updatedAt || !cursor.id) {
+          return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
         }
+        const parsedUpdatedAt = new Date(cursor.updatedAt);
+        if (Number.isNaN(parsedUpdatedAt.getTime())) {
+          return errorResponse('BAD_REQUEST', 'Invalid cursor timestamp', 400);
+        }
+        cursorUpdatedAt = parsedUpdatedAt;
+        cursorId = String(cursor.id);
       } catch (e) {
         return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
       }

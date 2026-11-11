@@ -4172,7 +4172,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         }
 
                         hasMore = dataEl.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
-                        var nextCursor = dataEl.TryGetProperty("nextCursor", out var nc) && nc.ValueKind != System.Text.Json.JsonValueKind.Null ? nc.GetRawText() : null;
+                        var nextCursor = dataEl.TryGetProperty("nextCursor", out var nc) && nc.ValueKind != System.Text.Json.JsonValueKind.Null
+                            ? nc.ValueKind == System.Text.Json.JsonValueKind.String ? nc.GetString() : nc.GetRawText()
+                            : null;
+
+                        if (hasMore && string.Equals(cursor, nextCursor, StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException("Guest sync cursor did not advance; stopping repeated page requests.");
+                        }
 
                         if (guestsToUpsert.Any())
                         {
