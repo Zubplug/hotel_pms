@@ -13,6 +13,10 @@ export async function GET(req: NextRequest) {
     const propertyId  = req.nextUrl.searchParams.get('propertyId');
     const cursorParam = req.nextUrl.searchParams.get('cursor');
     const sinceParam  = req.nextUrl.searchParams.get('since');
+    // New desktop clients synchronize guests through /sync/guests, which has
+    // its own ID cursor and local transaction. Keep the legacy default for
+    // older terminals until they are upgraded.
+    const includeGuests = req.nextUrl.searchParams.get('includeGuests') !== 'false';
     const reconcileSessionIds = Array.from(new Set(
       (req.nextUrl.searchParams.get('reconcilePosSessionIds') || '')
         .split(',')
@@ -281,8 +285,10 @@ export async function GET(req: NextRequest) {
     };
 
     const reservationInclude = {
-      primaryGuest: true,
-      reservationGuests: { include: { guest: true } },
+      ...(includeGuests ? {
+        primaryGuest: true,
+        reservationGuests: { include: { guest: true } },
+      } : {}),
       reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
       folios: { include: { items: true, payments: true, credits: true } },
       lockCredentials: true,
@@ -566,12 +572,13 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
-    let allGuests: any[] = [];
-    allGuests = await prisma.guest.findMany({
-      where: buildWhere({ propertyId }),
-      take: limit,
-      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }]
-    });
+    const allGuests = includeGuests
+      ? await prisma.guest.findMany({
+          where: buildWhere({ propertyId }),
+          take: limit,
+          orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }]
+        })
+      : [];
 
     // ---- Merge and Paginate ---------------------------------------------
     
@@ -599,7 +606,9 @@ export async function GET(req: NextRequest) {
     maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
     laundryItems.forEach(s => allEntities.push({ type: 'LaundryItem', updatedAt: s.updatedAt, data: s }));
     laundryOrders.forEach(s => allEntities.push({ type: 'LaundryOrder', updatedAt: s.updatedAt, data: s }));
-    allGuests.forEach(s => allEntities.push({ type: 'Guest', updatedAt: s.updatedAt, data: s }));
+    if (includeGuests) {
+      allGuests.forEach(s => allEntities.push({ type: 'Guest', updatedAt: s.updatedAt, data: s }));
+    }
 
     // ---- Fetch city-ledger invoices, payments, and guest credits ---------
     // These records are intentionally outside the cursor-paginated entity
@@ -686,7 +695,6 @@ export async function GET(req: NextRequest) {
     const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
     const finalLaundryItems = allEntities.filter(e => e.type === 'LaundryItem').map(e => e.data);
     const finalLaundryOrders = allEntities.filter(e => e.type === 'LaundryOrder').map(e => e.data);
-    const finalGuests = allEntities.filter(e => e.type === 'Guest').map(e => e.data);
 
     // Pool Terminal snapshot. Pool configuration and operational records are
     // small enough to travel as reference data, allowing the terminal to
@@ -808,16 +816,23 @@ export async function GET(req: NextRequest) {
       sharedCorporateFolios.map((folio: any) => [folio.corporateAccountId, folio]),
     );
 
-    // Flatten Guests and Folios from the resulting reservations
+    // Flatten folios from the resulting reservations. Guest records are
+    // intentionally excluded for new clients; /sync/guests owns that cache.
     const guestMap = new Map<string, any>();
-    finalGuests.forEach(g => guestMap.set(g.id, g));
+    if (includeGuests) {
+      allEntities
+        .filter(e => e.type === 'Guest')
+        .forEach(e => guestMap.set(e.data.id, e.data));
+    }
     const folioById = new Map<string, any>();
     const addFolio = (folio: any) => {
       if (folio?.id) folioById.set(folio.id, folio);
     };
     const plainReservations = finalReservations.map(r => {
-      if (r.primaryGuest) guestMap.set(r.primaryGuest.id, r.primaryGuest);
-      r.reservationGuests.forEach((rg: any) => { if (rg.guest) guestMap.set(rg.guest.id, rg.guest); });
+      if (includeGuests && r.primaryGuest) guestMap.set(r.primaryGuest.id, r.primaryGuest);
+      if (includeGuests) {
+        (r.reservationGuests || []).forEach((rg: any) => { if (rg.guest) guestMap.set(rg.guest.id, rg.guest); });
+      }
       r.folios.forEach((f: any) => addFolio(f));
       const sharedCorporateFolio = r.corporateAccountId
         ? sharedCorporateFolioByAccount.get(r.corporateAccountId)
@@ -1030,7 +1045,9 @@ export async function GET(req: NextRequest) {
       rates: finalRates,
       reservations: plainReservations,
       breakfastEligibilitySnapshots,
-      guests:     Array.from(guestMap.values()),
+      // Keep the field for old terminals. New terminals request
+      // includeGuests=false and receive an empty compatibility array.
+      guests:     includeGuests ? Array.from(guestMap.values()) : [],
       folios,
       eventInvoices,
       eventSchedule,

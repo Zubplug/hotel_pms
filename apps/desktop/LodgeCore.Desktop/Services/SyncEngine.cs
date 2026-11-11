@@ -890,6 +890,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
         bool hasMore = true;
         int pageCount = 0;
+        var cursorRecoveryAttempted = false;
 
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
@@ -913,7 +914,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 : "";
 
             var response = await _httpClient.GetAsync(
-                $"sync/pull?propertyId={Uri.EscapeDataString(identity.PropertyId)}{cursorParam}{reconcileSessionParam}&limit=500",
+                $"sync/pull?propertyId={Uri.EscapeDataString(identity.PropertyId)}{cursorParam}{reconcileSessionParam}&limit=500&includeGuests=false",
                 stoppingToken);
 
             if (!response.IsSuccessStatusCode)
@@ -948,6 +949,22 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             if (hasMore && !string.IsNullOrEmpty(lastPullStr) &&
                 string.Equals(lastPullStr, nextCursor, StringComparison.Ordinal))
             {
+                // Older pull cursors contain only millisecond precision while
+                // PostgreSQL may contain microseconds. If the server cuts a
+                // page inside that same millisecond, retry once from a clean
+                // snapshot instead of repeatedly requesting the same page.
+                if (!cursorRecoveryAttempted)
+                {
+                    cursorRecoveryAttempted = true;
+                    Preferences.Remove($"LastPull_{identity.PropertyId}");
+                    _logger.LogWarning(
+                        "General sync cursor did not advance at {Cursor}; resetting the local pull cursor and retrying a full pull.",
+                        lastPullStr);
+                    pageCount = 0;
+                    hasMore = true;
+                    continue;
+                }
+
                 throw new InvalidOperationException(
                     $"General sync cursor did not advance on page {pageCount}: {nextCursor}");
             }
@@ -1462,47 +1479,6 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     room.IsAccessible = el.TryGetProperty("isAccessible", out var isa) && isa.GetBoolean();
                     room.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
                     room.UpdatedAt = DateTime.UtcNow;
-                }
-            }
-
-            // 3. Guests (from pull payload to ensure FKs)
-            if (root.TryGetProperty("guests", out var pullGuests) && pullGuests.ValueKind == System.Text.Json.JsonValueKind.Array)
-            {
-                foreach (var el in pullGuests.EnumerateArray())
-                {
-                    var id = el.GetProperty("id").GetString();
-                    if (string.IsNullOrEmpty(id)) continue;
-                    
-                    var existing = await dbContext.Guests.FirstOrDefaultAsync(g => g.Id == id, stoppingToken);
-                    if (existing != null && existing.IsDirty) continue;
-
-                    var g = existing ?? new LodgeCore.Desktop.Data.Entities.LocalGuest { Id = id };
-                    g.OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "";
-                    g.PropertyId = el.TryGetProperty("propertyId", out var prop) && prop.ValueKind != System.Text.Json.JsonValueKind.Null ? prop.GetString() ?? "" : "";
-                    g.FirstName = el.TryGetProperty("firstName", out var fn) && fn.ValueKind != System.Text.Json.JsonValueKind.Null ? fn.GetString() ?? "" : "";
-                    g.LastName = el.TryGetProperty("lastName", out var ln) && ln.ValueKind != System.Text.Json.JsonValueKind.Null ? ln.GetString() ?? "" : "";
-                    g.Email = el.TryGetProperty("email", out var em) && em.ValueKind != System.Text.Json.JsonValueKind.Null ? em.GetString() : null;
-                    g.Phone = el.TryGetProperty("phone", out var ph) && ph.ValueKind != System.Text.Json.JsonValueKind.Null ? ph.GetString() : null;
-                    g.Gender = el.TryGetProperty("gender", out var gender) && gender.ValueKind != System.Text.Json.JsonValueKind.Null ? gender.GetString() : null;
-                    g.DateOfBirth = ReadNullableDate(el, "dateOfBirth");
-                    g.Nationality = ReadNullableString(el, "nationality");
-                    g.AddressLine1 = ReadNullableString(el, "addressLine1");
-                    g.City = ReadNullableString(el, "city");
-                    g.State = ReadNullableString(el, "state");
-                    g.Country = ReadNullableString(el, "country");
-                    g.IdType = ReadNullableString(el, "idType");
-                    g.CompanyName = el.TryGetProperty("companyName", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : null;
-                    g.IsVip = el.TryGetProperty("isVip", out var vip) && vip.ValueKind != System.Text.Json.JsonValueKind.Null && vip.GetBoolean();
-                    g.Notes = ReadNullableString(el, "notes");
-                    g.Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1;
-                    
-                    if (el.TryGetProperty("updatedAt", out var ua) && ua.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ua.GetString(), out var uad)) g.UpdatedAt = uad;
-                    if (el.TryGetProperty("deletedAt", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(da.GetString(), out var dad)) g.DeletedAt = dad;
-
-                    if (existing == null)
-                    {
-                        dbContext.Guests.Add(g);
-                    }
                 }
             }
 
