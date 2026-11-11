@@ -3236,7 +3236,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 }
             }
 
-            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
+            // Guest pages update the cursor with raw SQL. Do not reuse a
+            // previously tracked metadata entity, or the next request would
+            // send the old cursor and download the same page again.
+            var meta = await dbContext.SyncMetadata
+                .AsNoTracking()
+                .FirstOrDefaultAsync(stoppingToken);
             if (meta == null)
             {
                 meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "singleton", SchemaVersion = "1.0" };
@@ -4116,7 +4121,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
-            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
+            // Guest pages update the cursor with raw SQL. Do not reuse a
+            // previously tracked metadata entity, or the next request would
+            // send the old cursor and download the same page again.
+            var meta = await dbContext.SyncMetadata
+                .AsNoTracking()
+                .FirstOrDefaultAsync(stoppingToken);
             var cursor = meta?.LastGuestSyncCursor;
             
             var url = $"sync/guests?propertyId={identity.PropertyId}&limit=500";
