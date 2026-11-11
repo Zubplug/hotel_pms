@@ -63,6 +63,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalHardwareAuditLog> HardwareAuditLogs { get; set; } = null!;
     public DbSet<LocalPrinterConfig> PrinterConfigs { get; set; } = null!;
     public DbSet<LocalSyncMetadata> SyncMetadata { get; set; } = null!;
+    public DbSet<LocalGuestSyncCheckpoint> GuestSyncCheckpoints { get; set; } = null!;
     public DbSet<LocalPosProductionBatch> PosProductionBatches { get; set; } = null!;
     public DbSet<LocalPosProductionBatchItem> PosProductionBatchItems { get; set; } = null!;
 
@@ -196,6 +197,17 @@ public class LocalDbContext : DbContext
         try { await Database.ExecuteSqlRawAsync("ALTER TABLE SyncMetadata ADD COLUMN LastGuestSyncCursor TEXT NULL"); }
         catch (Microsoft.Data.Sqlite.SqliteException ex)
             when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
+    public async Task ApplyGuestSyncCheckpointSchemaAsync()
+    {
+        await Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS GuestSyncCheckpoints (
+                PropertyId TEXT PRIMARY KEY,
+                Cursor TEXT NULL,
+                UpdatedAt TEXT NOT NULL
+            );
+            """);
     }
 
     public async Task ApplyReachRoomTypeSchemaAsync()

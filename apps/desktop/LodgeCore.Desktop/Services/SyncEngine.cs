@@ -4121,10 +4121,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
         bool hasMore = true;
         int pageCount = 0;
-        var initialMeta = await dbContext.SyncMetadata
+        var checkpoint = await dbContext.GuestSyncCheckpoints
             .AsNoTracking()
-            .FirstOrDefaultAsync(stoppingToken);
-        string? cursor = initialMeta?.LastGuestSyncCursor;
+            .FirstOrDefaultAsync(item => item.PropertyId == identity.PropertyId, stoppingToken);
+        string? cursor = checkpoint?.Cursor;
         
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
@@ -4207,7 +4207,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         {
                             pageCount++;
                             BroadcastHealth(SyncState.SYNCING, null, "GUESTS_PAGED", pageCount, -1, $"Syncing guests page {pageCount}...");
-                            await localRepo.UpsertGuestPageTransactionAsync(guestsToUpsert, nextCursor);
+                            await localRepo.UpsertGuestPageTransactionAsync(identity.PropertyId, guestsToUpsert, nextCursor);
                             // Advance the current cycle from the cursor that
                             // was just committed. The next iteration must not
                             // depend on EF re-reading a tracked metadata row.

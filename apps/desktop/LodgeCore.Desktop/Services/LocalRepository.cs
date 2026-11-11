@@ -3831,7 +3831,7 @@ public class LocalRepository
             .ToListAsync();
     }
 
-    public async Task UpsertGuestPageTransactionAsync(List<LocalGuest> guests, string? nextCursor)
+    public async Task UpsertGuestPageTransactionAsync(string propertyId, List<LocalGuest> guests, string? nextCursor)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync();
         try
@@ -3897,16 +3897,17 @@ public class LocalRepository
                     new Microsoft.Data.Sqlite.SqliteParameter("@createdAt", guest.CreatedAt));
             }
 
-            var meta = await _dbContext.SyncMetadata.AsNoTracking().FirstOrDefaultAsync();
-            var metaId = meta?.Id ?? "singleton";
-            const string metaSql = """
-                INSERT INTO SyncMetadata (Id, LastGuestSyncCursor)
-                VALUES (@id, @cursor)
-                ON CONFLICT(Id) DO UPDATE SET LastGuestSyncCursor = excluded.LastGuestSyncCursor;
+            const string checkpointSql = """
+                INSERT INTO GuestSyncCheckpoints (PropertyId, Cursor, UpdatedAt)
+                VALUES (@propertyId, @cursor, @updatedAt)
+                ON CONFLICT(PropertyId) DO UPDATE SET
+                    Cursor = excluded.Cursor,
+                    UpdatedAt = excluded.UpdatedAt;
                 """;
-            await _dbContext.Database.ExecuteSqlRawAsync(metaSql,
-                new Microsoft.Data.Sqlite.SqliteParameter("@id", metaId),
-                new Microsoft.Data.Sqlite.SqliteParameter("@cursor", (object?)nextCursor ?? DBNull.Value));
+            await _dbContext.Database.ExecuteSqlRawAsync(checkpointSql,
+                new Microsoft.Data.Sqlite.SqliteParameter("@propertyId", propertyId),
+                new Microsoft.Data.Sqlite.SqliteParameter("@cursor", (object?)nextCursor ?? DBNull.Value),
+                new Microsoft.Data.Sqlite.SqliteParameter("@updatedAt", DateTime.UtcNow));
 
             await transaction.CommitAsync();
         }
