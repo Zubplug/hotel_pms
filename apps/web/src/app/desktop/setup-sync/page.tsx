@@ -110,6 +110,15 @@ export default function SetupSyncPage() {
               <span className="font-medium text-slate-700">
                 {health?.phase === 'STAFF' ? 'Downloading staff...' :
                  health?.phase === 'PREP' ? 'Preparing sync...' :
+                 health?.phase === 'ROOMS' ? 'Syncing rooms...' :
+                 health?.phase === 'ROOM_TYPES' ? 'Syncing room types...' :
+                 health?.phase === 'CORPORATE_ACCOUNTS' ? 'Syncing corporate accounts...' :
+                 health?.phase === 'RATE_PLANS' ? 'Syncing rate plans...' :
+                 health?.phase === 'RATES' ? 'Syncing rates...' :
+                 health?.phase === 'RESERVATIONS' ? 'Syncing reservations...' :
+                 health?.phase === 'FOLIOS' ? 'Syncing folios...' :
+                 health?.phase === 'GUESTS_PAGED' ? 'Syncing guests...' :
+                 health?.phase === 'PUSH_FD' ? 'Uploading Front Desk changes...' :
                  health?.sync === 'UP_TO_DATE' || health?.sync === 'UpToDate' ? 'Sync complete' :
                  'Synchronizing database'}
               </span>

@@ -893,6 +893,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
+            // Keep the cursor used for this request in memory.  The pull API
+            // must advance it whenever it says that another page exists;
+            // otherwise this loop downloads the same page forever.
             var lastPullStr = Preferences.Get($"LastPull_{identity.PropertyId}", "");
             var isIncremental = !string.IsNullOrEmpty(lastPullStr);
             var cursorParam = isIncremental ? $"&cursor={Uri.EscapeDataString(lastPullStr)}" : "";
@@ -935,6 +938,19 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             pageCount++;
             hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             var nextCursor = root.TryGetProperty("syncedAt", out var sa) && sa.ValueKind != System.Text.Json.JsonValueKind.Null ? sa.GetString() : null;
+
+            if (hasMore && string.IsNullOrWhiteSpace(nextCursor))
+            {
+                throw new InvalidOperationException(
+                    $"General sync returned more pages without a cursor (page {pageCount}).");
+            }
+
+            if (hasMore && !string.IsNullOrEmpty(lastPullStr) &&
+                string.Equals(lastPullStr, nextCursor, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"General sync cursor did not advance on page {pageCount}: {nextCursor}");
+            }
 
             try
             {
