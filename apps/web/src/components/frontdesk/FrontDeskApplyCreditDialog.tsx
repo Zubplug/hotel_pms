@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { showActionSuccess } from '@/components/ui/action-success-dialog';
 import { Loader2, Wallet, CheckCircle2, AlertCircle, AlertTriangle, WifiOff } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useProperty } from '@/components/PropertyProvider';
@@ -85,12 +84,6 @@ export function FrontDeskApplyCreditDialog({
           );
         }
         throw new Error(result.error || 'Failed to apply credit');
-      }
-
-      if (!isOnline) {
-        showActionSuccess({ title: 'Credit queued for sync', description: 'The credit will sync when the connection returns.' });
-      } else {
-        showActionSuccess({ title: 'Guest credit applied successfully', description: 'The folio balance has been updated.' });
       }
 
       await Promise.all([

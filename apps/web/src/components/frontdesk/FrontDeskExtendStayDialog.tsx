@@ -13,7 +13,6 @@ import { Loader2, CheckCircle2, AlertCircle, CalendarClock, ArrowRight, CreditCa
 import { Card } from '@/components/ui/card';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
-import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 interface FrontDeskExtendStayDialogProps {
   open: boolean;
@@ -78,7 +77,6 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
       }
 
       setPhase('SUCCESS');
-      showActionSuccess({ title: 'Stay extended successfully', description: 'The reservation and room access have been updated.' });
       router.refresh();
     } catch (err: unknown) {
       setPhase('FAILED');

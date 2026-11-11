@@ -19,17 +19,30 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', authResult.error, authResult.status);
     }
 
-    // Guest sync uses an immutable ID keyset. This avoids timestamp precision
-    // differences between PostgreSQL and JavaScript Date values.
+    // New clients use an immutable ID keyset. Keep accepting the previous
+    // timestamp+id cursor so already-installed terminals do not fail with a
+    // 400 until they are upgraded.
     let cursorId: string | null = null;
+    let legacyCursor: { updatedAt: Date; id: string } | null = null;
 
     if (cursorStr) {
       try {
         const cursor = JSON.parse(cursorStr);
-        if (!cursor || typeof cursor !== 'object' || cursor.mode !== 'id-v1' || !cursor.id) {
+        if (!cursor || typeof cursor !== 'object' || !cursor.id) {
           return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
         }
-        cursorId = String(cursor.id);
+
+        if (cursor.mode === 'id-v1') {
+          cursorId = String(cursor.id);
+        } else if (cursor.updatedAt) {
+          const updatedAt = new Date(String(cursor.updatedAt));
+          if (Number.isNaN(updatedAt.getTime())) {
+            return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
+          }
+          legacyCursor = { updatedAt, id: String(cursor.id) };
+        } else {
+          return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
+        }
       } catch (e) {
         return errorResponse('BAD_REQUEST', 'Invalid cursor format', 400);
       }
@@ -46,12 +59,23 @@ export async function GET(req: NextRequest) {
         ...whereClause,
         id: { gt: cursorId }
       };
+    } else if (legacyCursor) {
+      whereClause = {
+        ...whereClause,
+        OR: [
+          { updatedAt: { gt: legacyCursor.updatedAt } },
+          { updatedAt: legacyCursor.updatedAt, id: { gt: legacyCursor.id } }
+        ]
+      };
     }
 
-    // Query in the same immutable key order used by the cursor.
+    // Legacy clients need the old timestamp+id ordering. New clients use the
+    // immutable ID ordering, which is not affected by timestamp precision.
     const guests = await prisma.guest.findMany({
       where: whereClause,
-      orderBy: { id: 'asc' },
+      orderBy: legacyCursor
+        ? [{ updatedAt: 'asc' }, { id: 'asc' }]
+        : { id: 'asc' },
       take: limit + 1, // Fetch one extra to determine hasMore
       select: {
         id: true,
@@ -87,7 +111,11 @@ export async function GET(req: NextRequest) {
       const lastGuest = paginatedGuests[paginatedGuests.length - 1];
       nextCursor = {
         mode: 'id-v1',
-        id: lastGuest.id
+        id: lastGuest.id,
+        // Keep the legacy fields in the response so older terminals can
+        // continue sending their timestamp+id cursor during the upgrade
+        // window. New terminals ignore this field and use mode/id.
+        updatedAt: lastGuest.updatedAt.toISOString()
       };
     }
 

@@ -13,7 +13,6 @@ import { toast } from 'sonner';
 import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, ChevronRight, AlertCircle, ArrowUpRight } from 'lucide-react';
 import { cn, generateUUID } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
-import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess, mode = 'payment', eventInvoiceId, requireActualAmount = false }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void, mode?: 'payment' | 'deposit', eventInvoiceId?: string, requireActualAmount?: boolean }) {
   const isDeposit = mode === 'deposit';
@@ -127,10 +126,6 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
       }
 
       await queryClient.invalidateQueries({ queryKey: ['reservation', folio.reservationId] });
-      showActionSuccess({
-        title: isDeposit ? 'Deposit recorded successfully' : 'Payment posted successfully',
-        description: `${folio.currency || 'NGN'} ${numAmount.toLocaleString()} has been added to the folio.`,
-      });
       setSuccessPaymentId(paymentId);
       onPaymentSuccess?.();
       triggerPrint(paymentId);

@@ -10,7 +10,6 @@ import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
 import { getFolioBalance } from '@/lib/finance/folio-balance';
 import { formatRoomNumber } from '@/lib/format-room';
-import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
 interface FrontDeskQuickCheckoutDialogProps {
   open: boolean;
@@ -102,7 +101,6 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
       }
       if (!erased) throw new Error('Checkout succeeded, but timed out waiting to erase card.');
       setStep('SUCCESS');
-      showActionSuccess({ title: 'Guest checked out successfully', description: 'The folio was closed and the room was released.' });
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
       triggerPrint();
