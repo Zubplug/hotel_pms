@@ -1468,8 +1468,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     g.Email = el.TryGetProperty("email", out var em) && em.ValueKind != System.Text.Json.JsonValueKind.Null ? em.GetString() : null;
                     g.Phone = el.TryGetProperty("phone", out var ph) && ph.ValueKind != System.Text.Json.JsonValueKind.Null ? ph.GetString() : null;
                     g.Gender = el.TryGetProperty("gender", out var gender) && gender.ValueKind != System.Text.Json.JsonValueKind.Null ? gender.GetString() : null;
+                    g.DateOfBirth = ReadNullableDate(el, "dateOfBirth");
+                    g.Nationality = ReadNullableString(el, "nationality");
+                    g.AddressLine1 = ReadNullableString(el, "addressLine1");
+                    g.City = ReadNullableString(el, "city");
+                    g.State = ReadNullableString(el, "state");
+                    g.Country = ReadNullableString(el, "country");
+                    g.IdType = ReadNullableString(el, "idType");
                     g.CompanyName = el.TryGetProperty("companyName", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : null;
                     g.IsVip = el.TryGetProperty("isVip", out var vip) && vip.ValueKind != System.Text.Json.JsonValueKind.Null && vip.GetBoolean();
+                    g.Notes = ReadNullableString(el, "notes");
                     g.Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1;
                     
                     if (el.TryGetProperty("updatedAt", out var ua) && ua.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ua.GetString(), out var uad)) g.UpdatedAt = uad;
@@ -3236,12 +3244,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 }
             }
 
-            // Guest pages update the cursor with raw SQL. Do not reuse a
-            // previously tracked metadata entity, or the next request would
-            // send the old cursor and download the same page again.
-            var meta = await dbContext.SyncMetadata
-                .AsNoTracking()
-                .FirstOrDefaultAsync(stoppingToken);
+            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             if (meta == null)
             {
                 meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "singleton", SchemaVersion = "1.0" };
@@ -4170,8 +4173,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                 Email = el.TryGetProperty("email", out var em) && em.ValueKind != System.Text.Json.JsonValueKind.Null ? em.GetString() : null,
                                 Phone = el.TryGetProperty("phone", out var ph) && ph.ValueKind != System.Text.Json.JsonValueKind.Null ? ph.GetString() : null,
                                 Gender = el.TryGetProperty("gender", out var gender) && gender.ValueKind != System.Text.Json.JsonValueKind.Null ? gender.GetString() : null,
+                                DateOfBirth = ReadNullableDate(el, "dateOfBirth"),
+                                Nationality = ReadNullableString(el, "nationality"),
+                                AddressLine1 = ReadNullableString(el, "addressLine1"),
+                                City = ReadNullableString(el, "city"),
+                                State = ReadNullableString(el, "state"),
+                                Country = ReadNullableString(el, "country"),
+                                IdType = ReadNullableString(el, "idType"),
                                 CompanyName = el.TryGetProperty("companyName", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : null,
                                 IsVip = el.TryGetProperty("isVip", out var vip) && vip.ValueKind != System.Text.Json.JsonValueKind.Null && vip.GetBoolean(),
+                                Notes = ReadNullableString(el, "notes"),
                                 Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1
                             };
                             
@@ -4223,6 +4234,21 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
     private static decimal ReadDecimal(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var value) ? ReadDecimal(value) : 0m;
+    }
+
+    private static string? ReadNullableString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) &&
+               value.ValueKind != JsonValueKind.Null &&
+               value.ValueKind != JsonValueKind.Undefined
+            ? value.GetString()
+            : null;
+    }
+
+    private static DateTime? ReadNullableDate(JsonElement element, string propertyName)
+    {
+        var value = ReadNullableString(element, propertyName);
+        return value != null && DateTime.TryParse(value, out var parsed) ? parsed : null;
     }
 
     private static decimal ReadDecimal(JsonElement value)

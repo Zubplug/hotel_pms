@@ -69,14 +69,25 @@ export async function GET(req: NextRequest) {
       take: limit + 1, // Fetch one extra to determine hasMore
       select: {
         id: true,
+        organizationId: true,
+        propertyId: true,
         firstName: true,
         lastName: true,
         email: true,
         phone: true,
+        dateOfBirth: true,
         gender: true,
+        nationality: true,
+        addressLine1: true,
+        city: true,
+        state: true,
+        country: true,
+        idType: true,
         companyName: true,
         isVip: true,
         vipLevel: true,
+        notes: true,
+        createdAt: true,
         updatedAt: true,
         deletedAt: true
       }

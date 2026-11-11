@@ -189,6 +189,13 @@ public class LocalDbContext : DbContext
         try { await Database.ExecuteSqlRawAsync("ALTER TABLE Guests ADD COLUMN Gender TEXT NULL"); }
         catch (Microsoft.Data.Sqlite.SqliteException ex)
             when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+
+        // EnsureCreated does not add columns to an existing desktop database.
+        // Older terminals may therefore have SyncMetadata without the guest
+        // cursor column used by incremental guest sync.
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE SyncMetadata ADD COLUMN LastGuestSyncCursor TEXT NULL"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex)
+            when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
     public async Task ApplyReachRoomTypeSchemaAsync()

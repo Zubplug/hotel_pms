@@ -3842,18 +3842,28 @@ public class LocalRepository
             const string guestSql = """
                 INSERT INTO Guests
                     (Id, OrganizationId, PropertyId, FirstName, LastName, Email, Phone,
-                     Gender, CompanyName, IsVip, UpdatedAt, DeletedAt, Version, IsDirty, CreatedAt)
+                     DateOfBirth, Gender, Nationality, AddressLine1, City, State, Country,
+                     IdType, CompanyName, IsVip, Notes, UpdatedAt, DeletedAt, Version, IsDirty, CreatedAt)
                 VALUES
                     (@id, @organizationId, @propertyId, @firstName, @lastName, @email, @phone,
-                     @gender, @companyName, @isVip, @updatedAt, @deletedAt, @version, 0, @createdAt)
+                     @dateOfBirth, @gender, @nationality, @addressLine1, @city, @state, @country,
+                     @idType, @companyName, @isVip, @notes, @updatedAt, @deletedAt, @version, 0, @createdAt)
                 ON CONFLICT(Id) DO UPDATE SET
                     FirstName = excluded.FirstName,
                     LastName = excluded.LastName,
                     Email = excluded.Email,
                     Phone = excluded.Phone,
+                    DateOfBirth = excluded.DateOfBirth,
                     Gender = excluded.Gender,
+                    Nationality = excluded.Nationality,
+                    AddressLine1 = excluded.AddressLine1,
+                    City = excluded.City,
+                    State = excluded.State,
+                    Country = excluded.Country,
+                    IdType = excluded.IdType,
                     CompanyName = excluded.CompanyName,
                     IsVip = excluded.IsVip,
+                    Notes = excluded.Notes,
                     UpdatedAt = excluded.UpdatedAt,
                     DeletedAt = excluded.DeletedAt,
                     Version = excluded.Version
@@ -3870,9 +3880,17 @@ public class LocalRepository
                     new Microsoft.Data.Sqlite.SqliteParameter("@lastName", guest.LastName),
                     new Microsoft.Data.Sqlite.SqliteParameter("@email", (object?)guest.Email ?? DBNull.Value),
                     new Microsoft.Data.Sqlite.SqliteParameter("@phone", (object?)guest.Phone ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@dateOfBirth", (object?)guest.DateOfBirth ?? DBNull.Value),
                     new Microsoft.Data.Sqlite.SqliteParameter("@gender", (object?)guest.Gender ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@nationality", (object?)guest.Nationality ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@addressLine1", (object?)guest.AddressLine1 ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@city", (object?)guest.City ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@state", (object?)guest.State ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@country", (object?)guest.Country ?? DBNull.Value),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@idType", (object?)guest.IdType ?? DBNull.Value),
                     new Microsoft.Data.Sqlite.SqliteParameter("@companyName", (object?)guest.CompanyName ?? DBNull.Value),
                     new Microsoft.Data.Sqlite.SqliteParameter("@isVip", guest.IsVip ? 1 : 0),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@notes", (object?)guest.Notes ?? DBNull.Value),
                     new Microsoft.Data.Sqlite.SqliteParameter("@updatedAt", guest.UpdatedAt),
                     new Microsoft.Data.Sqlite.SqliteParameter("@deletedAt", (object?)guest.DeletedAt ?? DBNull.Value),
                     new Microsoft.Data.Sqlite.SqliteParameter("@version", guest.Version),
