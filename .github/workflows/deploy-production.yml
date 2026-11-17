@@ -51,6 +51,6 @@ jobs:
 
       - name: Verify public HTTPS endpoints
         run: |
-          curl --fail --silent --show-error --head https://pms.zubplug.com.ng/
-          curl --fail --silent --show-error --head https://lodgecore.zubplug.com.ng/
-          curl --fail --silent --show-error --head https://www.stanzelgrandresort.org/
+          curl --fail --silent --show-error --head --resolve pms.zubplug.com.ng:443:127.0.0.1 https://pms.zubplug.com.ng/
+          curl --fail --silent --show-error --head --resolve lodgecore.zubplug.com.ng:443:127.0.0.1 https://lodgecore.zubplug.com.ng/
+          curl --fail --silent --show-error --head --resolve www.stanzelgrandresort.org:443:127.0.0.1 https://www.stanzelgrandresort.org/
