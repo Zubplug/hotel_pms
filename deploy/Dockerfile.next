@@ -16,7 +16,6 @@ COPY apps/website/package.json apps/website/package.json
 COPY apps/hotel-stanzel/package.json apps/hotel-stanzel/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/db/package.json packages/db/package.json
-COPY packages/storage/package.json packages/storage/package.json
 COPY packages/types/package.json packages/types/package.json
 
 FROM base AS build
