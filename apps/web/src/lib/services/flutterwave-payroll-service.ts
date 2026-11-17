@@ -11,7 +11,7 @@ import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
 import { notifyEmployee } from '@/lib/employee-notification-service';
 
 export const FLUTTERWAVE_PAYROLL_SLUG = 'FLUTTERWAVE_PAYROLL_PAYOUT';
-const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL || 'https://getlodgecore.vercel.app/api/v1/public/payment/webhook';
+const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL || 'https://pms.zubplug.com.ng/api/v1/public/payment/webhook';
 
 type Credentials = { secretKey: string; webhookSecretHash: string; environment: 'TEST' | 'LIVE' };
 

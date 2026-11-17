@@ -10,7 +10,7 @@ export async function GET() {
   if (!partner) return NextResponse.json({ error: "Partner authentication required" }, { status: 401 });
   const properties = await getPartnerEligibleProperties(partner.organizationId);
   const campaigns = await prisma.referralCampaign.findMany({ where: { partnerId: partner.id, propertyId: { in: properties.map((property) => property.id) } }, include: { property: { select: { name: true } } }, orderBy: { createdAt: "desc" } });
-  return NextResponse.json({ campaigns: campaigns.map((campaign) => ({ ...campaign, targetUrl: reachShareUrl(campaign.code, process.env.NEXT_PUBLIC_SITE_URL || "https://getlodgecore.vercel.app") })) });
+  return NextResponse.json({ campaigns: campaigns.map((campaign) => ({ ...campaign, targetUrl: reachShareUrl(campaign.code, process.env.NEXT_PUBLIC_SITE_URL || "https://lodgecore.zubplug.com.ng") })) });
 }
 
 export async function POST(request: NextRequest) {

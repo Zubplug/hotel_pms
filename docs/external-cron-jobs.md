@@ -5,7 +5,7 @@ run hourly. Schedule it with an external service such as cron-job.org.
 
 Create a job with:
 
-- URL: `https://getlodgecore.vercel.app/api/v1/cron/expire-trials`
+- URL: `https://lodgecore.zubplug.com.ng/api/v1/cron/expire-trials`
 - Method: `GET`
 - Schedule: every hour (`0 * * * *`)
 - Header: `Authorization: Bearer <CRON_SECRET>`

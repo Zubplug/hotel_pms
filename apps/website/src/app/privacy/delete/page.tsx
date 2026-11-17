@@ -6,7 +6,7 @@ import { DeleteRequestForm } from "./DeleteRequestForm";
 export const metadata: Metadata = {
   title: "Request account deletion",
   description: "Request deletion of your LodgeCore Management account and associated personal data.",
-  alternates: { canonical: "https://getlodgecore.vercel.app/privacy/delete" },
+  alternates: { canonical: "https://lodgecore.zubplug.com.ng/privacy/delete" },
   robots: { index: true, follow: true },
 };
 

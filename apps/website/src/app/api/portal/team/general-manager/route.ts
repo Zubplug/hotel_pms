@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
       return { staff, organizationName: organization?.name || 'LodgeCore' };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    const appOrigin = process.env.PMS_APP_URL || process.env.NEXT_PUBLIC_PMS_URL || 'https://lodgecore.vercel.app';
+    const appOrigin = process.env.PMS_APP_URL || process.env.NEXT_PUBLIC_PMS_URL || 'https://pms.zubplug.com.ng';
     let invitationSent = true;
     let invitationWarning: string | undefined;
     try { await sendEmployeeInvitationEmail({ to: email, inviteUrl: `${appOrigin}/employee/invite/${token}`, expiresAt, employeeName: `${parsed.data.firstName} ${parsed.data.lastName}`, organizationName: result.organizationName, roleTitle: 'Property Administrator' }); }

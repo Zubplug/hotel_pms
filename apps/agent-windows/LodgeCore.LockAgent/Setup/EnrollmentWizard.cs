@@ -26,7 +26,7 @@ public static class EnrollmentWizard
         Console.WriteLine("╚══════════════════════════════════════════════╝");
         Console.WriteLine();
 
-        string pmsUrl     = Prompt("PMS URL",    "https://hotel-pms-web-nine.vercel.app");
+        string pmsUrl     = Prompt("PMS URL",    "https://pms.zubplug.com.ng");
         string token      = Prompt("Enrollment token (from PMS Settings → Hardware)");
         string deviceName = Prompt("Device name", $"LodgeCore-{Environment.MachineName}");
         string lockTypeStr= Prompt("Lock type (4=RF57 / 5=RF50)", "5");

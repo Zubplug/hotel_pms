@@ -5,8 +5,8 @@ import { authConfig } from "@/auth.config";
 const { auth } = NextAuth(authConfig);
 
 const PLATFORM_HOSTS = new Set([
-  "book.lodgecore.com",
-  "getlodgecore.vercel.app",
+  "lodgecore.zubplug.com.ng",
+  "lodgecore.zubplug.com.ng",
   "localhost",
   "127.0.0.1",
 ]);
@@ -29,7 +29,7 @@ async function rewriteVerifiedCustomDomain(request: Request) {
   // forms, API calls, and confirmation links continue to work unchanged.
   // Resolve the domain lookup on the active deployment first. This keeps
   // preview/custom-domain traffic from depending on a stale canonical host.
-  const lookupOrigin = new URL(request.url).origin || process.env.NEXT_PUBLIC_BOOKING_URL || "https://book.lodgecore.com";
+  const lookupOrigin = new URL(request.url).origin || process.env.NEXT_PUBLIC_BOOKING_URL || "https://lodgecore.zubplug.com.ng";
   try {
     const lookup = await fetch(
       `${lookupOrigin}/api/internal/booking-domain/resolve?domain=${encodeURIComponent(host)}`,

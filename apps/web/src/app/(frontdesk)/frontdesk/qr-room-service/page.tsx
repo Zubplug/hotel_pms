@@ -28,7 +28,7 @@ function formatRoomNo(raw: string): string {
 function buildRoomServiceUrl(token: string, roomNo: string): string {
   const base =
     process.env.NEXT_PUBLIC_WEBSITE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://app.getlodgecore.com');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://pms.zubplug.com.ng');
   return `${base}/room-service?t=${encodeURIComponent(token)}&rn=${encodeURIComponent(roomNo)}`;
 }
 
@@ -236,7 +236,7 @@ export default function QrRoomServicePage() {
               React.createElement(QRCodeCanvas as any, {
                 value: tokenMap[room.id]
                   ? buildRoomServiceUrl(tokenMap[room.id], room.number)
-                  : 'https://getlodgecore.com',
+                  : 'https://lodgecore.zubplug.com.ng',
                 size: 200,
                 level: 'M',
                 includeMargin: false,

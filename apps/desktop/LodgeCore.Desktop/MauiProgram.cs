@@ -84,7 +84,7 @@ public static class MauiProgram
         builder.Services.AddSingleton(sp => 
         {
             var baseUrl = Environment.GetEnvironmentVariable("LODGECORE_API_URL") 
-                          ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://lodgecore.vercel.app/api/v1/");
+                          ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://pms.zubplug.com.ng/api/v1/");
 
 #if !DEBUG
             if (baseUrl.Contains("localhost") || baseUrl.Contains("127.0.0.1") || baseUrl.Contains("0.0.0.0"))

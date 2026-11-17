@@ -14,7 +14,7 @@ export async function sendDemoCredentialsEmail(input: DemoCredentialsEmail) {
   const from = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from) throw new Error('Transactional email is not configured.');
 
-  const managementLoginUrl = `${process.env.MANAGEMENT_APP_URL || 'https://lodgecore.vercel.app'}/login`;
+  const managementLoginUrl = `${process.env.MANAGEMENT_APP_URL || 'https://pms.zubplug.com.ng'}/login`;
   const playStoreUrl = process.env.PLAY_STORE_URL || 'https://play.google.com/store/apps/details?id=com.lodgecore.management';
   const expires = input.expiresAt.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' });
   const roleTitle = input.roleName.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());

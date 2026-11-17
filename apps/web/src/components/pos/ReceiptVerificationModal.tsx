@@ -183,7 +183,7 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
               <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-lg border border-slate-200 mt-6">
                 <div className="bg-white p-2 rounded shadow-sm border border-slate-100 mb-2">
                   <QRCodeSVG 
-                    value={`https://lodgecore.com/verify/${order.verificationToken}`} 
+                    value={`https://lodgecore.zubplug.com.ng/verify/${order.verificationToken}`}
                     size={100}
                     level="H"
                   />

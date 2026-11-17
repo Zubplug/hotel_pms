@@ -69,10 +69,10 @@ export async function POST(request: NextRequest) {
       credentials: { email: result.email, password: result.password, pin: result.pin },
       emailSent,
       links: {
-        managementLoginUrl: `${process.env.MANAGEMENT_APP_URL || 'https://lodgecore.vercel.app'}/login`,
+        managementLoginUrl: `${process.env.MANAGEMENT_APP_URL || 'https://pms.zubplug.com.ng'}/login`,
         playStoreUrl: process.env.PLAY_STORE_URL || 'https://play.google.com/store/apps/details?id=com.lodgecore.management',
       },
-      managementLoginUrl: `${process.env.MANAGEMENT_APP_URL || 'https://lodgecore.vercel.app'}/login`,
+      managementLoginUrl: `${process.env.MANAGEMENT_APP_URL || 'https://pms.zubplug.com.ng'}/login`,
     }, { status: 201 });
   } catch (error) {
     console.error('[public.demo] failed', error);

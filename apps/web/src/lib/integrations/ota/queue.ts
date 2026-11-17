@@ -17,7 +17,7 @@ export const QueuePublisher = {
     }
 
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lodgecore.com';
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lodgecore.zubplug.com.ng';
       const endpoint = `${appUrl}/api/v1/webhooks/internal/process-outbox`;
 
       await qstashClient.publishJSON({
@@ -44,7 +44,7 @@ export const QueuePublisher = {
     }
 
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lodgecore.com';
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lodgecore.zubplug.com.ng';
       const endpoint = `${appUrl}/api/v1/webhooks/internal/process-ota-sync`;
 
       await qstashClient.publishJSON({

@@ -5,5 +5,5 @@ export function resolveBookingOrigin(requestHeaders: HeaderReader, configuredOri
   const forwardedHost = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
   const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0] ?? "https";
   const requestOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : null;
-  return (requestOrigin || configuredOrigin || "https://getlodgecore.vercel.app").replace(/\/$/, "");
+  return (requestOrigin || configuredOrigin || "https://lodgecore.zubplug.com.ng").replace(/\/$/, "");
 }

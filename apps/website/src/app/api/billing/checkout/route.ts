@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       (body as Record<string, unknown>).__upgrade = { chargeAmount, upgradeCredit, periodEnd: current!.currentPeriodEnd.toISOString() };
     }
   }
-  const site = process.env.NEXT_PUBLIC_SITE_URL || "https://getlodgecore.vercel.app";
+  const site = process.env.NEXT_PUBLIC_SITE_URL || "https://lodgecore.zubplug.com.ng";
   const upgrade = (body as Record<string, unknown>).__upgrade as { chargeAmount: number; upgradeCredit: number; periodEnd: string } | undefined;
   const email = sessionUser?.email;
   if (!email) return NextResponse.json({ error: "A billing email is required" }, { status: 400 });

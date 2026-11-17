@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://getlodgecore.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://lodgecore.zubplug.com.ng"),
   title: { default: "LodgeCore | The operating system for modern hotels", template: "%s | LodgeCore" },
   description: "A connected hotel platform for property management, POS, booking, finance, operations and hardware.",
   openGraph: { type: "website", siteName: "LodgeCore", title: "The operating system for modern hotels", description: "Run every part of your hotel from one connected platform." },

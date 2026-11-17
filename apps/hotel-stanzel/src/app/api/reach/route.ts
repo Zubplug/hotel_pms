@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   const campaign = req.nextUrl.searchParams.get('campaign')?.trim();
   if (!campaign) return NextResponse.json({ error: 'campaign is required' }, { status: 400 });
 
-  const apiUrl = process.env.LC_API_URL ?? 'https://getlodgecore.vercel.app/api/v1/public';
+  const apiUrl = process.env.LC_API_URL ?? 'https://pms.zubplug.com.ng/api/v1/public';
   const publishableKey = process.env.LC_PUBLISHABLE_KEY;
   if (!publishableKey) return NextResponse.json({ error: 'Referral links are not configured' }, { status: 503 });
 

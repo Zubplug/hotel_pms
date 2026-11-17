@@ -32,7 +32,7 @@ jobs:
 
       - name: Build Web (Next.js Static Export)
         env:
-          NEXT_PUBLIC_API_URL: https://lodgecore.vercel.app
+          NEXT_PUBLIC_API_URL: https://pms.zubplug.com.ng
         run: pnpm build:desktop
 
       - name: Setup .NET 10

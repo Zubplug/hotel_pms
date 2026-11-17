@@ -7,7 +7,7 @@ import { ensureCashierControlAccountsForClient, ensureExpenseCounterpartyForClie
 import { TenantContext } from '../organization-access';
 
 const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL
-  || 'https://getlodgecore.vercel.app/api/v1/public/payment/webhook';
+  || 'https://pms.zubplug.com.ng/api/v1/public/payment/webhook';
 
 export const REIMBURSEMENT_STAGES = ['HR_REVIEW', 'ACCOUNTANT_REVIEW', 'GENERAL_MANAGER_REVIEW', 'APPROVED_FOR_PAYMENT', 'REIMBURSED'] as const;
 export type ReimbursementStage = typeof REIMBURSEMENT_STAGES[number];

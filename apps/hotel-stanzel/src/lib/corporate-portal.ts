@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 function configuration() {
-  const baseUrl = process.env.CORPORATE_API_URL || 'https://getlodgecore.vercel.app';
+  const baseUrl = process.env.CORPORATE_API_URL || 'https://pms.zubplug.com.ng';
   return { baseUrl: baseUrl.replace(/\/$/, ''), propertyId: process.env.CORPORATE_PROPERTY_ID || null };
 }
 
@@ -40,7 +40,7 @@ export async function corporateApiRequest<T>(path: string, init: RequestInit = {
 }
 
 export async function publicCorporateAuthRequest<T>(path: string, init: RequestInit = {}): Promise<{ ok: true; data: T; status: number } | { ok: false; error: string; status?: number }> {
-  const baseUrl = process.env.CORPORATE_API_URL || 'https://getlodgecore.vercel.app';
+  const baseUrl = process.env.CORPORATE_API_URL || 'https://pms.zubplug.com.ng';
   const publishableKey = process.env.LC_PUBLISHABLE_KEY;
   if (!publishableKey) return { ok: false, error: 'Public booking API is not configured.' };
   try {

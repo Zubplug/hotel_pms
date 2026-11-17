@@ -180,7 +180,7 @@ export async function inviteOrganizationPortalUser(formData: FormData) {
     await tx.customerInvitation.create({ data: { email, organizationId, userId: account.id, tokenHash, expiresAt, createdById: admin.id } });
     await tx.auditLog.create({ data: { organizationId, userId: admin.id, userEmail: admin.email || undefined, action: 'CUSTOMER_PORTAL_INVITED', resource: 'CustomerInvitation', resourceId: tokenHash, requestId: `hq-portal-invite-${Date.now()}`, newValue: { email, userId: account.id } } });
   });
-  const websiteOrigin = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app';
+  const websiteOrigin = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://lodgecore.zubplug.com.ng';
   await sendCustomerInvitationEmail({ to: email, inviteUrl: `${websiteOrigin}/portal/invite/${rawToken}`, expiresAt, organizationName: organization.name });
   revalidatePath(`/hq/organizations/${organizationId}`);
 }

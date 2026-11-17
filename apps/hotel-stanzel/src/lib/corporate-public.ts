@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 
 export async function publicCorporateApplication<T>(path: string, init: RequestInit = {}) {
-  const baseUrl = (process.env.CORPORATE_API_URL || 'https://getlodgecore.vercel.app').replace(/\/$/, '');
+  const baseUrl = (process.env.CORPORATE_API_URL || 'https://pms.zubplug.com.ng').replace(/\/$/, '');
   const key = process.env.LC_PUBLISHABLE_KEY;
   const jar = await cookies();
   const applicationId = jar.get('stanzel_corporate_application_id')?.value;
@@ -18,7 +18,7 @@ export async function publicCorporateApplication<T>(path: string, init: RequestI
 }
 
 export async function publicCorporateAvailabilityRequest<T>(path: string, init: RequestInit = {}) {
-  const baseUrl = (process.env.CORPORATE_API_URL || 'https://getlodgecore.vercel.app').replace(/\/$/, '');
+  const baseUrl = (process.env.CORPORATE_API_URL || 'https://pms.zubplug.com.ng').replace(/\/$/, '');
   const key = process.env.LC_PUBLISHABLE_KEY;
   if (!key) return { ok: false as const, error: 'Public booking API is not configured.', status: 503 };
   try {

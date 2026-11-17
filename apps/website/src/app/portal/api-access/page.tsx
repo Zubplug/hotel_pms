@@ -6,7 +6,7 @@ import { PortalShell } from "@/components/portal-shell";
 
 export const dynamic = "force-dynamic";
 
-const API_BASE = process.env.NEXT_PUBLIC_PUBLIC_API_URL ?? "https://getlodgecore.vercel.app/api/v1/public";
+const API_BASE = process.env.NEXT_PUBLIC_PUBLIC_API_URL ?? "https://pms.zubplug.com.ng/api/v1/public";
 
 type ApiEndpoint = {
   method: "GET" | "POST";

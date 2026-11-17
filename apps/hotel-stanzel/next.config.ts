@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: '*.vercel-storage.com' },
       { protocol: 'https', hostname: '*.blob.vercel-storage.com' },
-      { protocol: 'https', hostname: 'lodgecore.vercel.app' },
+      { protocol: 'https', hostname: 'pms.zubplug.com.ng' },
       // Common cloud storage providers for LodgeCore-hosted room photos
       { protocol: 'https', hostname: '*.cloudinary.com' },
       { protocol: 'https', hostname: '*.amazonaws.com' },

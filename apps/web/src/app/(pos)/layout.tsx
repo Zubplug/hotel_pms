@@ -20,7 +20,7 @@ export default async function PosLayout({ children }: { children: ReactNode }) {
   try {
     await requireModuleAccess(session.user.id, 'MODULE_OPERATIONS', session.user.propertyId);
   } catch {
-    redirect(`${process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app'}/portal/subscription?required=MODULE_OPERATIONS`);
+    redirect(`${process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://lodgecore.zubplug.com.ng'}/portal/subscription?required=MODULE_OPERATIONS`);
   }
   return (
     <div className="h-screen w-screen bg-slate-50 overflow-hidden flex flex-col">

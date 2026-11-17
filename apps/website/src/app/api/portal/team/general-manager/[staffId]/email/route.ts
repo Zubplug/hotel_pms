@@ -35,7 +35,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       return { employeeName: `${staff.firstName} ${staff.lastName}`, organizationName: organization?.name || 'LodgeCore' };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    const appOrigin = process.env.PMS_APP_URL || process.env.NEXT_PUBLIC_PMS_URL || 'https://lodgecore.vercel.app';
+    const appOrigin = process.env.PMS_APP_URL || process.env.NEXT_PUBLIC_PMS_URL || 'https://pms.zubplug.com.ng';
     try {
       await sendEmployeeInvitationEmail({ to: email, inviteUrl: `${appOrigin}/employee/invite/${token}`, expiresAt, employeeName: result.employeeName, organizationName: result.organizationName, roleTitle: 'Property Administrator' });
       return NextResponse.json({ ok: true, invitationSent: true, invitationExpiresAt: expiresAt });

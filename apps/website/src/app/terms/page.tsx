@@ -5,7 +5,7 @@ import { PublicFooter, PublicHeader } from "@/components/public-shell";
 export const metadata: Metadata = {
   title: "Terms and Conditions",
   description: "The terms governing access to and use of LodgeCore services.",
-  alternates: { canonical: "https://getlodgecore.vercel.app/terms" },
+  alternates: { canonical: "https://lodgecore.zubplug.com.ng/terms" },
   robots: { index: true, follow: true },
 };
 

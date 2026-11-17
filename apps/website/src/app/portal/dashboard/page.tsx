@@ -41,7 +41,7 @@ export default async function PortalDashboard() {
   const session = await auth();
   const user = session?.user as SessionUser & { isLodgeCoreAdmin?: boolean } | undefined;
   if (user?.isLodgeCoreAdmin) {
-    const webUrl = process.env.NEXTAUTH_URL || "https://lodgecore.vercel.app";
+    const webUrl = process.env.NEXTAUTH_URL || "https://pms.zubplug.com.ng";
     redirect(`${webUrl}/hq`);
   }
   if (!user?.organizationId) redirect("/portal/login");

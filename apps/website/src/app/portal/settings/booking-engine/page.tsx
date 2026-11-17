@@ -117,7 +117,7 @@ export default async function BookingEngineOverviewPage() {
         {propertyData.map((prop) => {
           const isLive = prop.config?.enabled && prop.site?.status === "PUBLISHED";
           const bookingUrl = prop.config?.publicSlug
-            ? `https://book.lodgecore.com/book/${prop.config.publicSlug}`
+            ? `https://lodgecore.zubplug.com.ng/book/${prop.config.publicSlug}`
             : null;
 
           return (
@@ -185,7 +185,7 @@ export default async function BookingEngineOverviewPage() {
         <span>
           Each property gets its own booking page at{" "}
           <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)" }}>
-            book.lodgecore.com/[your-slug]
+            lodgecore.zubplug.com.ng/[your-slug]
           </span>
         </span>
         <Link href="/portal/support" className="btn btn-outline btn-sm">

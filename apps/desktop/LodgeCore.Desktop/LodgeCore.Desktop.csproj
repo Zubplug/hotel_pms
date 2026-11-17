@@ -25,7 +25,7 @@
 
 		<!-- MSIX Auto Update & Signing Configuration -->
 		<GenerateAppInstallerFile>True</GenerateAppInstallerFile>
-		<AppInstallerUri>https://lodgecore.vercel.app/api/desktop-update/LodgeCore.appinstaller</AppInstallerUri>
+		<AppInstallerUri>https://pms.zubplug.com.ng/api/desktop-update/LodgeCore.appinstaller</AppInstallerUri>
 		<AppxAutoUpdateEnabled>True</AppxAutoUpdateEnabled>
 		<AppxUpdateFrequency>OnLaunch</AppxUpdateFrequency>
 		<AppxShowProgress>True</AppxShowProgress>

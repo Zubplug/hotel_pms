@@ -5,7 +5,7 @@ import { resolveSecretRef } from "@/lib/payment-providers/booking-account";
 import { partnerPropertyWalletSnapshot } from "@/lib/partner-property-wallet";
 
 const PAYABLE_STATUSES = ["APPROVED", "PAYABLE", "PAID"];
-const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL || "https://getlodgecore.vercel.app/api/v1/public/payment/webhook";
+const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL || "https://pms.zubplug.com.ng/api/v1/public/payment/webhook";
 
 export async function syncPartnerWallet(partnerId: string) {
   return prisma.$transaction(async (tx) => {

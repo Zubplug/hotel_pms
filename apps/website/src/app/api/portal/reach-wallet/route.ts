@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   const wallet = await prisma.reachWallet.upsert({ where: { organizationId: orgId }, create: { organizationId: orgId, currency: organization.defaultCurrency || 'NGN' }, update: {} });
   const transaction = await prisma.reachWalletTransaction.create({ data: { walletId: wallet.id, organizationId: orgId, type: 'FUNDING', status: 'PENDING', amount, currency: wallet.currency, provider: 'FLUTTERWAVE', providerReference: txRef, idempotencyKey: txRef, description: 'Reach wallet funding through Flutterwave' } });
   try {
-    const checkout = await createFlutterwaveCheckout({ amount, currency: wallet.currency, txRef, redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://getlodgecore.vercel.app'}/portal/dashboard?reachWalletFunded=true`, customer: { email: user.email, name: user.name || organization.name }, meta: { lodgecore_source: 'reach_wallet', organizationId: orgId, walletTransactionId: transaction.id } });
+    const checkout = await createFlutterwaveCheckout({ amount, currency: wallet.currency, txRef, redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://lodgecore.zubplug.com.ng'}/portal/dashboard?reachWalletFunded=true`, customer: { email: user.email, name: user.name || organization.name }, meta: { lodgecore_source: 'reach_wallet', organizationId: orgId, walletTransactionId: transaction.id } });
     return NextResponse.json({ url: checkout.link, transactionId: transaction.id });
   } catch (error) {
     await prisma.reachWalletTransaction.update({ where: { id: transaction.id }, data: { status: 'FAILED', metadata: { error: error instanceof Error ? error.message : 'Flutterwave initialization failed' } } });

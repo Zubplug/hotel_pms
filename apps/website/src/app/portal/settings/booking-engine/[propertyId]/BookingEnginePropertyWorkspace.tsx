@@ -151,7 +151,7 @@ function EngineConfigForm({ propertyId, config, ratePlans }: { propertyId: strin
             background: "var(--bg-overlay)", borderRight: "1px solid var(--border)",
             whiteSpace: "nowrap", fontFamily: "var(--font-mono)",
           }}>
-            book.lodgecore.com/
+            lodgecore.zubplug.com.ng/
           </span>
           <input
             type="text" name="publicSlug"
@@ -467,7 +467,7 @@ function BrandingForm({ propertyId, site, engineEnabled }: { propertyId: string;
 export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entitled, config, site, ratePlans, enterpriseSettings }: Props) {
   const [tab, setTab] = useState<"engine" | "branding" | "content" | "payments" | "distribution">("engine");
   const isLive = config?.enabled && site?.status === "PUBLISHED";
-  const bookingUrl = config?.publicSlug ? `https://book.lodgecore.com/book/${config.publicSlug}` : null;
+  const bookingUrl = config?.publicSlug ? `https://lodgecore.zubplug.com.ng/book/${config.publicSlug}` : null;
   const tabs = [
     { id: "engine" as const, index: "01", label: "Engine", detail: "Availability & rates" },
     { id: "branding" as const, index: "02", label: "Branding", detail: "Look & feel" },

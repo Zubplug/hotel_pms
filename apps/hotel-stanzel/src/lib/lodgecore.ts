@@ -23,7 +23,7 @@ import type {
   ConfirmationResponse,
 } from './types';
 
-const LC_API = process.env.LC_API_URL ?? 'https://getlodgecore.vercel.app/api/v1/public';
+const LC_API = process.env.LC_API_URL ?? 'https://pms.zubplug.com.ng/api/v1/public';
 
 function getPublishableKey(): string {
   const key = process.env.LC_PUBLISHABLE_KEY;

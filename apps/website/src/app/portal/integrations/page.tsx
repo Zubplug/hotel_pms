@@ -83,7 +83,7 @@ export default function PortalIntegrationsPage() {
           <div>
             <div className="portal-stat-label">API base URL</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginTop: 6, padding: "8px 12px", background: "var(--bg-overlay)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-              https://getlodgecore.vercel.app/api/v1/public
+              https://pms.zubplug.com.ng/api/v1/public
             </div>
           </div>
           <div>

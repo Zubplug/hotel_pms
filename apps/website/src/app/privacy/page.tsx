@@ -5,7 +5,7 @@ import { PublicFooter, PublicHeader } from "@/components/public-shell";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: "The LodgeCore Management mobile application privacy policy.",
-  alternates: { canonical: "https://getlodgecore.vercel.app/privacy" },
+  alternates: { canonical: "https://lodgecore.zubplug.com.ng/privacy" },
   robots: { index: true, follow: true },
 };
 
@@ -68,7 +68,7 @@ export default function PrivacyPage() {
 
             <PolicySection title="11. Changes to this policy"><p>We may update this policy when the app, services, legal requirements, or data practices change. The current version will remain available at this URL with its updated date. Where required, we will provide additional notice through the app, a customer workspace, or another appropriate channel.</p></PolicySection>
 
-            <PolicySection title="12. Contact LodgeCore"><address style={{ fontStyle: "normal", lineHeight: 1.9 }}><strong style={{ color: "var(--text-primary)" }}>LodgeCore</strong><br />Privacy and Data Protection<br /><a href="mailto:privacy@getlodgecore.com" style={{ color: "var(--accent)", textDecoration: "underline" }}>privacy@getlodgecore.com</a><br /><a href="https://getlodgecore.vercel.app" style={{ color: "var(--accent)", textDecoration: "underline" }}>getlodgecore.vercel.app</a></address></PolicySection>
+            <PolicySection title="12. Contact LodgeCore"><address style={{ fontStyle: "normal", lineHeight: 1.9 }}><strong style={{ color: "var(--text-primary)" }}>LodgeCore</strong><br />Privacy and Data Protection<br /><a href="mailto:privacy@getlodgecore.com" style={{ color: "var(--accent)", textDecoration: "underline" }}>privacy@getlodgecore.com</a><br /><a href="https://lodgecore.zubplug.com.ng" style={{ color: "var(--accent)", textDecoration: "underline" }}>lodgecore.zubplug.com.ng</a></address></PolicySection>
 
             <div style={{ borderTop: "1px solid var(--border)", marginTop: 46, paddingTop: 22, display: "flex", flexWrap: "wrap", gap: 18, justifyContent: "space-between", fontSize: 13 }}><Link href="/terms" style={{ color: "var(--accent)" }}>Terms of service →</Link><Link href="/book-demo" style={{ color: "var(--accent)" }}>Contact LodgeCore →</Link></div>
           </article>
