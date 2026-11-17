@@ -1,0 +1,68 @@
+services:
+  pms:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.next
+      args:
+        APP: web
+    env_file:
+      - .env.aws
+    environment:
+      PORT: 3000
+    restart: unless-stopped
+    expose:
+      - "3000"
+    logging: &lodgecore_logging
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  website:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.next
+      args:
+        APP: website
+    env_file:
+      - .env.aws
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_SITE_URL: https://lodgecore.zubplug.com.ng
+    restart: unless-stopped
+    expose:
+      - "3000"
+    logging: *lodgecore_logging
+
+  stanzel:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.next
+      args:
+        APP: hotel-stanzel
+    env_file:
+      - .env.aws
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_SITE_URL: https://www.stanzelgrandresort.org
+      PUBLIC_SITE_ORIGIN: https://www.stanzelgrandresort.org
+    restart: unless-stopped
+    expose:
+      - "3000"
+    logging: *lodgecore_logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - pms
+      - website
+      - stanzel
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certbot/www:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    restart: unless-stopped
+    logging: *lodgecore_logging
