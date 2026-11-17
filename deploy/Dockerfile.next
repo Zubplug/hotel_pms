@@ -10,13 +10,21 @@ RUN apt-get update \
     && corepack prepare pnpm@9.15.4 --activate
 
 WORKDIR /app
-COPY . .
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/website/package.json apps/website/package.json
+COPY apps/hotel-stanzel/package.json apps/hotel-stanzel/package.json
+COPY packages/config/package.json packages/config/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/storage/package.json packages/storage/package.json
+COPY packages/types/package.json packages/types/package.json
 
 FROM base AS build
 ARG APP
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS=--max-old-space-size=4096
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=hotel-pms-pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
+COPY . .
 RUN pnpm --filter "$APP" build
 
 FROM base AS runtime

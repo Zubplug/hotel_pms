@@ -16,6 +16,55 @@ jobs:
     steps:
       - name: Check out production source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect affected services
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE="${GITHUB_EVENT_BEFORE:-}"
+          if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
+            BEFORE="$(git rev-list --max-parents=1 HEAD^ 2>/dev/null || true)"
+          fi
+
+          if [[ -z "$BEFORE" ]]; then
+            CHANGED="ALL"
+          else
+            CHANGED="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
+          fi
+
+          echo "Changed files:"
+          printf '%s\n' "$CHANGED"
+
+          ALL=false
+          PMS=false
+          WEBSITE=false
+          STANZEL=false
+
+          if [[ "$CHANGED" == "ALL" ]]; then
+            ALL=true
+          elif printf '%s\n' "$CHANGED" | grep -Eq '^(packages/|pnpm-lock.yaml$|pnpm-workspace.yaml$|package.json$|deploy/|turbo.json$|\.dockerignore$)'; then
+            ALL=true
+          else
+            printf '%s\n' "$CHANGED" | grep -q '^apps/web/' && PMS=true || true
+            printf '%s\n' "$CHANGED" | grep -q '^apps/website/' && WEBSITE=true || true
+            printf '%s\n' "$CHANGED" | grep -q '^apps/hotel-stanzel/' && STANZEL=true || true
+          fi
+
+          echo "all=$ALL" >> "$GITHUB_OUTPUT"
+          echo "pms=$PMS" >> "$GITHUB_OUTPUT"
+          echo "website=$WEBSITE" >> "$GITHUB_OUTPUT"
+          echo "stanzel=$STANZEL" >> "$GITHUB_OUTPUT"
+
+          if [[ "$ALL" == true ]]; then
+            echo 'Deployment scope: all services'
+          elif [[ "$PMS" == true || "$WEBSITE" == true || "$STANZEL" == true ]]; then
+            echo "Deployment scope: PMS=$PMS website=$WEBSITE Stanzel=$STANZEL"
+          else
+            echo 'Deployment scope: no application service changes'
+          fi
 
       - name: Sync source to production directory
         run: |
@@ -34,20 +83,31 @@ jobs:
             ./ /opt/hotel_pms/
 
       - name: Build and restart production services
+        env:
+          BUILD_ALL: ${{ steps.changes.outputs.all }}
+          BUILD_PMS: ${{ steps.changes.outputs.pms }}
+          BUILD_WEBSITE: ${{ steps.changes.outputs.website }}
+          BUILD_STANZEL: ${{ steps.changes.outputs.stanzel }}
         run: |
           set -euo pipefail
           cd /opt/hotel_pms
-          sudo docker builder prune -af
-          sudo docker image prune -af
           COMPOSE="sudo docker compose --env-file deploy/.env.aws -f deploy/docker-compose.aws.yml"
-          $COMPOSE build pms
-          $COMPOSE build website
-          $COMPOSE build stanzel
-          $COMPOSE up -d --force-recreate pms website stanzel nginx
+          SERVICES=()
+
+          if [[ "$BUILD_ALL" == true || "$BUILD_PMS" == true ]]; then SERVICES+=(pms); fi
+          if [[ "$BUILD_ALL" == true || "$BUILD_WEBSITE" == true ]]; then SERVICES+=(website); fi
+          if [[ "$BUILD_ALL" == true || "$BUILD_STANZEL" == true ]]; then SERVICES+=(stanzel); fi
+
+          if [[ ${#SERVICES[@]} -eq 0 ]]; then
+            echo 'No application service changed; keeping running containers unchanged.'
+            exit 0
+          fi
+
+          echo "Building: ${SERVICES[*]}"
+          $COMPOSE build --parallel "${SERVICES[@]}"
+          $COMPOSE up -d --no-build --force-recreate "${SERVICES[@]}" nginx
           sleep 10
           $COMPOSE ps
-          sudo docker builder prune -af
-          sudo docker image prune -af
 
       - name: Verify public HTTPS endpoints
         run: |
