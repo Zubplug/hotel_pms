@@ -118,6 +118,29 @@ jobs:
 
       - name: Verify public HTTPS endpoints
         run: |
-          curl --fail --silent --show-error --head --resolve pms.zubplug.com.ng:443:127.0.0.1 https://pms.zubplug.com.ng/
-          curl --fail --silent --show-error --head --resolve lodgecore.zubplug.com.ng:443:127.0.0.1 https://lodgecore.zubplug.com.ng/
-          curl --fail --silent --show-error --head --resolve www.stanzelgrandresort.org:443:127.0.0.1 https://www.stanzelgrandresort.org/
+          set -euo pipefail
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+
+          check_identity() {
+            local host="$1"
+            local expected="$2"
+            local response="$TMP_DIR/${host}.html"
+
+            echo "Checking https://${host}/"
+            curl --fail --silent --show-error --location \
+              --resolve "${host}:443:127.0.0.1" \
+              --max-time 30 \
+              "https://${host}/" > "$response"
+
+            if ! grep -Fq "$expected" "$response"; then
+              echo "::error::${host} did not return the expected application identity: ${expected}"
+              return 1
+            fi
+
+            echo "OK: ${host} (${expected})"
+          }
+
+          check_identity pms.zubplug.com.ng 'LodgeCore PMS'
+          check_identity lodgecore.zubplug.com.ng 'LodgeCore'
+          check_identity www.stanzelgrandresort.org 'Stanzel Grand Resort'
