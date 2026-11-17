@@ -33,12 +33,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV APP="$APP"
 
-# Keep the complete workspace in the runtime image. This is intentionally
-# simple and reliable for the first EC2 deployment; it can later be changed
-# to Next.js standalone output to reduce image size.
-COPY --from=build /app /app
-# Do not run `pnpm prune --prod` here: in this pnpm workspace it removes the
-# app-level executable links, including `next`, from the runtime image.
+# Only ship the Next.js standalone server, static assets, and public files.
+# This keeps each runtime image small enough for the EC2 root volume.
+COPY --from=build /app/apps/${APP}/.next/standalone ./
+COPY --from=build /app/apps/${APP}/.next/static ./apps/${APP}/.next/static
+COPY --from=build /app/apps/${APP}/public ./apps/${APP}/public
 
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm --filter \"$APP\" exec next start -p ${PORT:-3000} -H 0.0.0.0"]
+CMD ["sh", "-c", "node apps/$APP/server.js"]

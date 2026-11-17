@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === "true";
 
@@ -11,7 +12,8 @@ if (process.env.NODE_ENV === 'production' && !isDesktop) {
 }
 
 const nextConfig: NextConfig = {
-  output: isDesktop ? "export" : undefined,
+  output: isDesktop ? "export" : "standalone",
+  outputFileTracingRoot: path.join(__dirname, "../../"),
   images: isDesktop ? { unoptimized: true } : undefined,
   async rewrites() {
     return [
