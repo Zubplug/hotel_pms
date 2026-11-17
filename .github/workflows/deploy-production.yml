@@ -25,8 +25,8 @@ jobs:
         run: |
           set -euo pipefail
           BEFORE="${GITHUB_EVENT_BEFORE:-}"
-          if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
-            BEFORE="$(git rev-list --max-parents=1 HEAD^ 2>/dev/null || true)"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch || -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
+            BEFORE=""
           fi
 
           if [[ -z "$BEFORE" ]]; then
