@@ -263,7 +263,10 @@ export async function POST(
           priceValid: stillValid,
         };
       },
-      { isolationLevel: 'Serializable' }
+      // Keep the reservation transaction open long enough for the complete
+      // availability, pricing, reservation, folio, and audit sequence on the
+      // external production database.
+      { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 30_000 }
     );
 
     reservationId = newReservation.reservation.id;

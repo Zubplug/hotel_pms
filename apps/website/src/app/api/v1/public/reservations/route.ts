@@ -263,7 +263,11 @@ export async function POST(req: NextRequest) {
           priceValid: stillValid,
         };
       },
-      { isolationLevel: 'Serializable' }
+      // Reservation creation performs several consistency checks and writes
+      // against the external production database. The Prisma default
+      // interactive transaction timeout is 5 seconds, which can close the
+      // transaction before the final audit write when DB latency is higher.
+      { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 30_000 }
     );
 
     reservationId = newReservation.reservation.id;
