@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { put } from '@vercel/blob';
+import { uploadObject } from '@hotel-pms/storage';
 import prisma from '@hotel-pms/db';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
@@ -24,6 +24,6 @@ export async function POST(req: NextRequest) {
   if (!IMAGE_TYPES.has(file.type)) return errorResponse('VALIDATION_ERROR', 'Only JPG, PNG, and WebP images are supported', 400);
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const blob = await put(`pos-menu/${propertyId}/${crypto.randomUUID()}-${safeName}`, file, { access: 'public', addRandomSuffix: false });
-  return successResponse({ url: blob.url }, 201);
+  const uploaded = await uploadObject({ key: `pos-menu/${propertyId}/${crypto.randomUUID()}-${safeName}`, body: Buffer.from(await file.arrayBuffer()), contentType: file.type, visibility: 'public' });
+  return successResponse({ url: uploaded.url }, 201);
 }

@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { uploadObject } from "@hotel-pms/storage";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@hotel-pms/db";
@@ -39,11 +39,7 @@ export async function POST(
   if (file.size > MAX_LOGO_BYTES) return NextResponse.json({ error: "Logo must be 2 MB or smaller" }, { status: 400 });
 
   const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const blob = await put(`booking-engine/${propertyId}/logo-${crypto.randomUUID()}.${extension}`, file, {
-    access: "public",
-    addRandomSuffix: false,
-    contentType: file.type,
-  });
+  const uploaded = await uploadObject({ key: `booking-engine/${propertyId}/logo-${crypto.randomUUID()}.${extension}`, body: Buffer.from(await file.arrayBuffer()), contentType: file.type, visibility: "public" });
 
-  return NextResponse.json({ url: blob.url });
+  return NextResponse.json({ url: uploaded.url });
 }

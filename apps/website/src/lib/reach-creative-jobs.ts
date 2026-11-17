@@ -1,5 +1,5 @@
 import prisma from "@hotel-pms/db";
-import { del, put } from "@vercel/blob";
+import { deleteStoredObject, uploadObject } from "@hotel-pms/storage";
 import { Client } from "@upstash/qstash";
 import { reachShareUrl } from "./reach-links";
 import { CREATIVE_TEMPLATES, renderReachCreative, type CreativeTemplate } from "./reach-creative-renderer";
@@ -32,9 +32,9 @@ export async function processReachCreativeGeneration(generationId: string) {
       ? new Intl.NumberFormat("en", { style: "currency", currency: lowestRate.currency, currencyDisplay: "code", maximumFractionDigits: 0 }).format(lowestRate.amount).replace(/\u00a0/g, " ")
       : null;
     const rendered = await renderReachCreative({ template, propertyName: job.property.name, campaignName: job.campaign.name, referralUrl: reachShareUrl(job.campaign.code), sourceUrl: job.sourceUrl, startingPrice });
-    const blob = await put(`reach/creatives/${job.propertyId}/${job.id}.png`, rendered.buffer, { access: "public", addRandomSuffix: false, contentType: rendered.mimeType });
+    const uploaded = await uploadObject({ key: `reach/creatives/${job.propertyId}/${job.id}.png`, body: rendered.buffer, contentType: rendered.mimeType, visibility: "public" });
     await prisma.reachCreativeAsset.updateMany({ where: { propertyId: job.propertyId, campaignId: job.campaignId, status: "APPROVED", usageNotes: { in: ["Deterministically rendered from approved LodgeCore data.", "Deterministically rendered from approved LodgeCore data · renderer v2.", "Deterministically rendered from approved LodgeCore data · renderer v3."] } }, data: { status: "ARCHIVED" } });
-    const asset = await prisma.reachCreativeAsset.create({ data: { propertyId: job.propertyId, campaignId: job.campaignId, title: `${job.property.name} · ${template.toLowerCase()} referral banner`, assetType: rendered.assetType, url: blob.url, mimeType: rendered.mimeType, width: rendered.width, height: rendered.height, usageNotes: "Deterministically rendered from approved LodgeCore data · renderer v3.", status: "APPROVED" } });
+    const asset = await prisma.reachCreativeAsset.create({ data: { propertyId: job.propertyId, campaignId: job.campaignId, title: `${job.property.name} · ${template.toLowerCase()} referral banner`, assetType: rendered.assetType, url: uploaded.url, mimeType: rendered.mimeType, width: rendered.width, height: rendered.height, usageNotes: "Deterministically rendered from approved LodgeCore data · renderer v3.", status: "APPROVED" } });
     await removePreviousSameSizeCreatives(job.id, job.partnerId, job.propertyId, job.campaignId, job.template);
     return prisma.reachCreativeGeneration.update({ where: { id: job.id }, data: { status: "COMPLETED", outputUrl: asset.url, completedAt: new Date(), errorMessage: null } });
   } catch (error) {
@@ -48,7 +48,7 @@ async function removePreviousSameSizeCreatives(currentJobId: string, partnerId: 
   const previousJobs = await prisma.reachCreativeGeneration.findMany({ where: { id: { not: currentJobId }, partnerId, propertyId, campaignId, template, status: "COMPLETED", outputUrl: { not: null } }, select: { id: true, outputUrl: true } });
   for (const previous of previousJobs) {
     if (previous.outputUrl) {
-      try { await del(previous.outputUrl); } catch { /* The Blob may already have been removed. */ }
+      try { await deleteStoredObject(previous.outputUrl); } catch { /* The object may already have been removed. */ }
       await prisma.reachCreativeAsset.deleteMany({ where: { propertyId, campaignId, url: previous.outputUrl } });
     }
     await prisma.reachCreativeGeneration.delete({ where: { id: previous.id } });
@@ -59,7 +59,7 @@ export async function deleteReachCreativeGeneration(generationId: string, partne
   const job = await prisma.reachCreativeGeneration.findFirst({ where: { id: generationId, partnerId }, select: { id: true, outputUrl: true, propertyId: true, campaignId: true } });
   if (!job) return false;
   if (job.outputUrl) {
-    try { await del(job.outputUrl); } catch { /* Keep database cleanup safe if Blob is already gone. */ }
+    try { await deleteStoredObject(job.outputUrl); } catch { /* Keep database cleanup safe if the object is already gone. */ }
     await prisma.reachCreativeAsset.deleteMany({ where: { propertyId: job.propertyId, campaignId: job.campaignId, url: job.outputUrl } });
   }
   await prisma.reachCreativeGeneration.delete({ where: { id: job.id } });

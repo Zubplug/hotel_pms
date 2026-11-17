@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
+import { uploadObject } from '@hotel-pms/storage';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { createAuditLog } from '@/lib/audit';
@@ -42,12 +42,12 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const storageKey = `room-types/${roomType.propertyId}/${roomType.id}/${crypto.randomUUID()}-${safeName}`;
-    const blob = await put(storageKey, file, { access: 'public', addRandomSuffix: false });
-    const photos = Array.from(new Set([...(roomType.photos || []), blob.url]));
+    const uploaded = await uploadObject({ key: storageKey, body: Buffer.from(await file.arrayBuffer()), contentType: file.type, visibility: 'public' });
+    const photos = Array.from(new Set([...(roomType.photos || []), uploaded.url]));
     const altText = String(form.get('altText') || `${roomType.name} room`);
     const [updated, media] = await prisma.$transaction([
       prisma.roomType.update({ where: { id: roomType.id }, data: { photos } }),
-      prisma.reachPropertyMedia.create({ data: { propertyId: roomType.propertyId, roomTypeId: roomType.id, kind: 'ROOM', url: blob.url, altText, storageKey, mimeType: file.type, status: 'APPROVED', sortOrder: photos.length - 1 } }),
+      prisma.reachPropertyMedia.create({ data: { propertyId: roomType.propertyId, roomTypeId: roomType.id, kind: 'ROOM', url: uploaded.url, altText, storageKey, mimeType: file.type, status: 'APPROVED', sortOrder: photos.length - 1 } }),
     ]);
     await createAuditLog({ organizationId: ctx.organizationId, propertyId: roomType.propertyId, userId: session.user.id, action: 'UPDATE', resource: 'room_type_media', resourceId: roomType.id, previousValue: { photos: roomType.photos }, newValue: { photos } });
     return successResponse({ roomType: updated, media }, 201);

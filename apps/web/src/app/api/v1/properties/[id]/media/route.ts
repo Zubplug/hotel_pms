@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
+import { uploadObject } from '@hotel-pms/storage';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { createAuditLog } from '@/lib/audit';
@@ -34,9 +34,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!IMAGE_TYPES.has(file.type)) return errorResponse('VALIDATION_ERROR', 'Only JPG, PNG, and WebP images are supported', 400);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const storageKey = `properties/${property.id}/media/${crypto.randomUUID()}-${safeName}`;
-    const blob = await put(storageKey, file, { access: 'public', addRandomSuffix: false });
+    const uploaded = await uploadObject({ key: storageKey, body: Buffer.from(await file.arrayBuffer()), contentType: file.type, visibility: 'public' });
     const existing = await prisma.reachPropertyMedia.count({ where: { propertyId: property.id, kind: 'PROPERTY', status: 'APPROVED' } });
-    const media = await prisma.reachPropertyMedia.create({ data: { propertyId: property.id, kind: 'PROPERTY', url: blob.url, altText: String(form.get('altText') || `${property.id} property image`), storageKey, mimeType: file.type, status: 'APPROVED', sortOrder: existing } });
+    const media = await prisma.reachPropertyMedia.create({ data: { propertyId: property.id, kind: 'PROPERTY', url: uploaded.url, altText: String(form.get('altText') || `${property.id} property image`), storageKey, mimeType: file.type, status: 'APPROVED', sortOrder: existing } });
     await createAuditLog({ organizationId: ctx.organizationId, propertyId: property.id, userId: session.user.id, action: 'CREATE', resource: 'property_media', resourceId: media.id, newValue: media });
     return successResponse(media, 201);
   } catch (error: any) {
