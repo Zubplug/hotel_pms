@@ -3,6 +3,12 @@ node_modules/
 .turbo/
 .env
 .env.local
+.env.production.local
+.env.aws
+deploy/.env.aws
+.deploy/
+.vercel/
+*.tsbuildinfo
 dist/
 build/
 .next/
