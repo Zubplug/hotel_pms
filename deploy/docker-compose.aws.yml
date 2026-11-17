@@ -50,6 +50,11 @@ services:
       PORT: 3000
       NEXT_PUBLIC_SITE_URL: https://www.stanzelgrandresort.org
       PUBLIC_SITE_ORIGIN: https://www.stanzelgrandresort.org
+      # Stanzel calls the public booking and corporate APIs server-to-server.
+      # Keep these on the private Compose network so they cannot accidentally
+      # route through the PMS hostname or depend on public DNS.
+      LC_API_URL: http://website:3000/api/v1/public
+      CORPORATE_API_URL: http://website:3000
     restart: unless-stopped
     expose:
       - "3000"
