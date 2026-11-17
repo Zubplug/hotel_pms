@@ -36,6 +36,8 @@ jobs:
         run: |
           set -euo pipefail
           cd /opt/hotel_pms
+          sudo docker builder prune -af
+          sudo docker image prune -af
           COMPOSE="sudo docker compose --env-file deploy/.env.aws -f deploy/docker-compose.aws.yml"
           $COMPOSE build pms
           $COMPOSE build website
@@ -44,6 +46,7 @@ jobs:
           sleep 10
           $COMPOSE ps
           sudo docker builder prune -af
+          sudo docker image prune -af
 
       - name: Verify public HTTPS endpoints
         run: |
