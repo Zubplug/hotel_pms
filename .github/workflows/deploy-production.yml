@@ -103,8 +103,15 @@ jobs:
             exit 0
           fi
 
+          AVAILABLE_KB="$(df -Pk / | awk 'NR == 2 {print $4}')"
+          MINIMUM_FREE_KB=$((8 * 1024 * 1024))
+          if (( AVAILABLE_KB < MINIMUM_FREE_KB )); then
+            echo 'Low disk space detected; removing unused Docker build cache.'
+            sudo docker builder prune -af
+          fi
+
           echo "Building: ${SERVICES[*]}"
-          $COMPOSE build --parallel "${SERVICES[@]}"
+          $COMPOSE build "${SERVICES[@]}"
           $COMPOSE up -d --no-build --force-recreate "${SERVICES[@]}" nginx
           sleep 10
           $COMPOSE ps
