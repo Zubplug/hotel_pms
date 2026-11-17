@@ -29,6 +29,10 @@ services:
     environment:
       PORT: 3000
       NEXT_PUBLIC_SITE_URL: https://lodgecore.zubplug.com.ng
+      # The customer portal is served by this container. Do not inherit the
+      # PMS hostname from the shared env file, or Auth.js will send portal
+      # login, callback, and logout URLs to the PMS service.
+      NEXTAUTH_URL: https://lodgecore.zubplug.com.ng
     restart: unless-stopped
     expose:
       - "3000"
