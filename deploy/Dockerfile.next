@@ -22,7 +22,7 @@ FROM base AS build
 ARG APP
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS=--max-old-space-size=4096
-RUN --mount=type=cache,id=hotel-pms-pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=hotel-pms-pnpm-store,target=/pnpm/store,sharing=locked pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter "$APP" build
 
