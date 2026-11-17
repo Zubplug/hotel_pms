@@ -1,4 +1,12 @@
-export interface InitializePaymentRequest { amount: number; currency: string; email: string; reference: string; callbackUrl: string; }
+export interface InitializePaymentRequest {
+  amount: number;
+  currency: string;
+  email: string;
+  customerName?: string;
+  customerPhone?: string;
+  reference: string;
+  callbackUrl: string;
+}
 export interface InitializePaymentResponse { authorizationUrl: string; providerRef: string; }
 export interface VerifyPaymentResponse { isSuccessful: boolean; amount: number; currency: string; providerTransactionId: string; }
 export interface RefundPaymentResponse { status: 'PROCESSING' | 'COMPLETED' | 'FAILED'; providerRefundId?: string; message?: string; }

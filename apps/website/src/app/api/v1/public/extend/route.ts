@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   const reservation = await prisma.reservation.findFirst({
     where: { propertyId: ctx.propertyId, confirmationNumber, primaryGuest: { email: { equals: guestEmail, mode: 'insensitive' } } },
-    include: { primaryGuest: { select: { email: true } }, reservationRooms: { where: { status: 'ACTIVE' }, take: 1 } },
+    include: { primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true } }, reservationRooms: { where: { status: 'ACTIVE' }, take: 1 } },
   });
   if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
   if (!['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status)) return errorResponse('CONFLICT', 'This reservation cannot be extended', 409);
@@ -56,7 +56,15 @@ export async function POST(req: NextRequest) {
     const secret = account.secret ?? resolveSecretRef(account.secretRef, account.provider === 'FLUTTERWAVE' ? 'FLW_SECRET_KEY' : 'PAYSTACK_SECRET_KEY');
     const provider = account.provider === 'FLUTTERWAVE' ? new FlutterwaveProvider(secret, account.webhookSecret ?? resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH')) : new PaystackProvider(secret);
     const callbackUrl = `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}extension=processing&reference=${encodeURIComponent(providerRef)}`;
-    const initialized = await provider.initializeTransaction({ amount, currency: quote.currency, email: guestEmail, reference: providerRef, callbackUrl });
+    const initialized = await provider.initializeTransaction({
+      amount: Number(amount),
+      currency: quote.currency,
+      email: guestEmail,
+      customerName: `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim(),
+      customerPhone: reservation.primaryGuest.phone ?? undefined,
+      reference: providerRef,
+      callbackUrl,
+    });
     await prisma.bookingPaymentTransaction.update({ where: { id: transaction.id }, data: { metadata: { type: 'EXTENSION', newCheckOut, additionalNights: quote.nights, quote: quote.snapshot, returnUrl, authorizationUrl: initialized.authorizationUrl } as any } });
     const response = successResponse({ providerRef, authorizationUrl: initialized.authorizationUrl, amount, currency: quote.currency, newCheckOut, additionalNights: quote.nights }, 200);
     Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([key, value]) => response.headers.set(key, value));

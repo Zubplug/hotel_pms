@@ -22,11 +22,15 @@ export class FlutterwaveProvider implements PaymentProvider {
     const data = await this.request<{ link: string }>('/payments', {
       method: 'POST',
       body: JSON.stringify({
-        amount: request.amount,
-        currency: request.currency,
+        amount: Number(request.amount),
+        currency: String(request.currency).toUpperCase(),
         tx_ref: request.reference,
         redirect_url: request.callbackUrl,
-        customer: { email: request.email },
+        customer: {
+          email: request.email,
+          name: request.customerName?.trim() || request.email,
+          ...(request.customerPhone ? { phonenumber: request.customerPhone } : {}),
+        },
         meta: { lodgecore_source: 'standalone_api' },
         customizations: { title: 'Room reservation payment' },
       }),

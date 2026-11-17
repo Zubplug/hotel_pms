@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       guestConfirmationTokenHash: reservationTokenHash,
     },
     include: {
-      primaryGuest: { select: { email: true } },
+      primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true } },
       folios: {
         where: { type: 'ROOM', status: 'OPEN' },
         orderBy: { createdAt: 'asc' },
@@ -173,9 +173,11 @@ export async function POST(req: NextRequest) {
       ?? `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/reservation?token=${encodeURIComponent(String(reservationToken))}`;
 
     const init = await provider.initializeTransaction({
-      amount: amountDue,
+      amount: Number(amountDue),
       currency: reservation.currency,
       email: guestEmail,
+      customerName: `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim(),
+      customerPhone: reservation.primaryGuest.phone ?? undefined,
       reference: providerRef,
       callbackUrl,
     });
