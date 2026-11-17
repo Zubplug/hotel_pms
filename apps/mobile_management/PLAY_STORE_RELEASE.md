@@ -35,21 +35,22 @@ Do not commit the decrypted output.
 
 ## Versioning
 
-The current release is `1.0.2` with Android version code `3`. Increment the
+The current release is `1.0.4` with Android version code `5`. Increment the
 build number for every Play upload.
 
-## Release notes — 1.0.2 (Build 3)
+## Release notes — 1.0.4 (Build 5)
 
-- Added a professional Night Audit review flow with dedicated blocker dialogs
-  for check-in bypasses, discounts, transactions, cash handovers, and cash drops.
-- Added clearer audit verification details, including guest, room, reservation,
-  balance, staff, acknowledgement, and audit-note information.
-- Improved approval scoping so users see only approval work relevant to their
-  role and assignment.
-- Improved room-number display and transaction reservation context.
-- Fixed logout routing, first-install welcome behavior, and stale-session 401s.
-- Improved dashboard and approval dialog presentation for a more consistent
-  management experience.
+- Added General Cashier expense recording with category, amount, payment method,
+  notes, receipts, validation, and submission status.
+- Added cash custody workflows for shift opening, handover, cash drops, deposits,
+  reconciliation, and variance visibility.
+- Added cashier shift review analysis with clearer totals, exceptions, and
+  operational review context.
+- Improved cashier dashboards, expense presentation, and navigation between
+  custody, expenses, and shift review workflows.
+- Improved finance-period reporting and aligned mobile API traffic with the
+  current AWS production services.
+- Improved offline cashier and audit workflow reliability and error handling.
 
 Before submission, complete the Play Console requirements for the app:
 
