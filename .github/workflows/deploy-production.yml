@@ -87,7 +87,7 @@ jobs:
           set -euo pipefail
           cd /opt/hotel_pms
           sudo install -d -m 755 /opt/hotel_pms/deploy/cron /etc/systemd/system
-          sudo install -m 755 deploy/cron/run-job.sh /opt/hotel_pms/deploy/cron/run-job.sh
+          sudo chmod 755 deploy/cron/run-job.sh
           sudo install -m 644 deploy/systemd/*.service deploy/systemd/*.timer /etc/systemd/system/
           sudo systemctl daemon-reload
           sudo systemctl disable --now lodgecore-cron.service lodgecore-cron@.service 2>/dev/null || true
