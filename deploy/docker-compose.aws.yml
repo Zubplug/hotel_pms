@@ -5,6 +5,7 @@ services:
       dockerfile: deploy/Dockerfile.next
       args:
         APP: web
+        AUTH_SECRET: ${AUTH_SECRET}
     env_file:
       - .env.aws
     environment:
@@ -24,6 +25,7 @@ services:
       dockerfile: deploy/Dockerfile.next
       args:
         APP: website
+        AUTH_SECRET: ${AUTH_SECRET}
     env_file:
       - .env.aws
     environment:
@@ -44,6 +46,7 @@ services:
       dockerfile: deploy/Dockerfile.next
       args:
         APP: hotel-stanzel
+        AUTH_SECRET: ${AUTH_SECRET}
     env_file:
       - .env.aws
     environment:

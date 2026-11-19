@@ -22,8 +22,13 @@ COPY packages/types/package.json packages/types/package.json
 
 FROM base AS build
 ARG APP
+ARG AUTH_SECRET
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS=--max-old-space-size=4096
+# Next.js middleware reads Auth.js configuration in the build output. Pass the
+# production secret into the build so middleware and the runtime server use the
+# same signing key. The runtime container still receives the secret via env_file.
+ENV AUTH_SECRET=$AUTH_SECRET
 RUN --mount=type=cache,id=hotel-pms-pnpm-store,target=/pnpm/store,sharing=locked pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter "$APP" build
