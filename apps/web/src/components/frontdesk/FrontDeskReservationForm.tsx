@@ -39,7 +39,9 @@ const formSchema = z.object({
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     email: z.string().email('Invalid email').optional().or(z.literal('')),
-    phone: z.string().trim().min(7, 'A valid phone number is required'),
+    // Existing guests are identified by guestId and do not need to repeat
+    // profile fields in guestDetails. New guests are validated below.
+    phone: z.string().trim().optional(),
     gender: z.enum(['MALE', 'FEMALE', 'NON_BINARY', 'PREFER_NOT_TO_SAY']).optional().or(z.literal('')),
   }).optional(),
   roomTypeId: z.string().min(1, 'Please select a room type'),
@@ -67,6 +69,12 @@ const formSchema = z.object({
 }, {
   message: 'Please provide guest details or select an existing guest',
   path: ['guestId'],
+}).refine((data) => {
+  if (!data.isNewGuest) return true;
+  return !!data.guestDetails?.phone && data.guestDetails.phone.trim().length >= 7;
+}, {
+  message: 'A valid phone number is required',
+  path: ['guestDetails', 'phone'],
 }).refine((data) => {
   if (data.adjustmentType !== 'NONE' && data.adjustmentType !== 'COMP_FULL') {
     return !!data.adjustmentValue && data.adjustmentValue > 0;
