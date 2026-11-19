@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import 'dart:async';
 import '../../data/search_model.dart';
+import '../../../../core/api/api_client.dart';
 
 const _bgDeep = Color(0xFF070D1A);
 const _surfaceNavy = Color(0xFF1E293B);
@@ -22,8 +22,6 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
   List<GlobalSearchResult> _results = [];
   bool _isLoading = false;
   Timer? _debounce;
-  final Dio _dio = Dio(); // Should be injected in a real app, but this works for demo
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -33,7 +31,7 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    
+
     if (query.length < 2) {
       setState(() {
         _results = [];
@@ -48,22 +46,25 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
 
   Future<void> _performSearch(String query) async {
     setState(() => _isLoading = true);
-    
+
     try {
-      final response = await _dio.get(
-        'http://localhost:3000/api/mobile/v1/executive/search', // Replace with actual base URL in production
-        queryParameters: {'q': query},
-      );
-      
+      final response = await ref
+          .read(dioProvider)
+          .get('/mobile/v1/executive/search', queryParameters: {'q': query});
+
       final List<dynamic> rawResults = response.data['data']['results'] ?? [];
       setState(() {
-        _results = rawResults.map((r) => GlobalSearchResult.fromJson(r)).toList();
+        _results = rawResults
+            .map((r) => GlobalSearchResult.fromJson(r))
+            .toList();
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Search failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Search failed: $e')));
       }
     }
   }
@@ -87,22 +88,42 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
           autofocus: true,
         ),
       ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: _goldLight))
-        : _results.isEmpty && _searchController.text.length > 1
-          ? const Center(child: Text('No results found', style: TextStyle(color: _textSecondary)))
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _goldLight))
+          : _results.isEmpty && _searchController.text.length > 1
+          ? const Center(
+              child: Text(
+                'No results found',
+                style: TextStyle(color: _textSecondary),
+              ),
+            )
           : ListView.separated(
               itemCount: _results.length,
-              separatorBuilder: (context, index) => const Divider(color: _surfaceNavy, height: 1),
+              separatorBuilder: (context, index) =>
+                  const Divider(color: _surfaceNavy, height: 1),
               itemBuilder: (context, index) {
                 final result = _results[index];
                 return ListTile(
-                  leading: Icon(_getIconForType(result.type), color: _goldLight),
-                  title: Text(result.title, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w500)),
-                  subtitle: Text(result.subtitle, style: const TextStyle(color: _textSecondary, fontSize: 13)),
+                  leading: Icon(
+                    _getIconForType(result.type),
+                    color: _goldLight,
+                  ),
+                  title: Text(
+                    result.title,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    result.subtitle,
+                    style: const TextStyle(color: _textSecondary, fontSize: 13),
+                  ),
                   onTap: () {
                     // Navigate to appropriate screen
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Navigate to \${result.route}')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Navigate to \${result.route}')),
+                    );
                   },
                 );
               },
@@ -111,12 +132,17 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
   }
 
   IconData _getIconForType(String type) {
-    switch(type) {
-      case 'ROOM': return Icons.hotel;
-      case 'GUEST': return Icons.person;
-      case 'STAFF': return Icons.badge;
-      case 'RESERVATION': return Icons.book_online;
-      default: return Icons.search;
+    switch (type) {
+      case 'ROOM':
+        return Icons.hotel;
+      case 'GUEST':
+        return Icons.person;
+      case 'STAFF':
+        return Icons.badge;
+      case 'RESERVATION':
+        return Icons.book_online;
+      default:
+        return Icons.search;
     }
   }
 }
