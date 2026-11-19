@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LodgeCore demo-account expiry hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5m
+Unit=lodgecore-expire-demo-accounts.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LodgeCore OTA reconciliation every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=2m
+Unit=lodgecore-ota-reconciliation.service
+
+[Install]
+WantedBy=timers.target

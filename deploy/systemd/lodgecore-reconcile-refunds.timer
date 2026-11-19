@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LodgeCore refund reconciliation daily
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 UTC
+Persistent=true
+RandomizedDelaySec=5m
+Unit=lodgecore-reconcile-refunds.service
+
+[Install]
+WantedBy=timers.target

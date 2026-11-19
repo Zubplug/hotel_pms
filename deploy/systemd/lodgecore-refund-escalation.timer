@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LodgeCore refund escalation daily
+
+[Timer]
+OnCalendar=*-*-* 05:15:00 UTC
+Persistent=true
+RandomizedDelaySec=5m
+Unit=lodgecore-refund-escalation.service
+
+[Install]
+WantedBy=timers.target

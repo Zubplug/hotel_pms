@@ -1,0 +1,13 @@
+[Unit]
+Description=LodgeCore escalate overdue refund requests
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/hotel_pms/deploy/.env.aws
+ExecStart=/opt/hotel_pms/deploy/cron/run-job.sh refund-escalation https://pms.zubplug.com.ng/api/v1/refund-requests/escalate POST
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/lock

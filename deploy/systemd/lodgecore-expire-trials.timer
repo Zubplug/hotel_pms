@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LodgeCore trial expiry hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5m
+Unit=lodgecore-expire-trials.service
+
+[Install]
+WantedBy=timers.target

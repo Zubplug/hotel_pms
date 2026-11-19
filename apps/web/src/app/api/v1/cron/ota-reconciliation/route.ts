@@ -7,7 +7,10 @@ import { OTAReservationService } from '@/lib/integrations/ota/reservation-servic
 import { hasEntitlement } from '@/lib/auth/entitlement';
 
 export async function POST(req: NextRequest) {
-  // Can be secured via QStash signature verification
+  const expected = process.env.CRON_SECRET;
+  const supplied = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!expected || supplied !== expected) return new NextResponse('Unauthorized', { status: 401 });
+
   const BATCH_LIMIT = 50;
   let processedCount = 0;
 

@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/night-audit",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/v1/refund-requests/escalate",
-      "schedule": "0 5 * * *"
-    }
-  ]
-}
+{}

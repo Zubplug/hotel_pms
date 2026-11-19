@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LodgeCore booking-hold expiry daily
+
+[Timer]
+OnCalendar=*-*-* 00:00:00 UTC
+Persistent=true
+RandomizedDelaySec=5m
+Unit=lodgecore-expire-booking-holds.service
+
+[Install]
+WantedBy=timers.target

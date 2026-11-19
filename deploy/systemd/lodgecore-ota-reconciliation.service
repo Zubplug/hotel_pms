@@ -1,0 +1,13 @@
+[Unit]
+Description=LodgeCore OTA reconciliation
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/hotel_pms/deploy/.env.aws
+ExecStart=/opt/hotel_pms/deploy/cron/run-job.sh ota-reconciliation https://pms.zubplug.com.ng/api/v1/cron/ota-reconciliation POST
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/lock
