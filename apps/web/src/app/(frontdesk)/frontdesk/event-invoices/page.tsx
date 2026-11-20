@@ -80,7 +80,14 @@ export default function FrontDeskEventInvoicesPage() {
           </div>
         ) : (() => {
           const rawInvoices: any[] = Array.isArray(eventInvoicesData) ? eventInvoicesData : ((eventInvoicesData as any)?.data ?? []);
-          return rawInvoices.length === 0 ? (
+          // Keep the screen focused on invoices that can actually receive
+          // money. This client-side guard applies equally to the online API
+          // provider and the offline local provider, including stale records
+          // whose status was not updated after the final payment.
+          const invoices = rawInvoices.filter((invoice) =>
+            Number(invoice.totalAmount || 0) - Number(invoice.paidAmount || 0) > 0.01
+          );
+          return invoices.length === 0 ? (
             <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm">
               <ReceiptText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-lg font-bold text-slate-900">No event invoices</h3>
@@ -99,7 +106,7 @@ export default function FrontDeskEventInvoicesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {rawInvoices.map((invoice: any) => {
+                  {invoices.map((invoice: any) => {
                     const outstanding = Math.max(0, Number(invoice.totalAmount || 0) - Number(invoice.paidAmount || 0));
                     const folioId = invoice.folioId || invoice.folio?.id;
                     const clientName = invoice.clientName || (invoice.event?.guest ? `${invoice.event.guest.firstName || ''} ${invoice.event.guest.lastName || ''}`.trim() : invoice.event?.corporateAccount?.name || invoice.event?.contactName || '—');

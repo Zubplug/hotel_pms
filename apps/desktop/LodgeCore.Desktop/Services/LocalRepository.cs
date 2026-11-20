@@ -3633,7 +3633,10 @@ public class LocalRepository
             var term = search.Trim().ToLower();
             query = query.Where(invoice => invoice.EventName.ToLower().Contains(term) || invoice.ClientName.ToLower().Contains(term) || invoice.Id.ToLower().Contains(term));
         }
-        return await query.OrderByDescending(invoice => invoice.UpdatedAt).Take(100).ToListAsync();
+        var invoices = await query.OrderByDescending(invoice => invoice.UpdatedAt).Take(100).ToListAsync();
+        // Keep the offline front-desk list aligned with the online API: only
+        // invoices with a positive remaining balance are actionable.
+        return invoices.Where(invoice => invoice.TotalAmount - invoice.PaidAmount > 0.01m).ToList();
     }
 
     public async Task<List<LocalEventScheduleItem>> GetEventScheduleAsync(string propertyId)

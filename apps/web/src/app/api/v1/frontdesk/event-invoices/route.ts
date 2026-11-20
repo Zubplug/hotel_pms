@@ -49,21 +49,25 @@ export async function GET(req: NextRequest) {
       take: 100,
     });
 
-    return successResponse(invoices.map((invoice: any) => ({
-      ...invoice,
-      clientName: invoice.event?.guest
-        ? `${invoice.event.guest.firstName || ''} ${invoice.event.guest.lastName || ''}`.trim()
-        : invoice.event?.corporateAccount?.name
-          || invoice.event?.contactName
-          || invoice.leaseBillingSchedule?.leaseContract?.corporateAccount?.name
-          || invoice.leaseBillingSchedule?.leaseContract?.contactName
-          || invoice.cityLedgerAccount?.name
-          || '—',
-      eventName: invoice.event?.name || `${invoice.leaseBillingSchedule?.leaseContract?.hall?.name || 'Hall'} recurring use`,
-      cityLedgerEntryId: invoice.cityLedgerInvoice?.entries?.find((entry: any) => entry.type === 'TRANSFER_IN')?.id || null,
-      cityLedgerInvoiceId: invoice.cityLedgerInvoice?.id || null,
-      cityLedgerAccountId: invoice.cityLedgerAccountId || invoice.cityLedgerInvoice?.accountId || null,
-    })));
+    // Payment status can lag the monetary counters after a settlement. Do not
+    // expose fully paid invoices to the front desk in that case.
+    return successResponse(invoices
+      .filter((invoice: any) => Number(invoice.totalAmount || 0) - Number(invoice.paidAmount || 0) > 0.01)
+      .map((invoice: any) => ({
+        ...invoice,
+        clientName: invoice.event?.guest
+          ? `${invoice.event.guest.firstName || ''} ${invoice.event.guest.lastName || ''}`.trim()
+          : invoice.event?.corporateAccount?.name
+            || invoice.event?.contactName
+            || invoice.leaseBillingSchedule?.leaseContract?.corporateAccount?.name
+            || invoice.leaseBillingSchedule?.leaseContract?.contactName
+            || invoice.cityLedgerAccount?.name
+            || '—',
+        eventName: invoice.event?.name || `${invoice.leaseBillingSchedule?.leaseContract?.hall?.name || 'Hall'} recurring use`,
+        cityLedgerEntryId: invoice.cityLedgerInvoice?.entries?.find((entry: any) => entry.type === 'TRANSFER_IN')?.id || null,
+        cityLedgerInvoiceId: invoice.cityLedgerInvoice?.id || null,
+        cityLedgerAccountId: invoice.cityLedgerAccountId || invoice.cityLedgerInvoice?.accountId || null,
+      })));
   } catch (error) {
     console.error('[Frontdesk Event Invoices GET]', error);
     return errorResponse('INTERNAL_ERROR', 'Unable to load event invoices', 500);
