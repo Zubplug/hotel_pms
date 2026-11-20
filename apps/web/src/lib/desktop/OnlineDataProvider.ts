@@ -157,7 +157,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   },
   cityLedger: {
     async list(propertyId: string) { return apiFetch(`/api/v1/frontdesk/city-ledger?propertyId=${encodeURIComponent(propertyId)}`); },
-    async settle(data: any) { return apiFetch(`/api/v1/frontdesk/city-ledger/settle`, { method: 'POST', body: JSON.stringify(data) }); },
+    // Online front-desk settlement is handled by the collection route itself.
+    // The route validates the user's Front Desk role and resolves the user's
+    // open shift before delegating to the accounting posting service.
+    async settle(data: any) { return apiFetch(`/api/v1/frontdesk/city-ledger`, { method: 'POST', body: JSON.stringify(data) }); },
     async advance(data: any) { return apiFetch(`/api/v1/frontdesk/city-ledger/advance`, { method: 'POST', body: JSON.stringify(data) }); },
   },
   roomTypes: {
