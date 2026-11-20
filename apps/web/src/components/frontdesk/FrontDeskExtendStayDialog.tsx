@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays, startOfDay } from 'date-fns';
-import { Loader2, CheckCircle2, AlertCircle, CalendarClock, ArrowRight, CreditCard } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, CalendarClock, ArrowRight, CreditCard, Monitor } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
@@ -24,7 +24,7 @@ interface FrontDeskExtendStayDialogProps {
 export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: FrontDeskExtendStayDialogProps) {
   const router = useRouter();
 
-  const [phase, setPhase] = useState<'SELECT' | 'PREVIEW' | 'PROCESSING' | 'PROMPT_ENCODE' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('SELECT');
+  const [phase, setPhase] = useState<'SELECT' | 'OFFLINE_REQUIRED' | 'PREVIEW' | 'PROCESSING' | 'PROMPT_ENCODE' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('SELECT');
   const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [previewData, setPreviewData] = useState<any>(null);
@@ -45,9 +45,13 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     }
   }, [open]);
 
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isOnline } = useLodgeCoreProvider();
 
   const handlePreview = async () => {
+    if (isOnline) {
+      setPhase('OFFLINE_REQUIRED');
+      return;
+    }
     if (!newCheckoutDate) return;
     setPhase('PROCESSING');
     setErrorMsg(null);
@@ -63,6 +67,10 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
   };
 
   const handleEncodeCard = async () => {
+    if (isOnline) {
+      setPhase('OFFLINE_REQUIRED');
+      return;
+    }
     setPhase('ENCODING');
     setErrorMsg(null);
     try {
@@ -85,6 +93,10 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
   };
 
   const handleConfirmExtend = async () => {
+    if (isOnline) {
+      setPhase('OFFLINE_REQUIRED');
+      return;
+    }
     if (!newCheckoutDate) return;
     setPhase('PROCESSING');
     setErrorMsg(null);
@@ -128,7 +140,23 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
         </div>
 
         <div className="px-6 py-6 bg-slate-50/50 overflow-y-auto flex-1">
-          {phase === 'SELECT' && (
+          {isOnline ? (
+            <div className="flex flex-col items-center justify-center h-full py-10 text-center animate-in zoom-in-95 duration-300">
+              <div className="relative w-24 h-24 mb-7">
+                <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
+                <div className="relative w-full h-full bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center">
+                  <Monitor className="h-10 w-10 text-amber-600" />
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-3">Use the LodgeCore Desktop terminal</h3>
+              <p className="text-sm text-slate-500 leading-relaxed max-w-[360px] mb-6">
+                Extending a stay updates the guest&apos;s physical keycard through the USB encoder, so this action is available only from the offline desktop terminal at the front desk.
+              </p>
+              <div className="w-full max-w-[420px] rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-left text-xs text-amber-800 leading-relaxed">
+                Open LodgeCore Desktop on the computer connected to the keycard encoder, then extend the stay there.
+              </div>
+            </div>
+          ) : phase === 'SELECT' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
                 <div>
@@ -159,7 +187,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
             </div>
           )}
 
-          {phase === 'PREVIEW' && previewData && (
+          {!isOnline && phase === 'PREVIEW' && previewData && (
             <div className="space-y-5">
               <Card className="border-0 shadow-md bg-white rounded-xl overflow-hidden">
                 <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
@@ -189,7 +217,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
             </div>
           )}
 
-          {phase === 'PROMPT_ENCODE' && (
+          {!isOnline && phase === 'PROMPT_ENCODE' && (
             <div className="flex flex-col items-center py-10 space-y-4 text-center">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center shadow-inner">
                 <CreditCard className="w-8 h-8 text-blue-600" />
@@ -203,7 +231,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
             </div>
           )}
 
-          {(phase === 'PROCESSING' || phase === 'ENCODING') && (
+          {!isOnline && (phase === 'PROCESSING' || phase === 'ENCODING') && (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
               <p className="text-sm font-medium text-slate-500">
@@ -212,7 +240,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
             </div>
           )}
 
-          {phase === 'SUCCESS' && (
+          {!isOnline && phase === 'SUCCESS' && (
             <div className="flex flex-col items-center py-10 space-y-4 text-center">
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center shadow-inner">
                 <CheckCircle2 className="w-8 h-8 text-emerald-600" />
@@ -226,7 +254,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
             </div>
           )}
 
-          {phase === 'FAILED' && (
+          {!isOnline && phase === 'FAILED' && (
             <div className="flex flex-col items-center py-10 space-y-4 text-center">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center shadow-inner">
                 <AlertCircle className="w-8 h-8 text-red-600" />
@@ -241,7 +269,12 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
 
         <div className="bg-white px-6 py-4 border-t border-slate-100 shrink-0">
           <DialogFooter className="flex w-full sm:justify-between gap-2">
-            {phase === 'SELECT' && (
+            {isOnline && (
+              <Button onClick={() => onOpenChange(false)} className="w-full rounded-xl h-12 font-semibold bg-slate-900 hover:bg-slate-800 text-white">
+                Close
+              </Button>
+            )}
+            {!isOnline && phase === 'SELECT' && (
               <>
                 <DialogClose render={
                   <Button variant="outline" className="rounded-xl h-12 px-6 font-semibold border-slate-200">Cancel</Button>
@@ -255,7 +288,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 </Button>
               </>
             )}
-            {phase === 'PREVIEW' && (
+            {!isOnline && phase === 'PREVIEW' && (
               <>
                 <Button variant="outline" onClick={() => setPhase('SELECT')} className="rounded-xl h-12 px-6 font-semibold border-slate-200">Back</Button>
                 <Button onClick={handleConfirmExtend} className="rounded-xl h-12 px-8 font-semibold bg-emerald-600 hover:bg-emerald-700 ml-auto">
@@ -263,7 +296,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 </Button>
               </>
             )}
-            {phase === 'PROMPT_ENCODE' && (
+            {!isOnline && phase === 'PROMPT_ENCODE' && (
               <>
                 <DialogClose render={
                   <Button variant="outline" className="rounded-xl h-12 px-6 font-semibold border-slate-200">Skip / Do Later</Button>
@@ -273,7 +306,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 </Button>
               </>
             )}
-            {phase === 'FAILED' && (
+            {!isOnline && phase === 'FAILED' && (
               <>
                 <DialogClose render={
                   <Button variant="outline" className="rounded-xl h-12 px-6 font-semibold border-slate-200">Close</Button>
@@ -283,7 +316,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 </Button>
               </>
             )}
-            {phase === 'SUCCESS' && (
+            {!isOnline && phase === 'SUCCESS' && (
               <DialogClose render={
                 <Button className="w-full rounded-xl h-12 font-semibold bg-slate-900 hover:bg-slate-800 text-lg">
                   Done
