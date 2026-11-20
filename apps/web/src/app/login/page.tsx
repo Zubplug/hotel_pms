@@ -98,7 +98,10 @@ export default function LoginPage() {
       setError('Invalid email or password. Please try again.');
       setIsLoading(false);
     } else {
-      router.push(loginMode === 'employee' ? '/hr/self-service' : '/hub');
+      // Let the server resolve the correct landing page from the authenticated
+      // role. Front-desk employees go to the PMS workspace; other employees
+      // are redirected to HR self-service by middleware.
+      router.push('/hub');
       router.refresh();
     }
   }
@@ -220,13 +223,13 @@ export default function LoginPage() {
   const renderWebUI = () => (
     <div className="space-y-6">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-white">{loginMode === 'employee' ? 'Employee self-service' : 'Welcome back'}</h2>
-        <p className="text-slate-400 text-sm mt-1">{loginMode === 'employee' ? 'Use your Employer ID to view your HR records' : 'Sign in to your account to continue'}</p>
+        <h2 className="text-xl font-semibold text-white">{loginMode === 'employee' ? 'Employee & front desk login' : 'Welcome back'}</h2>
+        <p className="text-slate-400 text-sm mt-1">{loginMode === 'employee' ? 'Use your Employer ID and online password' : 'Sign in to your account to continue'}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-1">
         <button type="button" onClick={() => { setLoginMode('account'); setError(''); }} className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${loginMode === 'account' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Account login</button>
-        <button type="button" onClick={() => { setLoginMode('employee'); setError(''); }} className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${loginMode === 'employee' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}>Employee login</button>
+        <button type="button" onClick={() => { setLoginMode('employee'); setError(''); }} className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${loginMode === 'employee' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}>Employee / front desk</button>
       </div>
 
       <form onSubmit={handleWebLogin} className="space-y-5">
@@ -294,7 +297,7 @@ export default function LoginPage() {
           className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold py-3 text-sm transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isLoading ? 'Signing in...' : loginMode === 'employee' ? 'Open my HR dashboard' : 'Sign in'}
+            {isLoading ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
     </div>

@@ -46,7 +46,7 @@ function getDirectLandingUrl(
   }
 
   // Front desk roles → Front Desk workspace
-  if (['RECEPTIONIST', 'FRONT_DESK'].includes(role)) {
+  if (['RECEPTIONIST', 'FRONT_DESK', 'FRONT_DESK_MANAGER'].includes(role)) {
     return '/frontdesk';
   }
 
