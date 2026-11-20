@@ -73,7 +73,8 @@ export default function FrontDeskReservationsPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['frontdesk', 'reservations', { search: debouncedSearch, filter: activeFilter }],
+    queryKey: ['frontdesk', 'reservations', propertyId, { search: debouncedSearch, filter: activeFilter }],
+    enabled: Boolean(propertyId),
     queryFn: async () => {
       if (activeFilter === 'GUEST_CREDITS') return { data: [] };
       const status = getStatusQuery();
