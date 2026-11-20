@@ -14,6 +14,13 @@ type FrontDeskDiscountModalProps = {
   targetType: TargetType;
   targetId: string;
   targetTotal?: number;
+  existingDiscount?: {
+    type?: string | null;
+    amount?: number | null;
+    percent?: number | null;
+    approvalId?: string | null;
+    reason?: string | null;
+  };
   onClose: () => void;
   onSuccess: () => void;
 };
@@ -30,7 +37,7 @@ function numericAmount(value: string) {
   return Number(value.replace(/,/g, ''));
 }
 
-export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTotal, onClose, onSuccess }: FrontDeskDiscountModalProps) {
+export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTotal, existingDiscount, onClose, onSuccess }: FrontDeskDiscountModalProps) {
   const { provider } = useLodgeCoreProvider();
   const { propertyId } = useProperty();
   const [type, setType] = useState<'percent' | 'amount'>('percent');
@@ -40,12 +47,19 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
   const [beneficiaryStaffId, setBeneficiaryStaffId] = useState('');
   const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   const [confirmedHighValue, setConfirmedHighValue] = useState(false);
+  const [confirmedReplacement, setConfirmedReplacement] = useState(false);
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    if (isOpen) {
+      setConfirmedReplacement(false);
+      setError('');
+    }
+  }, [isOpen, targetId]);
 
   const { data: staffResponse } = useQuery({
     queryKey: ['frontdesk-acknowledging-staff', propertyId],
@@ -62,6 +76,11 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
   const staffLoadError = responseData?.error || '';
   const activeStaff = allActiveStaff;
   const managementStaff = allActiveStaff.filter((staff: any) => isConcessionManagementPosition(staff.position || staff.role));
+  const hasExistingDiscount = targetType === 'RESERVATION_ROOM' && Boolean(
+    ['PERCENTAGE', 'FIXED_AMOUNT'].includes(String(existingDiscount?.type || '').toUpperCase()) &&
+    (existingDiscount?.approvalId || Number(existingDiscount?.amount || 0) > 0 || Number(existingDiscount?.percent || 0) > 0),
+  );
+  const existingDiscountIsPending = String(existingDiscount?.approvalId || '').startsWith('PENDING:');
 
   if (!isOpen || !mounted) return null;
 
@@ -88,6 +107,10 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
       setError('This discount is at least 50% of the room total. Confirm the amount before submitting.');
       return;
     }
+    if (hasExistingDiscount && !confirmedReplacement) {
+      setError('Confirm that you want to replace the existing discount before submitting.');
+      return;
+    }
     const amount = type === 'amount' ? numValue : 0;
     const percentage = type === 'percent' ? numValue : 0;
 
@@ -104,6 +127,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
         beneficiaryType,
         beneficiaryStaffId: beneficiaryType === 'STAFF' ? beneficiaryStaffId : null,
         acknowledgedByStaffId,
+        replaceExistingDiscount: hasExistingDiscount,
       };
       // Map targetId to the field name the backend expects per targetType
       if (targetType === 'RESERVATION_ROOM') payload.reservationRoomId = targetId;
@@ -143,6 +167,21 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
             {staffLoadError && (
               <div className="p-3 rounded-lg bg-amber-50 text-amber-800 text-sm font-medium border border-amber-100">
                 Staff list unavailable. Refresh the page and try again.
+              </div>
+            )}
+
+            {hasExistingDiscount && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-bold">Replace existing discount?</p>
+                <p className="mt-1 leading-5">
+                  {existingDiscountIsPending
+                    ? 'A discount request is already pending approval for this stay. This new request will replace it.'
+                    : 'An approved discount is already attached to this stay. This request will require approval again, but the current discount remains active until the replacement is approved.'}
+                </p>
+                <label className="mt-3 flex items-start gap-2 font-semibold">
+                  <input type="checkbox" checked={confirmedReplacement} onChange={(event) => setConfirmedReplacement(event.target.checked)} className="mt-0.5 h-4 w-4 accent-amber-600" />
+                  <span>I understand this will replace the existing discount.</span>
+                </label>
               </div>
             )}
 

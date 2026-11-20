@@ -5275,6 +5275,19 @@ public class LocalRepository
         }
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
+        var existingApprovalId = reservationRoom?.DiscountApprovalId?.StartsWith("PENDING:", StringComparison.OrdinalIgnoreCase) == true
+            ? reservationRoom.DiscountApprovalId.Substring("PENDING:".Length)
+            : reservationRoom?.DiscountApprovalId;
+        var existingDiscountIsPending = reservationRoom?.DiscountApprovalId?.StartsWith("PENDING:", StringComparison.OrdinalIgnoreCase) == true;
+        var hasExistingDiscount = (string.Equals(reservationRoom?.DiscountType, "PERCENTAGE", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(reservationRoom?.DiscountType, "FIXED_AMOUNT", StringComparison.OrdinalIgnoreCase))
+            && (!string.IsNullOrWhiteSpace(existingApprovalId)
+                || reservationRoom?.DiscountAmount > 0
+                || reservationRoom?.DiscountPercent > 0);
+        var replaceExistingDiscount = root.TryGetProperty("replaceExistingDiscount", out var replaceProp)
+            && replaceProp.ValueKind == JsonValueKind.True;
+        if (hasExistingDiscount && !replaceExistingDiscount)
+            throw new InvalidOperationException("An approved or pending discount already exists. Confirm replacement before requesting a new discount.");
         if (await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == acknowledgedByStaffId && s.PropertyId == propertyId && s.IsActive) == null)
             throw new InvalidOperationException("The acknowledging staff member is not active for this property.");
         if (beneficiaryType == "STAFF" && await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == beneficiaryStaffId && s.PropertyId == propertyId && s.IsActive) == null)
@@ -5284,7 +5297,7 @@ public class LocalRepository
         // Keep the request visible offline immediately, but mark it explicitly
         // as pending so the reservation detail never reduces the effective rate
         // before the night auditor approves it.
-        if (reservationRoom != null)
+        if (reservationRoom != null && (!hasExistingDiscount || existingDiscountIsPending))
         {
             reservationRoom.DiscountType = discountType;
             reservationRoom.DiscountAmount = (decimal)amount;
@@ -5355,6 +5368,8 @@ public class LocalRepository
                 beneficiaryStaffId = beneficiaryType == "STAFF" ? beneficiaryStaffId : null,
                 beneficiaryGuestId = beneficiaryType == "GUEST" ? reservationSnapshot?.guest?.id : null,
                 acknowledgedByStaffId,
+                replaceExistingDiscount,
+                replacementOfApprovalId = hasExistingDiscount ? existingApprovalId : null,
                 reservation = reservationSnapshot
             })
         });

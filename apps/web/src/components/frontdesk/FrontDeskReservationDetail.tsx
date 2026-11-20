@@ -116,6 +116,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
     Number(resRoom.discountPercent || 0) > 0
   ));
   const canAddRoomAdjustment = Boolean(resRoom) && !hasRoomAdjustment;
+  const canRequestDiscount = Boolean(resRoom) && resRoom.discountType !== 'COMPLIMENTARY';
 
   const latestPayment = folio?.payments
     ?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'REFUNDED')
@@ -211,6 +212,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
       {isQuickCheckoutOpen && <FrontDeskQuickCheckoutDialog open={isQuickCheckoutOpen} onOpenChange={setIsQuickCheckoutOpen} propertyId={reservation.propertyId} initialReservation={reservation} />}
       {isDiscountOpen && resRoom && (
         <FrontDeskDiscountModal isOpen={isDiscountOpen} targetType="RESERVATION_ROOM" targetId={resRoom.id} targetTotal={Number(resRoom.rateAmount || 0)}
+          existingDiscount={{ type: resRoom.discountType, amount: Number(resRoom.discountAmount || 0), percent: Number(resRoom.discountPercent || 0), approvalId: resRoom.discountApprovalId, reason: resRoom.discountReason }}
           onClose={() => setIsDiscountOpen(false)}
           onSuccess={() => { queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] }); setIsDiscountOpen(false); }} />
       )}
@@ -364,8 +366,8 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                     <DropdownMenuTrigger className="col-span-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.04] text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.07]">Manage Reservation <ChevronDown className="h-4 w-4" /></DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56 rounded-xl border-white/[0.08] p-2 shadow-2xl" style={{ background: '#0d1117' }}>
                       {canEditReservation && <DropdownMenuItem className="cursor-pointer rounded-lg p-3 font-medium text-slate-300 hover:bg-white/[0.06] focus:bg-white/[0.06]" onClick={() => setIsEditDialogOpen(true)}><Edit3 className="mr-2 h-4 w-4 text-slate-500" /> Edit Details</DropdownMenuItem>}
+                      {canRequestDiscount && <DropdownMenuItem className="cursor-pointer rounded-lg p-3 font-medium text-slate-300 hover:bg-white/[0.06] focus:bg-white/[0.06]" onClick={() => setIsDiscountOpen(true)}><Percent className="mr-2 h-4 w-4 text-slate-500" /> {hasRoomAdjustment ? 'Replace Discount' : 'Apply Discount'}</DropdownMenuItem>}
                       {canAddRoomAdjustment && <>
-                        <DropdownMenuItem className="cursor-pointer rounded-lg p-3 font-medium text-slate-300 hover:bg-white/[0.06] focus:bg-white/[0.06]" onClick={() => setIsDiscountOpen(true)}><Percent className="mr-2 h-4 w-4 text-slate-500" /> Apply Discount</DropdownMenuItem>
                         <DropdownMenuItem className="cursor-pointer rounded-lg p-3 font-medium text-slate-300 hover:bg-white/[0.06] focus:bg-white/[0.06]" onClick={() => setIsComplimentaryOpen(true)}><Gift className="mr-2 h-4 w-4 text-emerald-400" /> Set as Complimentary</DropdownMenuItem>
                       </>}
                       {canReassignRoom && <DropdownMenuItem className="cursor-pointer rounded-lg p-3 font-medium text-slate-300 hover:bg-white/[0.06] focus:bg-white/[0.06]" onClick={() => setIsReassignDialogOpen(true)}><MapPin className="mr-2 h-4 w-4 text-slate-500" /> Reassign Room</DropdownMenuItem>}
@@ -482,12 +484,12 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
               <div className="pt-5 border-t border-slate-100 mt-5">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Rate Details</p>
-                  {canAddRoomAdjustment && (
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" className="h-8 rounded-lg font-bold text-xs border-slate-200 hover:bg-slate-50" onClick={() => setIsDiscountOpen(true)}><Percent className="w-3.5 h-3.5 mr-1 text-slate-500" /> Discount</Button>
-                      <Button variant="outline" size="sm" className="h-8 rounded-lg font-bold text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => setIsComplimentaryOpen(true)}><Gift className="w-3.5 h-3.5 mr-1" /> Comp</Button>
-                    </div>
-                  )}
+                    {canRequestDiscount && (
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="h-8 rounded-lg font-bold text-xs border-slate-200 hover:bg-slate-50" onClick={() => setIsDiscountOpen(true)}><Percent className="w-3.5 h-3.5 mr-1 text-slate-500" /> {hasRoomAdjustment ? 'Replace Discount' : 'Discount'}</Button>
+                        {canAddRoomAdjustment && <Button variant="outline" size="sm" className="h-8 rounded-lg font-bold text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => setIsComplimentaryOpen(true)}><Gift className="w-3.5 h-3.5 mr-1" /> Comp</Button>}
+                      </div>
+                    )}
                 </div>
                 <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100/60 space-y-3">
                   <div className="flex justify-between items-center text-sm">
@@ -529,8 +531,8 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                   <DropdownMenuTrigger className="col-span-2 h-12 rounded-xl font-semibold border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-sm shadow-sm transition-colors w-full">Manage Reservation <ChevronDown className="w-4 h-4 ml-2" /></DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl border-slate-200 shadow-xl">
                     {canEditReservation && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsEditDialogOpen(true)}><Edit3 className="w-4 h-4 mr-2 text-slate-500" /> Edit Details</DropdownMenuItem>}
+                    {canRequestDiscount && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsDiscountOpen(true)}><Percent className="w-4 h-4 mr-2 text-slate-500" /> {hasRoomAdjustment ? 'Replace Discount' : 'Apply Discount'}</DropdownMenuItem>}
                     {canAddRoomAdjustment && <>
-                      <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsDiscountOpen(true)}><Percent className="w-4 h-4 mr-2 text-slate-500" /> Apply Discount</DropdownMenuItem>
                       <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsComplimentaryOpen(true)}><Gift className="w-4 h-4 mr-2 text-emerald-600" /> Set as Complimentary</DropdownMenuItem>
                     </>}
                     {canReassignRoom && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsReassignDialogOpen(true)}><MapPin className="w-4 h-4 mr-2 text-slate-500" /> Reassign Room</DropdownMenuItem>}

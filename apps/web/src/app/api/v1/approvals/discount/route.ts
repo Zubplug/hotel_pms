@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       beneficiaryType,
       beneficiaryStaffId,
       acknowledgedByStaffId,
+      replaceExistingDiscount,
     } = body;
 
     if (!targetType || !reason) {
@@ -75,6 +76,18 @@ export async function POST(req: NextRequest) {
 
         propertyId = resRoom.reservation?.propertyId ?? '';
         if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
+        const existingApprovalId = typeof resRoom.discountApprovalId === 'string'
+          ? resRoom.discountApprovalId.replace(/^PENDING:/, '')
+          : null;
+        const existingDiscountIsPending = typeof resRoom.discountApprovalId === 'string'
+          && resRoom.discountApprovalId.startsWith('PENDING:');
+        const hasExistingDiscount = Boolean(
+          ['PERCENTAGE', 'FIXED_AMOUNT'].includes(String(resRoom.discountType || '').toUpperCase()) &&
+          (existingApprovalId || Number(resRoom.discountAmount || 0) > 0 || Number(resRoom.discountPercent || 0) > 0),
+        );
+        if (hasExistingDiscount && replaceExistingDiscount !== true) {
+          throw new Error('DISCOUNT_REPLACEMENT_CONFIRMATION_REQUIRED');
+        }
         await resolveAcknowledgingStaff(tx, acknowledgedByStaffId, propertyId);
         const operatorStaffId = await resolveOperatorStaffId(tx, user.id, propertyId);
         const beneficiaryStaff = normalizedBeneficiaryType === 'STAFF'
@@ -113,6 +126,7 @@ export async function POST(req: NextRequest) {
               targetType: 'RESERVATION_ROOM',
               reservationRoomId,
               originalRate: Number(resRoom.rateAmount),
+              replacementOfApprovalId: hasExistingDiscount ? existingApprovalId : null,
               discountType,
               discountAmount: discountType === 'FIXED_AMOUNT' ? amount : 0,
               discountPercent: discountType === 'PERCENTAGE' ? percent : 0,
@@ -121,6 +135,38 @@ export async function POST(req: NextRequest) {
             idempotencyKey,
           },
         });
+
+        // A replacement of an approved discount is staged in the approval
+        // request. Keep the currently approved room values active until the
+        // manager approves the replacement. If the existing request is still
+        // pending, it is safe to replace the pending room values immediately.
+        if (existingApprovalId && existingDiscountIsPending) {
+          await tx.approvalRequest.updateMany({
+            where: { id: existingApprovalId, type: 'DISCOUNT', status: 'PENDING' },
+            data: { status: 'CANCELLED', reviewedBy: operatorStaffId, reviewedAt: new Date() },
+          });
+          await tx.reservationRoom.update({
+            where: { id: reservationRoomId },
+            data: {
+              discountType,
+              discountAmount: discountType === 'FIXED_AMOUNT' ? amount : 0,
+              discountPercent: discountType === 'PERCENTAGE' ? percent : 0,
+              discountReason: reason,
+              discountApprovalId: `PENDING:${approval.id}`,
+            },
+          });
+        } else if (!hasExistingDiscount) {
+          await tx.reservationRoom.update({
+            where: { id: reservationRoomId },
+            data: {
+              discountType,
+              discountAmount: discountType === 'FIXED_AMOUNT' ? amount : 0,
+              discountPercent: discountType === 'PERCENTAGE' ? percent : 0,
+              discountReason: reason,
+              discountApprovalId: `PENDING:${approval.id}`,
+            },
+          });
+        }
 
         return { approvalId: approval.id };
 
@@ -184,6 +230,9 @@ export async function POST(req: NextRequest) {
     }
     if (err.message === 'INVALID_BENEFICIARY_STAFF') {
       return errorResponse('BAD_REQUEST', 'Beneficiary staff member is not active for this property', 400);
+    }
+    if (err.message === 'DISCOUNT_REPLACEMENT_CONFIRMATION_REQUIRED') {
+      return errorResponse('CONFLICT', 'An approved or pending discount already exists. Confirm replacement before requesting a new discount.', 409);
     }
     return errorResponse('INTERNAL_ERROR', err.message || 'Failed to apply discount', 500);
   }

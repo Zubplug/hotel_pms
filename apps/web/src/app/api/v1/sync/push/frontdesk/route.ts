@@ -103,6 +103,19 @@ async function reconcileOfflineRoomDiscount(
     throw new Error(`DISCOUNT_PROPERTY_MISMATCH: Reservation room ${reservationRoomId} is not in this property`);
   }
 
+  const existingApprovalId = typeof resRoom?.discountApprovalId === 'string'
+    ? resRoom.discountApprovalId.replace(/^PENDING:/, '')
+    : null;
+  const existingDiscountIsPending = typeof resRoom?.discountApprovalId === 'string'
+    && resRoom.discountApprovalId.startsWith('PENDING:');
+  const hasExistingDiscount = Boolean(
+    ['PERCENTAGE', 'FIXED_AMOUNT'].includes(String(resRoom?.discountType || '').toUpperCase()) &&
+    (existingApprovalId || Number(resRoom?.discountAmount || 0) > 0 || Number(resRoom?.discountPercent || 0) > 0),
+  );
+  if (hasExistingDiscount && args.payload.replaceExistingDiscount !== true) {
+    throw new Error('DISCOUNT_REPLACEMENT_CONFIRMATION_REQUIRED: an existing room discount must be explicitly replaced');
+  }
+
   const approval = await tx.approvalRequest.upsert({
     where: { idempotencyKey: `offline_discount:${args.idempotencyKey}` },
     create: {
@@ -152,11 +165,28 @@ async function reconcileOfflineRoomDiscount(
     },
   });
 
-  if (resRoom && !resRoom.discountApprovalId) {
-    await tx.reservationRoom.update({
-      where: { id: resRoom.id },
-      data: { discountApprovalId: `PENDING:${approval.id}` },
-    });
+  if (resRoom) {
+    if (existingApprovalId && existingApprovalId !== approval.id && existingDiscountIsPending) {
+      await tx.approvalRequest.updateMany({
+        where: { id: existingApprovalId, type: 'DISCOUNT', status: 'PENDING' },
+        data: { status: 'CANCELLED', reviewedBy: args.actorId, reviewedAt: new Date() },
+      });
+    }
+    // Preserve an approved discount while a replacement waits for approval.
+    // Pending requests can still be replaced immediately because they are not
+    // active concessions.
+    if (!hasExistingDiscount || existingDiscountIsPending) {
+      await tx.reservationRoom.update({
+        where: { id: resRoom.id },
+        data: {
+          discountType: args.payload.discountType || 'PERCENTAGE',
+          discountAmount: Number(args.payload.discountAmount || 0),
+          discountPercent: Number(args.payload.discountPercent || 0),
+          discountReason: args.payload.reason || 'Offline room discount request',
+          discountApprovalId: `PENDING:${approval.id}`,
+        },
+      });
+    }
   }
 
   return approval;

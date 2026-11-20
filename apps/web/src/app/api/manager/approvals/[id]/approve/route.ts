@@ -501,6 +501,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             });
             if (!resRoom) throw new Error('RESERVATION_ROOM_NOT_FOUND');
             if (resRoom.reservation.propertyId !== approval.propertyId) throw new Error('PROPERTY_MISMATCH');
+
+            const replacementOfApprovalId = typeof snapshot.replacementOfApprovalId === 'string'
+              ? snapshot.replacementOfApprovalId
+              : null;
+            if (replacementOfApprovalId) {
+                // A replacement is staged while the previous approved
+                // concession remains active. Do not apply it if another
+                // request has changed the room since this request was made.
+                if (resRoom.discountApprovalId !== replacementOfApprovalId) {
+                    throw new Error('DISCOUNT_REPLACEMENT_STALE');
+                }
+            } else if (resRoom.discountApprovalId !== `PENDING:${approval.id}`) {
+                // Initial requests and replacements of an already-pending
+                // request must still own the room pointer before activation.
+                throw new Error('DISCOUNT_REQUEST_STALE');
+            }
             
             // Validate original rate hasn't changed
             if (Number(resRoom.rateAmount) !== originalRate) {
@@ -704,6 +720,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (err.message === 'BANK_DETAILS_REQUIRED') return errorResponse('BAD_REQUEST', 'Bank details are required for a bank transfer refund.', 400);
     if (err.message === 'REDUCED_STAY_METADATA_MISSING' || err.message === 'REDUCED_STAY_CHARGES_UNAVAILABLE' || err.message === 'REDUCED_STAY_CHARGES_CHANGED') return errorResponse('CONFLICT', 'The unused room nights changed; review this reduced-stay refund before approving it.', 409);
     if (err.message === 'CONFLICT') return errorResponse('CONFLICT', 'Approval request is no longer pending', 409);
+    if (err.message === 'DISCOUNT_REPLACEMENT_STALE') return errorResponse('CONFLICT', 'This discount replacement is no longer current; review the room discount before approving it.', 409);
+    if (err.message === 'DISCOUNT_REQUEST_STALE') return errorResponse('CONFLICT', 'This discount request is no longer current; review the room discount before approving it.', 409);
 
     return errorResponse('INTERNAL_ERROR', 'Unexpected error processing approval', 500);
   }
