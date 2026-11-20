@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
   if (!entryId || !Number.isFinite(amount) || amount <= 0 || !reference) return errorResponse('BAD_REQUEST', 'Entry, amount, and reference are required', 400);
   if (!['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CHEQUE', 'OTHER'].includes(method)) return errorResponse('BAD_REQUEST', 'Invalid settlement method', 400);
   const ctx = await requireOrganizationContext(session.user.id);
+  const staff = await prisma.staff.findFirst({ where: { userId: session.user.id }, select: { id: true } });
+  if (!staff) return errorResponse('UNAUTHORIZED', 'Staff record not found', 401);
   const entry = await prisma.cityLedgerEntry.findUnique({ where: { id: entryId }, include: { account: true, invoice: true, allocations: true } });
   const isCorporateAdvance = entry?.type === 'PAYMENT' && entry.account.type === 'CORPORATE';
   if (!entry || !ctx.propertyIds.includes(entry.propertyId) || entry.status !== 'OPEN' || (entry.type !== 'TRANSFER_IN' && !isCorporateAdvance)) {
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
     const paid = entry.allocations.filter(allocation => allocation.invoiceId === invoiceId).reduce((sum, allocation) => sum + Number(allocation.amount), 0);
     if (amount > Number(entry.amount) - paid + 0.01) return errorResponse('CONFLICT', 'Settlement exceeds the walkout invoice balance', 409);
   }
-  const frontdeskSession = await prisma.frontdeskSession.findFirst({ where: { propertyId: entry.propertyId, staffId: session.user.id, status: 'OPEN', controlStatus: 'OPEN' }, select: { id: true } });
+  const frontdeskSession = await prisma.frontdeskSession.findFirst({ where: { propertyId: entry.propertyId, staffId: staff.id, status: 'OPEN', controlStatus: 'OPEN' }, select: { id: true } });
   if (!frontdeskSession) return errorResponse('INVALID_STATE', 'An open Front Desk shift is required to post this payment', 409);
   const response = await fetch(new URL(`/api/v1/accountant/city-ledger/${accountId}/payment`, req.url), { method: 'POST', headers: { ...Object.fromEntries(req.headers.entries()), 'content-type': 'application/json' }, body: JSON.stringify({ amount, method, reference, frontdeskSessionId: frontdeskSession.id, ...(accountType === 'SKIPPER' ? { invoiceId } : {}), idempotencyKey }) });
   const payload = await response.json();

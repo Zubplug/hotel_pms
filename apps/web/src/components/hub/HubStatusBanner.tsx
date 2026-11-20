@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Wifi, WifiOff, HardDrive, Bell, LogOut } from 'lucide-react';
+import { Wifi, WifiOff, HardDrive, Cloud, CalendarDays, LogOut } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useLogout } from '@/hooks/useLogout';
 
@@ -67,21 +67,32 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
   }, []);
 
   return (
-    <div className="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between shadow-sm">
-      <div className="flex items-center gap-4">
-        <h1 className="text-xl font-bold text-white tracking-wide">LODGECORE</h1>
+    <div className="bg-[#081426] border-b border-white/[0.08] px-4 py-3 shadow-[0_8px_30px_rgba(2,8,23,0.18)] sm:px-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-xs font-black tracking-tight text-cyan-200">LC</div>
+        <h1 className="text-base font-bold tracking-[0.18em] text-white sm:text-xl">LODGECORE</h1>
         <div className="h-4 w-px bg-slate-600"></div>
-        <span className="text-slate-300 text-sm">
+        <span className="truncate text-xs text-slate-300 sm:text-sm">
           {user.name || 'User'} • {user.role || 'Staff'}
         </span>
       </div>
 
-      <div className="flex items-center gap-6 text-sm text-slate-300">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300 sm:gap-3 lg:justify-end">
+        <div
+          role="status"
+          aria-live="polite"
+          title={isOnline ? 'Connected to LodgeCore online services' : 'Offline mode: changes will be queued for synchronization'}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold tracking-wide ${
+            isOnline
+              ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+              : 'border-rose-400/25 bg-rose-400/10 text-rose-300'
+          }`}
+        >
           {isOnline ? (
-            <><Wifi className="w-4 h-4 text-emerald-400" /> <span className="text-emerald-400">ONLINE</span></>
+            <><Wifi className="w-4 h-4" aria-hidden="true" /> <span>ONLINE</span></>
           ) : (
-            <><WifiOff className="w-4 h-4 text-rose-400" /> <span className="text-rose-400">OFFLINE</span></>
+            <><WifiOff className="w-4 h-4" aria-hidden="true" /> <span>OFFLINE</span></>
           )}
         </div>
 
@@ -91,30 +102,38 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
               <HardDrive className="w-4 h-4 text-emerald-400" />
               <span>Offline Ready</span>
             </div>
-            <div className="flex flex-col text-xs leading-tight">
-              <span>Sync Queue: {syncQueue} pending</span>
-              {!isOnline && <span className="text-slate-400">Transactions will sync when online.</span>}
-            </div>
+            {!isOnline && (
+              <div className="flex flex-col text-xs leading-tight">
+                <span>Sync Queue: {syncQueue} pending</span>
+                <span className="text-slate-400">Transactions will sync when online.</span>
+              </div>
+            )}
           </>
         ) : (
-          <div className="flex items-center gap-2 text-slate-400">
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-3 py-1.5 text-xs font-semibold text-cyan-200">
+            <Cloud className="h-4 w-4" aria-hidden="true" />
             <span>Cloud Connected</span>
           </div>
         )}
 
-        <div className="h-4 w-px bg-slate-600"></div>
+        <div className="hidden h-5 w-px bg-white/10 sm:block"></div>
         
-        <div className="flex items-center gap-2 font-medium">
-          Business Date: <span className="text-white">{businessDate}</span>
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-400">
+          <CalendarDays className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+          <span>Business Date</span>
+          <span className="font-semibold text-white">{businessDate}</span>
         </div>
 
         <button 
           onClick={() => logout()}
-          className="ml-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition-colors"
+          aria-label="Logout"
+          title="Logout"
+          className="ml-0 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-1.5 text-slate-300 transition-colors hover:border-rose-400/25 hover:bg-rose-400/10 hover:text-rose-300"
         >
-          <LogOut className="w-4 h-4" />
-          <span className="text-sm font-medium">Logout</span>
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden text-xs font-semibold sm:inline">Logout</span>
         </button>
+      </div>
       </div>
     </div>
   );

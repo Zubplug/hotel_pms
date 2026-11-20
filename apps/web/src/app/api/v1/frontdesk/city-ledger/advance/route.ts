@@ -16,9 +16,11 @@ export async function POST(req: NextRequest) {
   if (!accountId || !Number.isFinite(amount) || amount <= 0 || !reference) return errorResponse('BAD_REQUEST', 'Corporate account, positive amount, and reference are required', 400);
   if (!['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CHEQUE', 'OTHER'].includes(method)) return errorResponse('BAD_REQUEST', 'Invalid payment method', 400);
   const context = await requireOrganizationContext(session.user.id);
+  const staff = await prisma.staff.findFirst({ where: { userId: session.user.id }, select: { id: true } });
+  if (!staff) return errorResponse('UNAUTHORIZED', 'Staff record not found', 401);
   const account = await prisma.cityLedgerAccount.findUnique({ where: { id: accountId } });
   if (!account || account.type !== 'CORPORATE' || !context.propertyIds.includes(account.propertyId) || account.status !== 'ACTIVE') return errorResponse('FORBIDDEN', 'Active corporate City Ledger account not found', 403);
-  const frontdeskSession = await prisma.frontdeskSession.findFirst({ where: { propertyId: account.propertyId, staffId: session.user.id, status: 'OPEN', controlStatus: 'OPEN' }, select: { id: true } });
+  const frontdeskSession = await prisma.frontdeskSession.findFirst({ where: { propertyId: account.propertyId, staffId: staff.id, status: 'OPEN', controlStatus: 'OPEN' }, select: { id: true } });
   if (!frontdeskSession) return errorResponse('INVALID_STATE', 'An open Front Desk shift is required to receive an advance', 409);
   const response = await fetch(new URL(`/api/v1/accountant/city-ledger/${accountId}/payment`, req.url), { method: 'POST', headers: { ...Object.fromEntries(req.headers.entries()), 'content-type': 'application/json' }, body: JSON.stringify({ amount, method, reference, frontdeskSessionId: frontdeskSession.id, idempotencyKey: String(body.idempotencyKey || `corporate-advance:${accountId}:${crypto.randomUUID()}`) }) });
   return new Response(await response.text(), { status: response.status, headers: { 'content-type': 'application/json' } });

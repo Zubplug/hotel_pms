@@ -33,11 +33,12 @@ export async function POST(
     if (!ALLOWED_METHODS.includes(method)) return errorResponse('BAD_REQUEST', `Invalid payment method. Allowed: ${ALLOWED_METHODS.join(', ')}`, 400);
 
     const ctx = await requireOrganizationContext(session.user.id);
+    const staff = await prisma.staff.findFirst({ where: { userId: session.user.id }, select: { id: true } });
     const account = await prisma.cityLedgerAccount.findUnique({ where: { id: accountId }, include: { property: true } });
     if (!account || !ctx.propertyIds.includes(account.propertyId)) return errorResponse('FORBIDDEN', 'City ledger account is not accessible', 403);
     if (frontdeskSessionId) {
       const frontdeskSession = await prisma.frontdeskSession.findUnique({ where: { id: frontdeskSessionId }, select: { propertyId: true, staffId: true, status: true, controlStatus: true } });
-      if (!frontdeskSession || frontdeskSession.propertyId !== account.propertyId || frontdeskSession.staffId !== session.user.id || frontdeskSession.status !== 'OPEN' || frontdeskSession.controlStatus !== 'OPEN') return errorResponse('INVALID_STATE', 'Front Desk shift is not open for this payment', 409);
+      if (!staff || !frontdeskSession || frontdeskSession.propertyId !== account.propertyId || frontdeskSession.staffId !== staff.id || frontdeskSession.status !== 'OPEN' || frontdeskSession.controlStatus !== 'OPEN') return errorResponse('INVALID_STATE', 'Front Desk shift is not open for this payment', 409);
     }
     if (account.status !== 'ACTIVE') return errorResponse('INVALID_STATE', 'City ledger account is not active', 409);
 
