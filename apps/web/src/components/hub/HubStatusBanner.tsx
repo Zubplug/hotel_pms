@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Wifi, WifiOff, HardDrive, Cloud, CalendarDays, LogOut } from 'lucide-react';
+import { Wifi, WifiOff, HardDrive, CalendarDays, LogOut } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useLogout } from '@/hooks/useLogout';
 
@@ -79,7 +79,7 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300 sm:gap-3 lg:justify-end">
-        {isDesktop && (
+        {isDesktop && !isOnline && (
           <div
             role="status"
             aria-live="polite"
@@ -98,7 +98,7 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
           </div>
         )}
 
-        {isDesktop ? (
+        {isDesktop && !isOnline ? (
           <>
             <div className="flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-emerald-400" />
@@ -111,12 +111,7 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
               </div>
             )}
           </>
-        ) : (
-          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-3 py-1.5 text-xs font-semibold text-cyan-200">
-            <Cloud className="h-4 w-4" aria-hidden="true" />
-            <span>Cloud Connected</span>
-          </div>
-        )}
+        ) : null}
 
         <div className="hidden h-5 w-px bg-white/10 sm:block"></div>
         

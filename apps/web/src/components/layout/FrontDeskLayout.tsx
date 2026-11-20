@@ -555,7 +555,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           )}
 
           {/* Offline sync indicator */}
-          <SyncIndicator />
+          {isDesktopMode && !isOnline && <SyncIndicator />}
 
           {/* User Profile */}
           <DropdownMenu>

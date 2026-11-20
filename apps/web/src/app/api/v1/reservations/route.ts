@@ -62,7 +62,9 @@ export async function GET(req: NextRequest) {
         where,
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: { checkIn: 'asc' },
+        // Front-desk lists should surface the newest booking/activity first.
+        // The client also applies this ordering for the offline provider.
+        orderBy: { updatedAt: 'desc' },
         include: {
           primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true } },
           property: { select: { name: true, city: true } },

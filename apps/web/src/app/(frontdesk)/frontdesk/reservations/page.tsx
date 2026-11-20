@@ -18,6 +18,8 @@ interface Reservation {
   status: string;
   checkIn: string;
   checkOut: string;
+  createdAt?: string;
+  updatedAt?: string;
   primaryGuest: { firstName: string; lastName: string; phone?: string };
   reservationRooms: Array<{ room?: { number: string; status: string } | null; roomType?: { name: string } | null; }>;
   folio?: { balance: number };
@@ -95,7 +97,13 @@ export default function FrontDeskReservationsPage() {
   // Both providers may return complete history, so apply the same status rule
   // here to prevent cancelled and checked-out records from appearing online or
   // offline.
-  const visibleReservations = reservations.filter(res => FRONT_DESK_RESERVATION_STATUSES.has(res.status));
+  const visibleReservations = reservations
+    .filter(res => FRONT_DESK_RESERVATION_STATUSES.has(res.status))
+    .sort((a, b) => {
+      const timestamp = (reservation: Reservation) =>
+        new Date(reservation.updatedAt || reservation.createdAt || reservation.checkIn).getTime() || 0;
+      return timestamp(b) - timestamp(a);
+    });
   const filteredReservations = visibleReservations.filter(res => {
     if (activeFilter === 'DEPARTURES') {
       const today = new Date().toISOString().split('T')[0];

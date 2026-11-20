@@ -684,6 +684,8 @@ public class OfflinePMSInterop
                     confirmationNumber = !string.IsNullOrEmpty(r.ConfirmationNumber) ? r.ConfirmationNumber : (r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper()),
                     status = r.Status,
                     propertyId = r.PropertyId,
+                    createdAt = r.CreatedAt,
+                    updatedAt = r.UpdatedAt,
                     corporateAccountId = r.CorporateAccountId,
                     corporateAccount = r.CorporateAccount == null ? null : new {
                         id = r.CorporateAccount.Id,
