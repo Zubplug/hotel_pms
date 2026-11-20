@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import CorporateWalletCreditModal from './CorporateWalletCreditModal';
+import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
 
 type IconName = 'grid' | 'calendar' | 'building' | 'receipt' | 'wallet' | 'sparkles' | 'menu' | 'arrow' | 'logout' | 'close';
 
@@ -45,7 +47,17 @@ export default function CorporatePortalFrame({ children }: { children: React.Rea
   const [mobileOpen, setMobileOpen] = useState(false);
 
   if (!isPortalPath(pathname)) {
-    return <><header className="corporate-public-header"><div className="container corporate-public-header-inner"><Link href="/corporate" className="corporate-public-brand"><span className="corporate-brand-mark">S</span><span>Stanzel Grand Resort</span></Link><Link href="/corporate/login" className="corporate-public-signin">Corporate portal <Icon name="arrow" size={15} /></Link></div></header><main className="corporate-public-main"><div className="container corporate-public-container">{children}</div></main><footer className="corporate-public-footer"><div className="container">Stanzel Grand Resort <span>·</span> Corporate services</div></footer></>;
+    return <>
+      <Header />
+      <main
+        id="main-content"
+        className="corporate-public-main"
+        style={{ paddingTop: 'calc(var(--nav-height) + var(--space-8))' }}
+      >
+        <div className="container corporate-public-container">{children}</div>
+      </main>
+      <Footer />
+    </>;
   }
 
   const page = currentPage(pathname);
