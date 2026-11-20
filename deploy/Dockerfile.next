@@ -33,6 +33,15 @@ RUN --mount=type=cache,id=hotel-pms-pnpm-store,target=/pnpm/store,sharing=locked
 COPY . .
 RUN pnpm --filter "$APP" build
 
+# Next.js standalone tracing does not reliably include Prisma's native query
+# engine when the client lives in a pnpm workspace package. Stage the engine
+# explicitly so the runtime image can place it beside the standalone server.
+RUN set -eux; \
+    engine="$(find /app -type f -name 'libquery_engine-debian-openssl-3.0.x.so.node' -print -quit)"; \
+    test -n "$engine"; \
+    mkdir -p /app/prisma-engine; \
+    cp "$engine" /app/prisma-engine/libquery_engine-debian-openssl-3.0.x.so.node
+
 FROM base AS runtime
 ARG APP
 ENV NODE_ENV=production
@@ -44,6 +53,8 @@ ENV APP="$APP"
 COPY --from=build /app/apps/${APP}/.next/standalone ./
 COPY --from=build /app/apps/${APP}/.next/static ./apps/${APP}/.next/static
 COPY --from=build /app/apps/${APP}/public ./apps/${APP}/public
+# Prisma searches the standalone server directory for the native engine.
+COPY --from=build /app/prisma-engine/libquery_engine-debian-openssl-3.0.x.so.node ./apps/${APP}/.next/server/
 
 EXPOSE 3000
 CMD ["sh", "-c", "node apps/$APP/server.js"]
