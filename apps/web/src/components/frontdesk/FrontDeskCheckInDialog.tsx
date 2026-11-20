@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight, Wallet, LogIn, X, Printer } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight, Wallet, LogIn, X, Printer, Monitor } from 'lucide-react';
 import { format } from 'date-fns';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -23,9 +23,9 @@ interface FrontDeskCheckInDialogProps {
 export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, propertyId }: FrontDeskCheckInDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isOnline } = useLodgeCoreProvider();
   
-  const [phase, setPhase] = useState<'IDLE' | 'READING' | 'OVERWRITE_CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('IDLE');
+  const [phase, setPhase] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'READING' | 'OVERWRITE_CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('IDLE');
   const [operationId, setOperationId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [existingCardData, setExistingCardData] = useState<any>(null);
@@ -41,7 +41,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       if (!reservationId) return null;
       return await provider.reservations.get(reservationId);
     },
-    enabled: !!reservationId && open,
+    enabled: !isOnline && !!reservationId && open,
   });
 
   const reservation = resData?.data;
@@ -95,6 +95,10 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   }, [phase, operationId, queryClient, propertyId]);
 
   const handleStartCheckIn = async () => {
+    if (isOnline) {
+      setPhase('OFFLINE_REQUIRED');
+      return;
+    }
     try {
       setPhase('READING'); setErrorMsg(null);
       const data = await provider.keycards.read();
@@ -104,6 +108,10 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   };
 
   const executeCheckInEncoding = async () => {
+    if (isOnline) {
+      setPhase('OFFLINE_REQUIRED');
+      return;
+    }
     try {
       setPhase('ENCODING'); setErrorMsg(null); setOperationId(null); 
       const data = await provider.reservations.checkIn(reservationId!, "System", "Device1", { 
@@ -192,7 +200,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
             </div>
             <div>
               <h2 className="text-lg font-bold text-white leading-tight">Check-In Guest</h2>
-              <p className="text-slate-500 text-xs font-medium mt-0.5">Issue keycard and authorize stay</p>
+              <p className="text-slate-500 text-xs font-medium mt-0.5">{isOnline ? 'Available on the offline desktop terminal' : 'Issue keycard and authorize stay'}</p>
             </div>
           </div>
           {phase !== 'ENCODING' && phase !== 'READING' && (
@@ -205,7 +213,28 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         {/* Body */}
         <div className="relative z-10 flex-1 overflow-y-auto p-6 flex flex-col justify-center min-h-[300px]">
           
-          {isFetching ? (
+          {isOnline ? (
+            <div className="flex flex-col items-center text-center gap-6 animate-in zoom-in-95 duration-300 px-2">
+              <div className="relative">
+                <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
+                <div className="relative w-24 h-24 bg-amber-500/10 border border-amber-500/25 rounded-full flex items-center justify-center">
+                  <Monitor className="h-10 w-10 text-amber-300" />
+                </div>
+              </div>
+              <div className="max-w-[330px]">
+                <h3 className="text-xl font-bold text-white mb-2">Use the LodgeCore Desktop terminal</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  Check-In issues and encodes a physical room keycard through the USB encoder, so it is available only from the offline desktop terminal at the front desk.
+                </p>
+              </div>
+              <div className="w-full rounded-2xl bg-amber-500/8 border border-amber-500/20 px-4 py-3 text-left text-xs text-amber-200/80 leading-relaxed">
+                Open LodgeCore Desktop on the computer connected to the keycard encoder, then complete the guest check-in there.
+              </div>
+              <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 shadow-[0_0_20px_-5px_rgba(59,130,246,0.5)] transition-all">
+                Close
+              </button>
+            </div>
+          ) : isFetching ? (
             <div className="flex flex-col items-center text-center gap-5 py-8 animate-in fade-in duration-300">
               <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
               <p className="text-slate-400 text-sm">Fetching reservation details…</p>
