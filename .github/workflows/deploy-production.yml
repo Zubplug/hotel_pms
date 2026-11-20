@@ -133,6 +133,8 @@ jobs:
           echo "Building: ${SERVICES[*]}"
           $COMPOSE build "${SERVICES[@]}"
           $COMPOSE up -d --no-build --force-recreate "${SERVICES[@]}" nginx
+          sudo docker exec deploy-nginx-1 nginx -t
+          sudo docker exec deploy-nginx-1 nginx -s reload
           sleep 10
           $COMPOSE ps
 
