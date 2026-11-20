@@ -216,13 +216,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        // Employer-ID login is available to all employees, but only front-desk
-        // roles may enter the operational PMS. Other employee roles remain
-        // restricted to the HR self-service area. Evaluate this after the
-        // super-admin role normalization above so the session policy reflects
-        // the final authoritative role.
-        const isFrontDeskRole = ['RECEPTIONIST', 'FRONT_DESK', 'FRONT_DESK_MANAGER'].includes(primaryRole);
-
         // Return user object
         return {
           id: user.id,
@@ -236,7 +229,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           sessionVersion: user.sessionVersion || 1,
           propertyId,
           organizationId,
-          selfServiceOnly: isEmployeeLogin && !isFrontDeskRole
+          selfServiceOnly: isEmployeeLogin
         };
       },
     }),
