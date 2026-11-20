@@ -10,6 +10,11 @@ services:
       - .env.aws
     environment:
       PORT: 3000
+      # PMS owns the web session. Keep its public origin and legacy secret
+      # alias aligned with the canonical Auth.js secret.
+      NEXT_PUBLIC_SITE_URL: https://pms.zubplug.com.ng
+      NEXTAUTH_URL: https://pms.zubplug.com.ng
+      NEXTAUTH_SECRET: ${AUTH_SECRET}
     restart: unless-stopped
     expose:
       - "3000"
@@ -35,6 +40,7 @@ services:
       # PMS hostname from the shared env file, or Auth.js will send portal
       # login, callback, and logout URLs to the PMS service.
       NEXTAUTH_URL: https://lodgecore.zubplug.com.ng
+      NEXTAUTH_SECRET: ${AUTH_SECRET}
     restart: unless-stopped
     expose:
       - "3000"
@@ -53,6 +59,7 @@ services:
       PORT: 3000
       NEXT_PUBLIC_SITE_URL: https://www.stanzelgrandresort.org
       PUBLIC_SITE_ORIGIN: https://www.stanzelgrandresort.org
+      NEXTAUTH_SECRET: ${AUTH_SECRET}
       # Stanzel calls the public booking and corporate APIs server-to-server.
       # Keep these on the private Compose network so they cannot accidentally
       # route through the PMS hostname or depend on public DNS.

@@ -37,6 +37,10 @@ const webAuthUserSelect = {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
+  // Keep the server-side Auth.js runtime on the same canonical secret as the
+  // edge middleware. NEXTAUTH_SECRET remains a legacy compatibility fallback,
+  // but AUTH_SECRET is the production source of truth.
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   trustHost: true,
   pages: {
     signIn: '/login',
