@@ -4,13 +4,6 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import prisma from '@hotel-pms/db';
 import bcrypt from 'bcryptjs';
 
-// JWT sessions should remain fast even when the external production database
-// has a transient latency spike. Revalidating the account on every
-// /api/auth/session request turns a slow Neon connection into an application-
-// wide login loop. Revocation is still checked periodically below.
-const SESSION_REVALIDATION_INTERVAL_MS = 5 * 60 * 1000;
-const SESSION_REVALIDATION_TIMEOUT_MS = 1500;
-
 // Keep web email/password authentication independent from mobile-only fields.
 // An older production database can authenticate web users without selecting
 // mobile PIN or password-recovery columns that may still be awaiting migration.
@@ -252,40 +245,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.propertyId = (user as any).propertyId;
         token.organizationId = (user as any).organizationId;
         token.selfServiceOnly = (user as any).selfServiceOnly;
-        token.sessionValidatedAt = Date.now();
       } else if (token.id) {
-        // Validate session version periodically to support remote revocation,
-        // but do not make every browser session refresh wait on Neon. A
-        // transient database delay must not turn into a 502/login loop.
-        const lastValidatedAt = Number((token as any).sessionValidatedAt || 0);
-        if (Date.now() - lastValidatedAt >= SESSION_REVALIDATION_INTERVAL_MS) {
-          // Mark the attempt before querying so repeated concurrent refreshes
-          // do not stampede the database during a latency incident.
-          (token as any).sessionValidatedAt = Date.now();
-          try {
-            const result = await Promise.race([
-              prisma.user.findUnique({
-                where: { id: token.id as string },
-                select: {
-                  sessionVersion: true,
-                  demoAccount: { select: { status: true, expiresAt: true } },
-                },
-              }).then((dbUser) => ({ timedOut: false, dbUser })),
-              new Promise<{ timedOut: true; dbUser: null }>((resolve) =>
-                setTimeout(() => resolve({ timedOut: true, dbUser: null }), SESSION_REVALIDATION_TIMEOUT_MS)
-              ),
-            ]);
-
-            if (!result.timedOut && (!result.dbUser || result.dbUser.sessionVersion !== token.sessionVersion || (result.dbUser.demoAccount && (result.dbUser.demoAccount.status !== 'ACTIVE' || result.dbUser.demoAccount.expiresAt <= new Date())))) {
-              // Revoke session if the user was deleted, disabled, expired, or
-              // their session version was bumped.
-              return null as any;
+        // Validate session version on subsequent requests to support remote revocation
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: {
+              sessionVersion: true,
+              demoAccount: { select: { status: true, expiresAt: true } },
             }
-          } catch (error) {
-            // Availability-first: keep an already-authenticated JWT during a
-            // transient database outage. The next scheduled check retries.
-            console.warn('[auth] session revalidation deferred:', error instanceof Error ? error.message : 'database error');
+          });
+          if (!dbUser || dbUser.sessionVersion !== token.sessionVersion || (dbUser.demoAccount && (dbUser.demoAccount.status !== 'ACTIVE' || dbUser.demoAccount.expiresAt <= new Date()))) {
+            // Revoke session if user was deleted or sessionVersion bumped
+            return null as any; 
           }
+        } catch (e) {
+          // Ignore DB errors to prevent locking out on transient network issues
         }
       }
       return token;

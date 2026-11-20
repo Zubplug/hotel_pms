@@ -10,8 +10,6 @@ services:
       - .env.aws
     environment:
       PORT: 3000
-      NEXT_PUBLIC_SITE_URL: https://pms.zubplug.com.ng
-      NEXTAUTH_URL: https://pms.zubplug.com.ng
     restart: unless-stopped
     expose:
       - "3000"
