@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Loader2, AlertCircle, CheckCircle2, KeySquare, Search, ArrowRight, X, ChevronLeft } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, KeySquare, Search, ArrowRight, X, ChevronLeft, Monitor } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 import { cn } from '@/lib/utils';
@@ -17,7 +17,7 @@ interface FrontDeskReencodeCardDialogProps {
 
 export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: FrontDeskReencodeCardDialogProps) {
   const router = useRouter();
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isOnline } = useLodgeCoreProvider();
 
   const [phase, setPhase] = useState<'SELECT' | 'PROMPT_ENCODE' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('SELECT');
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,7 +37,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
       // re-encoded room key.
       return (Array.isArray(rows) ? rows : []).filter((reservation: any) => reservation.status === 'CHECKED_IN');
     },
-    enabled: open && phase === 'SELECT',
+    enabled: !isOnline && open && phase === 'SELECT',
   });
 
   useEffect(() => {
@@ -65,6 +65,10 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
   const handleSelectReservation = (reservation: any) => { setSelectedReservation(reservation); setPhase('PROMPT_ENCODE'); };
 
   const handleStartEncode = async () => {
+    if (isOnline) {
+      setErrorMsg('Re-encoding a key card is available only from the offline desktop terminal.');
+      return;
+    }
     try {
       setPhase('ENCODING'); setHardwareStatus('STARTING'); setErrorMsg(null);
       if (selectedReservation?.status !== 'CHECKED_IN') { setPhase('FAILED'); setErrorMsg('Cards can only be encoded for checked-in reservations.'); return; }
@@ -119,7 +123,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
             </div>
             <div>
               <h2 className="text-lg font-bold text-white leading-tight">Re-Encode Key Card</h2>
-              <p className="text-slate-500 text-xs font-medium mt-0.5">Create a new key for an in-house guest</p>
+              <p className="text-slate-500 text-xs font-medium mt-0.5">{isOnline ? 'Available on the offline desktop terminal' : 'Create a new key for an in-house guest'}</p>
             </div>
           </div>
           {phase !== 'ENCODING' && (
@@ -132,8 +136,30 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
         {/* Body */}
         <div className="relative z-10 flex-1 overflow-hidden min-h-[380px] flex flex-col">
 
+          {/* ONLINE NOTICE */}
+          {isOnline && (
+            <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in zoom-in-95 duration-300">
+              <div className="relative w-24 h-24 mb-7">
+                <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
+                <div className="relative w-full h-full bg-amber-500/10 border border-amber-500/25 rounded-full flex items-center justify-center">
+                  <Monitor className="h-10 w-10 text-amber-300" />
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">Use the LodgeCore Desktop terminal</h3>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-[340px] mb-6">
+                Re-encoding a key card requires the USB encoder connected to the offline desktop terminal at the front desk.
+              </p>
+              <div className="w-full rounded-2xl bg-amber-500/8 border border-amber-500/20 px-4 py-3 text-left text-xs text-amber-200/80 leading-relaxed mb-7">
+                Open LodgeCore Desktop on the encoder computer to search for the guest and create the new key card.
+              </div>
+              <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] transition-all">
+                Close
+              </button>
+            </div>
+          )}
+
           {/* SELECT PHASE */}
-          {phase === 'SELECT' && (
+          {!isOnline && phase === 'SELECT' && (
             <div className="flex flex-col h-full overflow-hidden p-6 animate-in fade-in duration-200">
               <div className="relative mb-5 shrink-0">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -184,7 +210,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
           )}
 
           {/* PROMPT_ENCODE PHASE */}
-          {phase === 'PROMPT_ENCODE' && (
+          {!isOnline && phase === 'PROMPT_ENCODE' && (
             <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in zoom-in-95 duration-300">
               <div className="w-20 h-20 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-2xl font-black text-indigo-300 mb-6 shadow-[0_0_30px_-8px_rgba(99,102,241,0.4)]">
                 {initials}
@@ -207,7 +233,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
           )}
 
           {/* ENCODING PHASE */}
-          {phase === 'ENCODING' && (
+          {!isOnline && phase === 'ENCODING' && (
             <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in fade-in duration-300">
               <div className="relative w-24 h-24 mb-8">
                 <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping" />
@@ -221,7 +247,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
           )}
 
           {/* SUCCESS PHASE */}
-          {phase === 'SUCCESS' && (
+          {!isOnline && phase === 'SUCCESS' && (
             <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in zoom-in-95 duration-300">
               <div className="relative w-24 h-24 mb-8">
                 <div className="absolute inset-0 bg-emerald-500/15 rounded-full" />

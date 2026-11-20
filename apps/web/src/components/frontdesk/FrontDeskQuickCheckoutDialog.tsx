@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { CreditCard, Loader2, AlertCircle, CheckCircle2, Key, ArrowRight, Wallet, X, Printer } from 'lucide-react';
+import { CreditCard, Loader2, AlertCircle, CheckCircle2, Key, ArrowRight, Wallet, X, Printer, Monitor } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { cn } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
@@ -23,8 +23,8 @@ const formatCurrency = (amount: number) =>
 
 export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, initialReservation }: FrontDeskQuickCheckoutDialogProps) {
   const queryClient = useQueryClient();
-  const { provider } = useLodgeCoreProvider();
-  const [step, setStep] = useState<'IDLE' | 'LOADING' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const { provider, isOnline } = useLodgeCoreProvider();
+  const [step, setStep] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'LOADING' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   const [reservation, setReservation] = useState<any>(null);
   const [showManagerOverride, setShowManagerOverride] = useState(false);
@@ -35,6 +35,11 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     let cancelled = false;
     const load = async () => {
       setErrorMsg('');
+      if (isOnline) {
+        setReservation(null);
+        setStep('OFFLINE_REQUIRED');
+        return;
+      }
       if (!initialReservation) { setReservation(null); setStep('IDLE'); return; }
       setReservation(initialReservation);
       const hasDetails = Boolean(
@@ -54,9 +59,13 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     };
     void load();
     return () => { cancelled = true; };
-  }, [open, initialReservation, provider]);
+  }, [open, initialReservation, isOnline, provider]);
 
   const handleReadCard = async () => {
+    if (isOnline) {
+      setStep('OFFLINE_REQUIRED');
+      return;
+    }
     setStep('READING'); setErrorMsg('');
     try {
       const data = await provider.keycards.read();
@@ -82,6 +91,10 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
   };
 
   const handleCheckout = async (managerId?: string, managerPin?: string, reason?: string) => {
+    if (isOnline) {
+      setStep('OFFLINE_REQUIRED');
+      return;
+    }
     if (!reservation) return;
     setStep('CHECKING_OUT');
     try {
@@ -164,7 +177,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white leading-tight">Quick Checkout</h2>
-                <p className="text-slate-500 text-xs font-medium mt-0.5">Read physical card to checkout guest</p>
+                <p className="text-slate-500 text-xs font-medium mt-0.5">{isOnline ? 'Available on the offline desktop terminal' : 'Read physical card to checkout guest'}</p>
               </div>
             </div>
             {step !== 'CHECKING_OUT' && step !== 'ERASING' && (
@@ -192,6 +205,30 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                 </div>
                 <button onClick={handleReadCard} className="h-12 px-8 rounded-2xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] hover:shadow-[0_0_28px_-5px_rgba(99,102,241,0.7)] transition-all hover:-translate-y-0.5 flex items-center gap-2">
                   Read Keycard <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* OFFLINE_REQUIRED */}
+            {step === 'OFFLINE_REQUIRED' && (
+              <div className="flex flex-col items-center text-center gap-6 animate-in zoom-in-95 duration-300 px-2">
+                <div className="relative">
+                  <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
+                  <div className="relative w-24 h-24 bg-amber-500/10 border border-amber-500/25 rounded-full flex items-center justify-center">
+                    <Monitor className="h-10 w-10 text-amber-300" />
+                  </div>
+                </div>
+                <div className="max-w-[330px]">
+                  <h3 className="text-xl font-bold text-white mb-2">Use the LodgeCore Desktop terminal</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Quick Checkout reads and erases physical room keycards through the USB encoder, so it is available only from the offline desktop terminal at the front desk.
+                  </p>
+                </div>
+                <div className="w-full rounded-2xl bg-amber-500/8 border border-amber-500/20 px-4 py-3 text-left text-xs text-amber-200/80 leading-relaxed">
+                  Open LodgeCore Desktop on the computer connected to the keycard encoder, then complete the checkout there.
+                </div>
+                <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] transition-all">
+                  Close
                 </button>
               </div>
             )}
