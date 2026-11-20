@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,8 +17,25 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // On foreground resume, WebSocket reconnect will trigger data refresh.
 }
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('[LodgeCore] Flutter error: ${details.exception}');
+    debugPrintStack(stackTrace: details.stack);
+  };
+
+  ui.PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[LodgeCore] Unhandled error: $error');
+    debugPrintStack(stackTrace: stack);
+    return true;
+  };
+
+  // Flutter's default release ErrorWidget is only an icon on a blank screen.
+  // Keep startup failures visible and actionable for users and support staff.
+  ErrorWidget.builder = (details) =>
+      _AppErrorWidget(message: details.exceptionAsString());
 
   // Firebase is only active when GoogleService-Info.plist (iOS) /
   // google-services.json (Android) are present in the project.
@@ -30,7 +50,67 @@ void main() async {
     );
   }
 
-  runApp(const ProviderScope(child: LodgeCoreManagerApp()));
+  await runZonedGuarded(
+    () async => runApp(const ProviderScope(child: LodgeCoreManagerApp())),
+    (error, stack) {
+      debugPrint('[LodgeCore] Zone error: $error');
+      debugPrintStack(stackTrace: stack);
+    },
+  );
+}
+
+class _AppErrorWidget extends StatelessWidget {
+  final String message;
+
+  const _AppErrorWidget({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF070D1A),
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  color: Color(0xFFD6A956),
+                  size: 56,
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'LodgeCore could not start',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Please close and reopen the app. If the problem continues, contact support.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF94A3B8), height: 1.4),
+                ),
+                if (const bool.fromEnvironment('dart.vm.product') == false) ...[
+                  const SizedBox(height: 18),
+                  SelectableText(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class LodgeCoreManagerApp extends ConsumerStatefulWidget {

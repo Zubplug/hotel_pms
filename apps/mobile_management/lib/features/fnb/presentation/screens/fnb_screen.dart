@@ -39,7 +39,7 @@ class FnbScreen extends ConsumerWidget {
         ),
         data: (data) => _FnbBody(
           data: data,
-          onRefresh: () async => ref.invalidate(fnbDashboardProvider),
+          onRefresh: () => ref.refresh(fnbDashboardProvider.future),
         ),
       ),
     );

@@ -12,18 +12,28 @@ class AuthNotifier extends StateNotifier<AuthStatus> {
   final TokenStorage _tokenStorage;
   final Ref _ref;
   bool _hasSeenWelcome = false;
+  bool _sessionClearing = false;
 
   AuthNotifier(this._tokenStorage, this._ref) : super(AuthStatus.unknown) {
     _init();
   }
 
   Future<void> _init() async {
-    final preferences = await SharedPreferences.getInstance();
-    _hasSeenWelcome = preferences.getBool(_welcomeShownKey) ?? false;
-    final token = await _tokenStorage.getAccessToken();
-    state = (token != null && token.isNotEmpty)
-        ? AuthStatus.authenticated
-        : AuthStatus.unauthenticated;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      _hasSeenWelcome = preferences.getBool(_welcomeShownKey) ?? false;
+      final token = await _tokenStorage.getAccessToken();
+      state = (token != null && token.isNotEmpty)
+          ? AuthStatus.authenticated
+          : AuthStatus.unauthenticated;
+    } catch (error, stack) {
+      // A corrupted local store must not leave the router permanently on the
+      // boot screen. Treat it as a signed-out device and let the user sign in
+      // again; the error is retained in logs for diagnosis.
+      state = AuthStatus.unauthenticated;
+      // ignore: avoid_print
+      print('[LodgeCore] Auth bootstrap failed: $error\n$stack');
+    }
   }
 
   bool get hasSeenWelcome => _hasSeenWelcome;
@@ -54,6 +64,22 @@ class AuthNotifier extends StateNotifier<AuthStatus> {
     await _tokenStorage.clearTokens();
     await _tokenStorage.clearUserCache();
     _invalidateSessionProviders();
+  }
+
+  /// Clears an expired or rejected API session without calling an authenticated
+  /// endpoint. This is intentionally separate from [logout], which unregisters
+  /// the device from push notifications while its token is still valid.
+  Future<void> expireSession() async {
+    if (_sessionClearing || state == AuthStatus.unauthenticated) return;
+    _sessionClearing = true;
+    try {
+      state = AuthStatus.unauthenticated;
+      await _tokenStorage.clearTokens();
+      await _tokenStorage.clearUserCache();
+      _invalidateSessionProviders();
+    } finally {
+      _sessionClearing = false;
+    }
   }
 
   void _invalidateSessionProviders() {
