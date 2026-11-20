@@ -23,6 +23,8 @@ interface Reservation {
   folio?: { balance: number };
 }
 
+const FRONT_DESK_RESERVATION_STATUSES = new Set(['PENDING', 'RESERVED', 'CONFIRMED', 'CHECKED_IN', 'NO_SHOW']);
+
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
 };
@@ -89,11 +91,12 @@ export default function FrontDeskReservationsPage() {
   const rawData = data as any;
   const reservations: Reservation[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
 
-  // The ALL view intentionally preserves every reservation status returned by
-  // the provider, including NO_SHOW and cancelled/checked-out records. The
-  // online API and offline history provider both return the complete history;
-  // filtering this list to only active stays would hide valid front-desk work.
-  const filteredReservations = reservations.filter(res => {
+  // Keep this operational list focused on reservations front desk can act on.
+  // Both providers may return complete history, so apply the same status rule
+  // here to prevent cancelled and checked-out records from appearing online or
+  // offline.
+  const visibleReservations = reservations.filter(res => FRONT_DESK_RESERVATION_STATUSES.has(res.status));
+  const filteredReservations = visibleReservations.filter(res => {
     if (activeFilter === 'DEPARTURES') {
       const today = new Date().toISOString().split('T')[0];
       return res.status === 'CHECKED_IN' && res.checkOut.startsWith(today);
@@ -104,10 +107,10 @@ export default function FrontDeskReservationsPage() {
     return true;
   });
 
-  const arrivalsCount = reservations.filter(res => res.status === 'CONFIRMED').length;
-  const inHouseCount = reservations.filter(res => res.status === 'CHECKED_IN').length;
-  const noShowCount = reservations.filter(res => res.status === 'NO_SHOW').length;
-  const unpaidCount = reservations.filter(res => Number(res.folio?.balance || 0) > 0).length;
+  const arrivalsCount = visibleReservations.filter(res => res.status === 'CONFIRMED').length;
+  const inHouseCount = visibleReservations.filter(res => res.status === 'CHECKED_IN').length;
+  const noShowCount = visibleReservations.filter(res => res.status === 'NO_SHOW').length;
+  const unpaidCount = visibleReservations.filter(res => Number(res.folio?.balance || 0) > 0).length;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,rgba(79,70,229,0.08),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-24">
