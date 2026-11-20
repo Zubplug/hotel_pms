@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { goBack } from '@/lib/frontdesk-navigation';
-import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet, Landmark, CalendarCheck, Sparkles, ReceiptText } from 'lucide-react';
+import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, AlertCircle, UserPlus, CreditCard, Wallet, Landmark, CalendarCheck, Sparkles, ReceiptText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -22,8 +22,6 @@ interface Reservation {
   reservationRooms: Array<{ room?: { number: string; status: string } | null; roomType?: { name: string } | null; }>;
   folio?: { balance: number };
 }
-
-const ACTIVE_RESERVATION_STATUSES = new Set(['CONFIRMED', 'CHECKED_IN']);
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
@@ -77,7 +75,7 @@ export default function FrontDeskReservationsPage() {
       const status = getStatusQuery();
       const params: any = {
         page: '1',
-        pageSize: '50',
+        pageSize: '100',
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(status ? { status } : {}),
       };
@@ -91,9 +89,11 @@ export default function FrontDeskReservationsPage() {
   const rawData = data as any;
   const reservations: Reservation[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
 
-  // Client-side filtering for complex filters that the API might not natively support yet
-  const activeReservations = reservations.filter(res => ACTIVE_RESERVATION_STATUSES.has(res.status));
-  const filteredReservations = activeReservations.filter(res => {
+  // The ALL view intentionally preserves every reservation status returned by
+  // the provider, including NO_SHOW and cancelled/checked-out records. The
+  // online API and offline history provider both return the complete history;
+  // filtering this list to only active stays would hide valid front-desk work.
+  const filteredReservations = reservations.filter(res => {
     if (activeFilter === 'DEPARTURES') {
       const today = new Date().toISOString().split('T')[0];
       return res.status === 'CHECKED_IN' && res.checkOut.startsWith(today);
@@ -104,9 +104,10 @@ export default function FrontDeskReservationsPage() {
     return true;
   });
 
-  const arrivalsCount = activeReservations.filter(res => res.status === 'CONFIRMED').length;
-  const inHouseCount = activeReservations.filter(res => res.status === 'CHECKED_IN').length;
-  const unpaidCount = activeReservations.filter(res => Number(res.folio?.balance || 0) > 0).length;
+  const arrivalsCount = reservations.filter(res => res.status === 'CONFIRMED').length;
+  const inHouseCount = reservations.filter(res => res.status === 'CHECKED_IN').length;
+  const noShowCount = reservations.filter(res => res.status === 'NO_SHOW').length;
+  const unpaidCount = reservations.filter(res => Number(res.folio?.balance || 0) > 0).length;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,rgba(79,70,229,0.08),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-24">
@@ -147,9 +148,10 @@ export default function FrontDeskReservationsPage() {
           </Button>
             </div>
           </div>
-          <div className="mt-8 grid max-w-3xl grid-cols-3 gap-2 sm:gap-3">
+          <div className="mt-8 grid max-w-4xl grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
             <HeaderMetric icon={CalendarCheck} label="Confirmed" value={arrivalsCount} />
             <HeaderMetric icon={LogIn} label="In-house" value={inHouseCount} />
+            <HeaderMetric icon={AlertCircle} label="No-show" value={noShowCount} tone={noShowCount > 0 ? 'amber' : 'indigo'} />
             <HeaderMetric icon={CreditCard} label="Needs payment" value={unpaidCount} tone={unpaidCount > 0 ? 'amber' : 'emerald'} />
           </div>
         </div>
@@ -223,7 +225,9 @@ export default function FrontDeskReservationsPage() {
                   <div className={`absolute top-0 left-0 w-full h-1.5 ${
                     res.status === 'CHECKED_IN' ? 'bg-blue-500' :
                     arrivalOverdue ? 'bg-red-500' :
-                    res.status === 'CONFIRMED' ? 'bg-emerald-500' : 'bg-slate-300'
+                    res.status === 'CONFIRMED' ? 'bg-emerald-500' :
+                    res.status === 'NO_SHOW' ? 'bg-amber-500' :
+                    res.status === 'CANCELLED' ? 'bg-rose-500' : 'bg-slate-300'
                   }`} />
 
                   <div className="flex justify-between items-start mb-4">
@@ -254,9 +258,13 @@ export default function FrontDeskReservationsPage() {
                     <div className="flex gap-2">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
                         res.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
-                        res.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                        res.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800' :
+                        res.status === 'NO_SHOW' ? 'bg-amber-100 text-amber-800' :
+                        res.status === 'CANCELLED' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
                       }`}>
-                      {res.status === 'CHECKED_IN' ? <LogIn className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      {res.status === 'CHECKED_IN' ? <LogIn className="w-3.5 h-3.5" /> :
+                       res.status === 'NO_SHOW' ? <AlertCircle className="w-3.5 h-3.5" /> :
+                       res.status === 'CANCELLED' ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                         {res.status}
                       </span>
                       {arrivalOverdue && (

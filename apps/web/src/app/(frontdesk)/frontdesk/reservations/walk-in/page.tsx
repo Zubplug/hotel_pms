@@ -16,7 +16,7 @@ export default function WalkInPage() {
         {prefillGuestId && (
           <div className="mb-5 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-sm">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white">✓</span>
-            Returning guest profile linked — available guest credit will be applied after the stay is created.
+            Returning guest profile linked — any available guest credit will be reviewed after the stay is created.
           </div>
         )}
         <FrontDeskReservationForm isWalkIn={true} prefillGuestId={prefillGuestId} />

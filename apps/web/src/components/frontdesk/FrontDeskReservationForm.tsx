@@ -364,7 +364,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
   const { propertyId } = useProperty();
   const { data: enabledModules = [] } = useNavigationModules(propertyId);
   const corporateAccessEnabled = enabledModules.includes('MODULE_OPERATIONS');
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isOnline } = useLodgeCoreProvider();
 
   const [datesInitialized, setDatesInitialized] = useState(false);
 
@@ -577,25 +577,40 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
 
       const res: any = await provider.reservations.create(payload);
 
+      let creditApplicationPending = false;
       if (prefillGuestId && Number(guestCreditToApply?.availableAmount ?? 0) > 0) {
-        const reservationId = res?.data?.newReservation?.id || res?.data?.id || res?.newReservation?.id || res?.id;
-        if (!reservationId) throw new Error('Reservation was created but its ID could not be determined for guest-credit application.');
-        const reservationResponse: any = await provider.reservations.get(reservationId);
-        const reservation = reservationResponse?.data?.newReservation || reservationResponse?.data || reservationResponse?.reservation || reservationResponse;
-        const folios = reservation?.folios || (reservation?.folio ? [reservation.folio] : []);
-        const folio = Array.isArray(folios) ? folios.find((item: any) => item?.id) : null;
-        if (!folio?.id) throw new Error('Reservation was created but its folio could not be found for guest-credit application.');
-        await provider.guestCredits.apply({ folioId: folio.id, guestId: prefillGuestId, amount: Number(guestCreditToApply.availableAmount) });
+        try {
+          const reservationId = res?.data?.newReservation?.id || res?.data?.id || res?.newReservation?.id || res?.id;
+          if (!reservationId) throw new Error('Reservation ID unavailable for guest-credit application.');
+          const reservationResponse: any = await provider.reservations.get(reservationId);
+          const reservation = reservationResponse?.data?.newReservation || reservationResponse?.data || reservationResponse?.reservation || reservationResponse;
+          const folios = reservation?.folios || (reservation?.folio ? [reservation.folio] : []);
+          const folio = Array.isArray(folios) ? folios.find((item: any) => item?.id) : null;
+          if (!folio?.id) throw new Error('Reservation folio unavailable for guest-credit application.');
+          await provider.guestCredits.apply({ folioId: folio.id, guestId: prefillGuestId, amount: Number(guestCreditToApply.availableAmount) });
+        } catch (creditError) {
+          if (!isOnline) throw creditError;
+          // Creating the reservation is the primary operation. Applying a
+          // previous-stay credit is a controlled financial action and may be
+          // restricted for receptionists; never make a successful booking
+          // appear failed or encourage a duplicate submission.
+          console.warn('[ReservationForm] Guest credit remains pending authorization', creditError);
+          creditApplicationPending = true;
+        }
       }
 
-      return { data: res };
+      return { data: res, creditApplicationPending };
     },
     onSuccess: (data) => {
       showActionSuccess({
-        title: prefillGuestId
-          ? 'Reservation created and credit applied'
+        title: data.creditApplicationPending
+          ? 'Reservation created — credit pending approval'
+          : prefillGuestId
+            ? 'Reservation created and credit applied'
           : (isWalkIn ? 'Walk-in created successfully' : 'Reservation created successfully'),
-        description: 'The reservation has been saved and is ready for Front Desk follow-up.',
+        description: data.creditApplicationPending
+          ? 'The available guest credit was preserved. A manager or authorized accounting user can apply it from the reservation folio.'
+          : 'The reservation has been saved and is ready for Front Desk follow-up.',
       });
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });

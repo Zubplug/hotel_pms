@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { CreditCard, Loader2, AlertCircle, Info, User, CheckCircle2, Key, LogIn, LogOut, X } from 'lucide-react';
+import { CreditCard, Loader2, AlertCircle, Info, User, CheckCircle2, Key, LogIn, LogOut, X, Monitor } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -17,17 +17,21 @@ interface FrontDeskReadCardDialogProps {
 
 export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: FrontDeskReadCardDialogProps) {
   const router = useRouter();
-  const { provider } = useLodgeCoreProvider();
-  const [step, setStep] = useState<'IDLE' | 'READING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const { provider, isOnline } = useLodgeCoreProvider();
+  const [step, setStep] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'READING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   const [cardInfo, setCardInfo] = useState<any>(null);
   const [reservation, setReservation] = useState<any>(null);
 
   useEffect(() => {
-    if (open) { setStep('IDLE'); setErrorMsg(''); setCardInfo(null); setReservation(null); }
-  }, [open]);
+    if (open) { setStep(isOnline ? 'OFFLINE_REQUIRED' : 'IDLE'); setErrorMsg(''); setCardInfo(null); setReservation(null); }
+  }, [open, isOnline]);
 
   const handleReadCard = async () => {
+    if (isOnline) {
+      setStep('OFFLINE_REQUIRED');
+      return;
+    }
     setStep('READING'); setErrorMsg('');
     try {
       const data = await provider.keycards.read();
@@ -81,6 +85,29 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
 
         {/* Body */}
         <div className="relative z-10 p-6">
+
+          {step === 'OFFLINE_REQUIRED' && (
+            <div className="py-10 flex flex-col items-center justify-center gap-6 text-center animate-in zoom-in-95 duration-300 px-2">
+              <div className="relative">
+                <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
+                <div className="relative w-24 h-24 bg-amber-500/10 border border-amber-500/25 rounded-full flex items-center justify-center">
+                  <Monitor className="h-10 w-10 text-amber-300" />
+                </div>
+              </div>
+              <div className="max-w-[330px]">
+                <h3 className="text-xl font-bold text-white mb-2">Use the LodgeCore Desktop terminal</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  Reading a physical key card requires the USB encoder, so this action is available only from the offline desktop terminal at the front desk.
+                </p>
+              </div>
+              <div className="w-full rounded-2xl bg-amber-500/8 border border-amber-500/20 px-4 py-3 text-left text-xs text-amber-200/80 leading-relaxed">
+                Open LodgeCore Desktop on the computer connected to the keycard encoder, then choose Read Key there.
+              </div>
+              <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] transition-all">
+                Close
+              </button>
+            </div>
+          )}
 
           {step === 'IDLE' && (
             <div className="py-10 flex flex-col items-center justify-center gap-6 text-center animate-in zoom-in-95 duration-300">

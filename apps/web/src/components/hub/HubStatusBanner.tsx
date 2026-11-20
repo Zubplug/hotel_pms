@@ -79,22 +79,24 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300 sm:gap-3 lg:justify-end">
-        <div
-          role="status"
-          aria-live="polite"
-          title={isOnline ? 'Connected to LodgeCore online services' : 'Offline mode: changes will be queued for synchronization'}
-          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold tracking-wide ${
-            isOnline
-              ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
-              : 'border-rose-400/25 bg-rose-400/10 text-rose-300'
-          }`}
-        >
-          {isOnline ? (
-            <><Wifi className="w-4 h-4" aria-hidden="true" /> <span>ONLINE</span></>
-          ) : (
-            <><WifiOff className="w-4 h-4" aria-hidden="true" /> <span>OFFLINE</span></>
-          )}
-        </div>
+        {isDesktop && (
+          <div
+            role="status"
+            aria-live="polite"
+            title={isOnline ? 'Connected to LodgeCore online services' : 'Offline mode: changes will be queued for synchronization'}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold tracking-wide ${
+              isOnline
+                ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+                : 'border-rose-400/25 bg-rose-400/10 text-rose-300'
+            }`}
+          >
+            {isOnline ? (
+              <><Wifi className="w-4 h-4" aria-hidden="true" /> <span>ONLINE</span></>
+            ) : (
+              <><WifiOff className="w-4 h-4" aria-hidden="true" /> <span>OFFLINE</span></>
+            )}
+          </div>
+        )}
 
         {isDesktop ? (
           <>
