@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RefreshCw, MapPin, Loader2, Check } from 'lucide-react';
+import { RefreshCw, MapPin, Loader2, Check, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
 import { showActionSuccess } from '@/components/ui/action-success-dialog';
 
@@ -52,7 +52,8 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
   const [error, setError] = useState('');
   const [upgradePayment, setUpgradePayment] = useState<{ folio: any; amount: number; roomId: string } | null>(null);
 
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isOnline } = useLodgeCoreProvider();
+  const requiresDesktop = isOnline && reservation.status === 'CHECKED_IN';
 
   const { data: availableRooms, isLoading: isLoadingRooms } = useQuery({
     queryKey: ['available-rooms', reservation.propertyId, checkIn, checkOut],
@@ -65,7 +66,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
       // RESERVED rooms are valid reassignment targets too.
       return res.data || [];
     },
-    enabled: open && !!checkIn && !!checkOut,
+    enabled: open && !!checkIn && !!checkOut && !requiresDesktop,
   });
 
   const selectedRoomPreview = availableRooms?.find((r: any) => r.id === selectedRoomId);
@@ -75,6 +76,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
 
   const reassignMutation = useMutation({
     mutationFn: async () => {
+      if (requiresDesktop) throw new Error('Room changes for checked-in guests must be completed from the offline desktop terminal so the new keycard can be encoded.');
       if (!selectedRoomId) throw new Error('No room selected');
       const selectedRoom = availableRooms?.find((r: any) => r.id === selectedRoomId);
       if (!selectedRoom) throw new Error('Invalid room selected');
@@ -118,7 +120,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
           amount: result.paymentDue,
           roomId: result.roomId,
         });
-      } else if (reservation.status === 'CHECKED_IN') {
+      } else if (reservation.status === 'CHECKED_IN' && !isOnline) {
         void encodeNewRoomCard(result.roomId);
       }
     },
@@ -162,6 +164,24 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
         </div>
 
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
+          {requiresDesktop ? (
+            <div className="flex flex-col items-center justify-center h-full py-10 text-center animate-in zoom-in-95 duration-300">
+              <div className="relative w-24 h-24 mb-7">
+                <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
+                <div className="relative w-full h-full bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center">
+                  <Monitor className="h-10 w-10 text-amber-600" />
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-3">Use the LodgeCore Desktop terminal</h3>
+              <p className="text-sm text-slate-500 leading-relaxed max-w-[360px] mb-6">
+                This guest is already checked in. Changing the room requires encoding a new physical keycard, so complete the room move from the offline desktop terminal.
+              </p>
+              <div className="w-full max-w-[420px] rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-left text-xs text-amber-800 leading-relaxed">
+                Open LodgeCore Desktop on the encoder computer to reassign the room and issue the guest&apos;s new keycard together.
+              </div>
+            </div>
+          ) : (
+          <>
           
           <div className="space-y-2">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Room</p>
@@ -260,28 +280,21 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
               {error}
             </div>
           )}
+          </>
+          )}
         </div>
 
         <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 shrink-0">
-          <Button 
-            variant="outline" 
-            onClick={() => handleOpenChange(false)}
-            disabled={reassignMutation.isPending}
-            className="rounded-xl font-medium"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={() => reassignMutation.mutate()}
-            disabled={reassignMutation.isPending || !selectedRoomId}
-            className="rounded-xl font-bold px-6 shadow-sm shadow-emerald-200 bg-emerald-600 hover:bg-emerald-700 text-white"
-          >
-            {reassignMutation.isPending ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Assigning...</>
-            ) : (
-              'Reassign Room'
-            )}
-          </Button>
+          {requiresDesktop ? (
+            <Button onClick={() => handleOpenChange(false)} className="w-full rounded-xl font-semibold bg-slate-900 hover:bg-slate-800 text-white">Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={reassignMutation.isPending} className="rounded-xl font-medium">Cancel</Button>
+              <Button onClick={() => reassignMutation.mutate()} disabled={reassignMutation.isPending || !selectedRoomId} className="rounded-xl font-bold px-6 shadow-sm shadow-emerald-200 bg-emerald-600 hover:bg-emerald-700 text-white">
+                {reassignMutation.isPending ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Assigning...</>) : ('Reassign Room')}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
       </Dialog>
