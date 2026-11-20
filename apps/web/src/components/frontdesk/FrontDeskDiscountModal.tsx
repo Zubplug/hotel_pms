@@ -49,11 +49,17 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
 
   const { data: staffResponse } = useQuery({
     queryKey: ['frontdesk-acknowledging-staff', propertyId],
-    queryFn: () => provider.auth.getActiveStaff(),
+    queryFn: () => provider.auth.getActiveStaff(undefined, propertyId),
     enabled: !!propertyId && isOpen,
     staleTime: 300_000,
   });
-  const allActiveStaff = (staffResponse as any)?.data || staffResponse || [];
+  const responseData = staffResponse as any;
+  const allActiveStaff = Array.isArray(responseData?.data)
+    ? responseData.data
+    : Array.isArray(responseData)
+      ? responseData
+      : [];
+  const staffLoadError = responseData?.error || '';
   const activeStaff = allActiveStaff;
   const managementStaff = allActiveStaff.filter((staff: any) => isConcessionManagementPosition(staff.position || staff.role));
 
@@ -131,6 +137,12 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
             {error && (
               <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm font-medium border border-red-100">
                 {error}
+              </div>
+            )}
+
+            {staffLoadError && (
+              <div className="p-3 rounded-lg bg-amber-50 text-amber-800 text-sm font-medium border border-amber-100">
+                Staff list unavailable. Refresh the page and try again.
               </div>
             )}
 
