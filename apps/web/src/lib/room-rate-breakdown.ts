@@ -1,4 +1,7 @@
-import { computeCanonicalRoomRateBreakdown } from '@hotel-pms/db';
+// Import the pure calculation module directly. Importing the package root here
+// also pulls its Prisma/Flutterwave exports into client bundles, including
+// node:crypto, which makes the production Webpack build fail.
+import { computeCanonicalRoomRateBreakdown } from '@hotel-pms/db/src/canonical-room-rate-breakdown';
 
 /**
  * Room Rate Breakdown Engine
