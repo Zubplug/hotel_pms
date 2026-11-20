@@ -533,7 +533,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
 
   const { data: managersRes } = useQuery({
     queryKey: ['managers-local', propertyId],
-    queryFn: async () => provider.auth.getActiveStaff(),
+    queryFn: async () => provider.auth.getActiveStaff(undefined, propertyId),
     enabled: !!propertyId,
     staleTime: 300_000,
   });
