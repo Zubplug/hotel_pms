@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { useLogout } from '@/hooks/useLogout';
-import { PropertySelector } from '@/components/properties/PropertySelector';
 import {
   Hotel,
   LogOut,
@@ -21,6 +20,7 @@ import {
   Bell,
   X,
   QrCode,
+  Menu,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -392,13 +392,13 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       )}
 
       {/* ── Top App Bar ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 w-full flex items-center h-[60px] px-4 md:px-6 bg-[#080c18]/90 backdrop-blur-xl border-b border-white/[0.06]">
+      <header className="sticky top-0 z-40 w-full flex min-h-14 items-center px-3 py-2 sm:h-[60px] sm:py-0 sm:px-4 md:px-6 bg-[#080c18]/90 backdrop-blur-xl border-b border-white/[0.06]">
 
         {/* Left: Switcher · Logo · Property · Nav */}
-        <div className="flex items-center gap-4 lg:gap-5 flex-1 min-w-0">
-          {!isDesktop && <AppSwitcher hideOperations enabledModules={visibleModules} />}
+        <div className="flex items-center gap-2 lg:gap-5 flex-1 min-w-0">
+          {role !== 'RECEPTIONIST' && <AppSwitcher hideOperations enabledModules={visibleModules} />}
 
-          <Link href="/frontdesk" className="flex items-center gap-2.5 group shrink-0">
+          <Link href="/frontdesk" className="flex items-center gap-2 group shrink-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-[0_0_16px_-4px_rgba(99,102,241,0.6)] transition-all group-hover:shadow-[0_0_20px_-4px_rgba(99,102,241,0.8)] group-hover:scale-105">
               <Hotel className="h-4 w-4 text-white" />
             </div>
@@ -407,21 +407,16 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
 
           <div className="h-4 w-px bg-white/10 hidden sm:block" />
 
-          {/* Property */}
-          {role !== 'RECEPTIONIST' ? (
-            <PropertySelector className="w-[180px] lg:w-[220px]" />
-          ) : (
-            <div className="flex items-center">
-              <div className="hidden"><PropertySelector /></div>
-              {res?.data?.property?.name ? (
-                <span className="text-sm font-semibold text-slate-300 whitespace-nowrap tracking-tight">
-                  {res.data.property.name}
-                </span>
-              ) : (
-                <div className="h-4 w-28 bg-white/10 animate-pulse rounded" />
-              )}
-            </div>
-          )}
+          {/* Property is assigned by the authenticated staff context. */}
+          <div className="min-w-0 flex-1 sm:flex-none">
+            {res?.data?.property?.name ? (
+              <span className="block whitespace-normal break-words text-xs font-semibold leading-tight text-slate-300 tracking-tight sm:text-sm">
+                {res.data.property.name}
+              </span>
+            ) : (
+              <div className="h-4 w-28 bg-white/10 animate-pulse rounded" />
+            )}
+          </div>
 
           <div className="h-4 w-px bg-white/10 hidden md:block" />
 
@@ -438,6 +433,25 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
               </Link>
             ))}
           </nav>
+
+          {/* Mobile front-desk navigation */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="md:hidden outline-none">
+              <button className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/10" aria-label="Open front desk navigation">
+                <Menu className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60 bg-[#0d1424] border border-white/10 text-slate-200 rounded-2xl shadow-2xl p-2">
+              <DropdownMenuLabel className="px-3 pt-1 text-xs font-bold uppercase tracking-wider text-slate-500">Front Desk</DropdownMenuLabel>
+              <DropdownMenuSeparator className="my-2 bg-white/10" />
+              {visibleNavLinks.map(({ href, label, icon: Icon }) => (
+                <DropdownMenuItem key={href} onClick={() => router.push(href)} className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-300 focus:bg-white/[0.08] focus:text-white">
+                  {Icon ? <Icon className="h-4 w-4 text-indigo-300" /> : <Hotel className="h-4 w-4 text-indigo-300" />}
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Right: Clock · Hardware · Sync · User */}
@@ -459,8 +473,8 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
 
           <div className="h-4 w-px bg-white/10 hidden lg:block" />
 
-          {/* Hardware status */}
-          <DropdownMenu>
+          {/* Hardware status is meaningful only inside the offline desktop shell. */}
+          {isDesktopMode && <DropdownMenu>
             <DropdownMenuTrigger className="outline-none">
               <button className={cn(
                 'flex items-center gap-2 h-8 px-3 rounded-xl text-xs font-bold border transition-all',
@@ -531,7 +545,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
                 )}
               </div>
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu>}
 
           {/* Sync Now (desktop only) */}
           {isDesktopMode && (

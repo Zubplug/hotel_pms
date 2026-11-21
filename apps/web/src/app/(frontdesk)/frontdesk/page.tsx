@@ -578,11 +578,12 @@ export default function ReceptionistDashboardPage() {
         <div className="rounded-3xl border border-white/8 bg-white/[0.025] backdrop-blur-xl overflow-hidden">
           {/* Tabs + Search */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-white/8">
-            <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/8">
+            <div className="w-full overflow-x-auto rounded-2xl scrollbar-none sm:w-auto">
+            <div className="flex min-w-max items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/8">
               <button
                 onClick={() => setActiveTab('arrivals')}
                 className={cn(
-                  'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200',
+                  'flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 sm:gap-2 sm:px-5 sm:text-sm',
                   activeTab === 'arrivals'
                     ? 'bg-indigo-600 text-white shadow-[0_0_20px_-5px_rgba(99,102,241,0.6)]'
                     : 'text-slate-400 hover:text-slate-300',
@@ -597,7 +598,7 @@ export default function ReceptionistDashboardPage() {
               <button
                 onClick={() => setActiveTab('paymentRequired')}
                 className={cn(
-                  'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200',
+                  'flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 sm:gap-2 sm:px-5 sm:text-sm',
                   activeTab === 'paymentRequired'
                     ? 'bg-rose-600 text-white shadow-[0_0_20px_-5px_rgba(225,29,72,0.55)]'
                     : 'text-slate-400 hover:text-slate-300',
@@ -612,7 +613,7 @@ export default function ReceptionistDashboardPage() {
               <button
                 onClick={() => setActiveTab('departures')}
                 className={cn(
-                  'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200',
+                  'flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 sm:gap-2 sm:px-5 sm:text-sm',
                   activeTab === 'departures'
                     ? 'bg-amber-600 text-white shadow-[0_0_20px_-5px_rgba(217,119,6,0.5)]'
                     : 'text-slate-400 hover:text-slate-300',
@@ -624,6 +625,7 @@ export default function ReceptionistDashboardPage() {
                   {departures.length}
                 </span>
               </button>
+            </div>
             </div>
 
             {/* Search */}
