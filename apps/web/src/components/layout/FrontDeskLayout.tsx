@@ -34,7 +34,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useProperty } from '@/components/PropertyProvider';
 import { cn, formatCurrency } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -97,12 +97,18 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const { data: cachedModules = [] } = useNavigationModules(propertyId);
   const logout = useLogout();
   const router = useRouter();
+  const pathname = usePathname();
   const [time, setTime] = useState<Date | null>(null);
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [roomChargeNotification, setRoomChargeNotification] = useState<FrontDeskRoomChargeNotification | null>(null);
   const lastRoomChargeNotificationId = React.useRef<string | null>(null);
   const [acknowledgedRoomChargeNotificationIds] = React.useState<Set<string>>(() => readAcknowledgements('frontdesk'));
   const roomChargeChimeTimer = React.useRef<number | null>(null);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
   const visibleModules = isDesktop || isDesktopMode ? cachedModules : enabledModules;
@@ -432,23 +438,15 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           </nav>
 
           {/* Mobile front-desk navigation */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className="md:hidden outline-none">
-              <button className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/10" aria-label="Open front desk navigation">
-                <Menu className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-60 bg-[#0d1424] border border-white/10 text-slate-200 rounded-2xl shadow-2xl p-2">
-              <DropdownMenuLabel className="px-3 pt-1 text-xs font-bold uppercase tracking-wider text-slate-500">Front Desk</DropdownMenuLabel>
-              <DropdownMenuSeparator className="my-2 bg-white/10" />
-              {visibleNavLinks.map(({ href, label, icon: Icon }) => (
-                <DropdownMenuItem key={href} onClick={() => router.push(href)} className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-300 focus:bg-white/[0.08] focus:text-white">
-                  {Icon ? <Icon className="h-4 w-4 text-indigo-300" /> : <Hotel className="h-4 w-4 text-indigo-300" />}
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-300 transition hover:border-indigo-400/30 hover:bg-indigo-500/10 hover:text-white md:hidden"
+            aria-label="Open front desk navigation"
+            aria-expanded={mobileNavOpen}
+          >
+            <Menu className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Right: Clock · Hardware · Sync · User */}
@@ -600,6 +598,70 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           </DropdownMenu>
         </div>
       </header>
+
+      {/* Mobile navigation drawer */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-[70] md:hidden" role="dialog" aria-modal="true" aria-label="Front Desk navigation">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px]"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close navigation"
+          />
+          <aside className="absolute inset-y-0 left-0 flex w-[min(86vw,340px)] flex-col border-r border-white/10 bg-[#0b1222] shadow-[20px_0_60px_rgba(0,0,0,0.35)] animate-in slide-in-from-left duration-200">
+            <div className="border-b border-white/[0.08] bg-gradient-to-br from-indigo-500/[0.16] via-[#111b32] to-[#0b1222] px-5 pb-5 pt-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-950/40">
+                    <Hotel className="h-5 w-5 text-white" />
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-300">LodgeCore</p>
+                  <h2 className="mt-1 text-lg font-bold tracking-tight text-white">Front Desk</h2>
+                  <p className="mt-1 text-xs text-slate-400">Daily operations workspace</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-400 transition hover:bg-white/10 hover:text-white"
+                  aria-label="Close front desk navigation"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-5">
+              <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Workspace</p>
+              <div className="space-y-1">
+                {visibleNavLinks.map(({ href, label, icon: Icon }) => {
+                  const active = pathname === href || pathname.startsWith(`${href}/`);
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMobileNavOpen(false)}
+                      className={cn(
+                        'group flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition',
+                        active
+                          ? 'bg-indigo-500/15 text-white ring-1 ring-inset ring-indigo-400/20'
+                          : 'text-slate-300 hover:bg-white/[0.06] hover:text-white',
+                      )}
+                    >
+                      <span className={cn('flex h-9 w-9 items-center justify-center rounded-xl', active ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/[0.05] text-slate-400 group-hover:text-indigo-300')}>
+                        {Icon ? <Icon className="h-4 w-4" /> : <Hotel className="h-4 w-4" />}
+                      </span>
+                      <span className="flex-1">{label}</span>
+                      <ChevronDown className="h-4 w-4 -rotate-90 text-slate-600 transition group-hover:text-slate-300" />
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+            <div className="border-t border-white/[0.08] px-5 py-4">
+              <p className="text-[11px] leading-5 text-slate-500">Use the menu to move between Front Desk workspaces.</p>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* Offline Banner */}
       {!isOnline && (
