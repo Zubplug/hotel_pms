@@ -38,7 +38,6 @@ import { useRouter } from 'next/navigation';
 import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { FrontDeskMasterCardModal } from '@/components/frontdesk/FrontDeskMasterCardModal';
@@ -394,10 +393,8 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       {/* ── Top App Bar ──────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 w-full flex min-h-14 items-center px-3 py-2 sm:h-[60px] sm:py-0 sm:px-4 md:px-6 bg-[#080c18]/90 backdrop-blur-xl border-b border-white/[0.06]">
 
-        {/* Left: Switcher · Logo · Property · Nav */}
+        {/* Left: Logo · Property · Nav */}
         <div className="flex items-center gap-2 lg:gap-5 flex-1 min-w-0">
-          {role !== 'RECEPTIONIST' && <AppSwitcher hideOperations enabledModules={visibleModules} />}
-
           <Link href="/frontdesk" className="flex items-center gap-2 group shrink-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-[0_0_16px_-4px_rgba(99,102,241,0.6)] transition-all group-hover:shadow-[0_0_20px_-4px_rgba(99,102,241,0.8)] group-hover:scale-105">
               <Hotel className="h-4 w-4 text-white" />
