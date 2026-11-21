@@ -14,7 +14,7 @@ export async function hasPermission(userId: string, propertyId: string, required
     // isolation even when a user has records in more than one organization.
     where: {
       userId,
-      propertyId: { in: [propertyId, null] },
+      OR: [{ propertyId: null }, { propertyId }],
       role: { organizationId: property.organizationId },
     },
     include: {
