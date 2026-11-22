@@ -528,6 +528,14 @@ export async function POST(
         });
       }
       return property;
+    }, {
+      // Checkout atomically posts folio/City Ledger/GL activity, closes the
+      // stay, queues housekeeping, and writes the audit trail. The default
+      // Prisma interactive-transaction timeout is 5s, which is too short for
+      // this intentional multi-ledger workflow and can expire before the
+      // journal entry is created.
+      maxWait: 10_000,
+      timeout: 30_000,
     });
 
     if (txResult) {
