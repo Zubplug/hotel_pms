@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface PropertyContextType {
   propertyId: string;
@@ -16,6 +17,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   const [propertyId, setPropertyId] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { status: sessionStatus } = useLodgeCoreSession();
+  const { provider } = useLodgeCoreProvider();
   const pathname = usePathname();
 
   useEffect(() => {
@@ -39,15 +41,15 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
     // browser value is only accepted when it is still in the user's scope.
     async function autoSelectProperty() {
       try {
-        const res = await fetch('/api/v1/properties?pageSize=100', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`Property scope request failed (${res.status})`);
-        const json = await res.json();
+        const result = await provider.properties.list();
         // Support both { data: [...] } and paginated { data: { data: [...] } } shapes
         const list: { id: string }[] =
-          Array.isArray(json?.data?.data)
-            ? json.data.data
-            : Array.isArray(json?.data)
-            ? json.data
+          Array.isArray(result?.data?.data)
+            ? result.data.data
+            : Array.isArray(result?.data)
+            ? result.data
+            : Array.isArray(result)
+            ? result
             : [];
         if (list.length > 0) {
           const resolvedId = stored && list.some((property) => property.id === stored)
@@ -64,7 +66,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
     }
 
     autoSelectProperty();
-  }, [sessionStatus, pathname]);
+  }, [provider, sessionStatus, pathname]);
 
   const handleSetPropertyId = (id: string) => {
     setPropertyId(id);

@@ -542,24 +542,15 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
             </DropdownMenuContent>
           </DropdownMenu>}
 
-          {/* Sync Now (desktop only) */}
+          {/* Sync Center (desktop only). The detail view remains available even
+              when the machine has internet but the AWS sync endpoint is down. */}
           {isDesktopMode && (
             <button
               className="hidden lg:flex items-center gap-2 h-8 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-400 hover:text-slate-300 transition-all"
-              onClick={async () => {
-                try {
-                  if (provider.system?.forceSync) {
-                    toast.promise(provider.system.forceSync(), {
-                      loading: 'Synchronizing with cloud…',
-                      success: 'Sync completed',
-                      error: 'Sync failed. Check connection.',
-                    });
-                  }
-                } catch (e) {}
-              }}
+              onClick={() => router.push('/frontdesk/sync')}
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Sync Now
+              Sync Center
             </button>
           )}
 
