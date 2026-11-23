@@ -155,12 +155,15 @@ export async function processLeaseBilling(propertyId: string, actor?: { userId: 
       where: { status: 'PENDING', ...(scheduleId ? { id: scheduleId } : { dueDate: { lte: asOfDate || property.businessDate || new Date() } }), leaseContract: { propertyId, isActive: true, corporateAccountId: { not: null } } },
       include: { lines: { include: { segment: { include: { hall: true } } } }, leaseContract: { include: { corporateAccount: { include: { cityLedgerAccount: true } } } } }, orderBy: { dueDate: 'asc' },
     });
+    const tax = await tx.tax.findFirst({
+      where: { propertyId, isActive: true, OR: [{ code: 'VAT' }, { name: { contains: 'VAT', mode: 'insensitive' } }] },
+      orderBy: { createdAt: 'asc' },
+    });
     const generatedInvoices = [];
     for (const schedule of dueSchedules) {
       const contract = schedule.leaseContract;
       const cityLedgerAccountId = contract.corporateAccount?.cityLedgerAccountId;
       if (!cityLedgerAccountId) throw new Error(`Lease ${contract.id} has no City Ledger account.`);
-      const tax = await tx.tax.findFirst({ where: { propertyId, isActive: true, OR: [{ code: 'VAT' }, { name: { contains: 'VAT', mode: 'insensitive' } }] }, orderBy: { createdAt: 'asc' } });
       const subTotal = Number(schedule.amount);
       const totalTax = tax?.type === 'PERCENTAGE' ? subTotal * Number(tax.rate) / 100 : tax?.type === 'FLAT' ? Number(tax.rate) : 0;
       const items = schedule.lines.map((line) => { const gross = Number(line.amount); const lineTax = subTotal ? totalTax * gross / subTotal : 0; return { description: `${line.segment.hall.name} lease usage (${line.usageCount} use${line.usageCount === 1 ? '' : 's'})`, category: 'HALL', quantity: line.usageCount, unitPrice: line.segment.rate, grossAmount: gross, discountAmount: 0, requestedDiscount: 0, discountStatus: 'APPROVED', taxAmount: lineTax, totalPrice: gross + lineTax, taxId: tax?.id }; });
@@ -173,6 +176,13 @@ export async function processLeaseBilling(propertyId: string, actor?: { userId: 
       generatedInvoices.push(invoice);
     }
     return { processedCount: generatedInvoices.length, invoices: generatedInvoices };
+  }, {
+    // AWS database latency can exceed Prisma's 5s interactive transaction
+    // default when several recurring hall periods are generated together.
+    // Keep the whole billing batch atomic while allowing the expected work to
+    // complete before Prisma invalidates the transaction client.
+    maxWait: 10_000,
+    timeout: 60_000,
   });
 }
 
