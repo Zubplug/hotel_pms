@@ -76,6 +76,7 @@ export async function getGuestAmenityAuditControl(propertyId: string, businessDa
       items: [],
       missingItems: [],
       shortages: [],
+      warnings: [],
       zeroCostItems: [],
       blockers: [],
       currency: property.baseCurrency || 'NGN',
@@ -106,6 +107,7 @@ export async function getGuestAmenityAuditControl(propertyId: string, businessDa
       items: [],
       missingItems: [],
       shortages: [],
+      warnings: [],
       zeroCostItems: [],
       blockers: [],
     };
@@ -170,7 +172,7 @@ export async function getGuestAmenityAuditControl(propertyId: string, businessDa
     };
   });
 
-  const blockers = [
+  const warnings = [
     guestCount > 0 && !warehouse ? 'Configure an active housekeeping/laundry warehouse.' : null,
     ...(guestCount > 0 ? missingItems.map((name) => `${name} is not configured in the selected warehouse.`) : []),
     ...(guestCount > 0 ? shortages.map((item) => `${item.name} requires ${item.required} ${item.unit} but only ${item.available} is available.`) : []),
@@ -186,20 +188,32 @@ export async function getGuestAmenityAuditControl(propertyId: string, businessDa
     missingItems,
     shortages,
     zeroCostItems,
-    blockers,
+    // Stock is operational fulfilment, not a financial audit prerequisite.
+    blockers: [],
+    warnings,
     currency: property.baseCurrency || 'NGN',
   };
 }
 
+export type GuestAmenityPostingResult = {
+  itemCount: number;
+  issuedQuantity: number;
+  shortageQuantity: number;
+  totalCost: number;
+  shortages: Array<{ name: string; required: number; issued: number; shortage: number; unit: string; reason: string }>;
+};
+
 /**
- * Deducts the complimentary in-room amenity pack from the property's stock.
- * The guest is not charged. Each operation is unique per reservation/date/item
- * so retries and offline/cloud replay cannot consume stock twice.
+ * Issues complimentary amenities on a best-effort basis. Financial Night
+ * Audit must not depend on housekeeping stock: every item gets an immutable
+ * fulfilment row, while StockTransaction is written only for quantities that
+ * were actually issued. The operation key makes retries safe.
  */
 export async function postGuestAmenityPackInTransaction(
   tx: any,
   input: {
     propertyId: string;
+    nightAuditId: string;
     reservationId: string;
     roomId?: string | null;
     businessDate: Date;
@@ -216,7 +230,7 @@ export async function postGuestAmenityPackInTransaction(
   const settings = (property.settings || {}) as any;
   const guestAmenities = settings.guestAmenities || {};
   const definitions = resolveGuestAmenityDefinitions(settings);
-  if (!definitions.length) return { itemCount: 0, totalCost: 0 };
+  if (!definitions.length) return { itemCount: 0, issuedQuantity: 0, shortageQuantity: 0, totalCost: 0, shortages: [] };
 
   const configuredWarehouseId = guestAmenities.warehouseId || guestAmenities.stockWarehouseId;
   const targetWarehouse = configuredWarehouseId
@@ -233,16 +247,17 @@ export async function postGuestAmenityPackInTransaction(
         orderBy: { name: 'asc' },
         select: { id: true, name: true },
       });
-  if (!targetWarehouse) {
-    throw new Error('GUEST_AMENITY_WAREHOUSE_MISSING: Configure an active housekeeping/laundry stock outlet warehouse for guest amenities.');
-  }
-
-  const candidates = await tx.stockItem.findMany({
-    where: { propertyId: input.propertyId, warehouseId: targetWarehouse.id, isActive: true },
-    include: { warehouse: { select: { id: true, name: true } }, stockUnits: true },
-  });
+  const candidates = targetWarehouse
+    ? await tx.stockItem.findMany({
+        where: { propertyId: input.propertyId, warehouseId: targetWarehouse.id, isActive: true },
+        include: { warehouse: { select: { id: true, name: true } }, stockUnits: true },
+      })
+    : [];
   let itemCount = 0;
+  let issuedQuantity = 0;
+  let shortageQuantity = 0;
   let totalCost = 0;
+  const shortages: GuestAmenityPostingResult['shortages'] = [];
   const currency = property.baseCurrency || property.supportedCurrencies?.[0] || 'NGN';
 
   for (const definition of definitions) {
@@ -251,63 +266,213 @@ export async function postGuestAmenityPackInTransaction(
     const matches = candidates.filter((item: any) => configuredId
       ? item.id === configuredId
       : [definition.name, ...definition.aliases].some((name) => normalizeGuestAmenityName(name) === normalizeGuestAmenityName(item.name)));
-    const stock = matches[0];
-    if (!stock) {
-      throw new Error(`GUEST_AMENITY_STOCK_MISSING: ${definition.name} is not configured in the ${targetWarehouse.name} warehouse.`);
-    }
-
     const required = definition.quantityPerGuest * Math.max(1, input.guestCount);
-    const operationId = `GUEST_AMENITY_${input.reservationId}_${input.businessDate.toISOString().slice(0, 10)}_${stock.id}`;
-    if (await tx.stockTransaction.findUnique({ where: { operationId } })) continue;
+    const stock = matches[0];
+    const operationId = `GUEST_AMENITY_${input.reservationId}_${input.businessDate.toISOString().slice(0, 10)}_${definition.key}`;
+    if (await tx.guestAmenityFulfillment.findUnique({ where: { operationId } })) continue;
 
-    // Amenity quantities are configured in the stock item's base unit. For
-    // example, one bottle or one sachet is one base-unit issue.
-    const requiredInBase = required;
-    const updated = await tx.stockItem.updateMany({
-      where: { id: stock.id, isActive: true, quantityOnHand: { gte: requiredInBase } },
-      data: { quantityOnHand: { decrement: requiredInBase } },
-    });
-    if (updated.count !== 1) {
-      throw new Error(`INSUFFICIENT_GUEST_AMENITY_STOCK: ${stock.name} requires ${requiredInBase} ${stock.baseUnit}, but available stock is insufficient.`);
+    const unit = stock?.baseUnit || 'UNIT';
+    const available = Number(stock?.quantityOnHand || 0);
+    const requestedIssue = Math.min(required, Math.max(0, available));
+    let issued = 0;
+    let after: any = null;
+    let unitCost = definition.expectedCost;
+    let reason: string | null = null;
+
+    if (!targetWarehouse) {
+      reason = 'No active housekeeping/laundry warehouse is configured.';
+    } else if (!stock) {
+      reason = `Amenity is not configured in the ${targetWarehouse.name} warehouse.`;
+    } else if (requestedIssue > 0) {
+      // Atomic conditional decrement prevents negative stock if two audit or
+      // fulfilment workers race for the same inventory row.
+      const updated = await tx.stockItem.updateMany({
+        where: { id: stock.id, isActive: true, quantityOnHand: { gte: requestedIssue } },
+        data: { quantityOnHand: { decrement: requestedIssue } },
+      });
+      if (updated.count === 1) {
+        issued = requestedIssue;
+        after = await tx.stockItem.findUnique({
+          where: { id: stock.id },
+          select: {
+            quantityOnHand: true,
+            costPrice: true,
+            stockUnits: { select: { unit: true, unitsInBase: true, purchaseCost: true, isPurchaseUnit: true } },
+          },
+        });
+        const inventoryCost = resolveInventoryUnitCost(after) || resolveInventoryUnitCost(stock);
+        unitCost = inventoryCost > 0 ? inventoryCost : definition.expectedCost;
+        const value = issued * unitCost;
+        await tx.stockTransaction.create({
+          data: {
+            propertyId: input.propertyId,
+            stockItemId: stock.id,
+            reservationId: input.reservationId,
+            roomId: input.roomId || null,
+            source: 'GUEST_AMENITY',
+            quantity: -issued,
+            unitCost,
+            quantityBefore: Number(after?.quantityOnHand || 0) + issued,
+            quantityAfter: Number(after?.quantityOnHand || 0),
+            totalValue: -value,
+            currency,
+            warehouseId: stock.warehouseId,
+            reference: input.reservationId,
+            notes: `Complimentary guest amenity issue for ${input.guestCount} registered guest(s)`,
+            operationId: `${operationId}_STOCK`,
+            userId: input.actorId,
+            businessDate: input.businessDate,
+          },
+        });
+        totalCost += value;
+      } else {
+        reason = 'Stock changed before the amenity could be issued.';
+      }
+    } else {
+      reason = 'No stock is currently available.';
     }
 
-    const after = await tx.stockItem.findUnique({
-      where: { id: stock.id },
-      select: {
-        quantityOnHand: true,
-        costPrice: true,
-        stockUnits: { select: { unit: true, unitsInBase: true, purchaseCost: true, isPurchaseUnit: true } },
-      },
-    });
-    // Inventory cost is authoritative. The supplied standard costs are safe
-    // defaults for a newly created item whose cost has not been initialized.
-    const inventoryCost = resolveInventoryUnitCost(after) || resolveInventoryUnitCost(stock);
-    const unitCost = inventoryCost > 0 ? inventoryCost : definition.expectedCost;
-    const totalValue = requiredInBase * unitCost;
-    await tx.stockTransaction.create({
+    const shortage = Math.max(0, required - issued);
+    const status = shortage === 0 ? 'FULFILLED' : issued > 0 ? 'PARTIALLY_FULFILLED' : 'PENDING';
+    await tx.guestAmenityFulfillment.create({
       data: {
         propertyId: input.propertyId,
-        stockItemId: stock.id,
+        nightAuditId: input.nightAuditId,
         reservationId: input.reservationId,
         roomId: input.roomId || null,
-        source: 'GUEST_AMENITY',
-        quantity: -requiredInBase,
-        unitCost,
-        quantityBefore: Number(after?.quantityOnHand || 0) + requiredInBase,
-        quantityAfter: Number(after?.quantityOnHand || 0),
-        totalValue: -totalValue,
-        currency,
-        warehouseId: stock.warehouseId,
-        reference: input.reservationId,
-        notes: `Complimentary guest amenity pack for ${input.guestCount} registered guest(s)`,
-        operationId,
-        userId: input.actorId,
+        stockItemId: stock?.id || null,
+        warehouseId: stock?.warehouseId || targetWarehouse?.id || null,
         businessDate: input.businessDate,
+        amenityKey: definition.key,
+        amenityName: definition.name,
+        unit,
+        guestCount: Math.max(1, input.guestCount),
+        requiredQuantity: required,
+        issuedQuantity: issued,
+        shortageQuantity: shortage,
+        stockBefore: available,
+        stockAfter: Number(after?.quantityOnHand || available),
+        unitCost,
+        totalValue: issued * unitCost,
+        estimatedShortageValue: shortage * unitCost,
+        currency,
+        status,
+        reason,
+        operationId,
       },
     });
+
     itemCount++;
-    totalCost += totalValue;
+    issuedQuantity += issued;
+    shortageQuantity += shortage;
+    if (shortage > 0) shortages.push({ name: definition.name, required, issued, shortage, unit, reason: reason || 'Insufficient stock.' });
   }
 
-  return { itemCount, totalCost };
+  return { itemCount, issuedQuantity, shortageQuantity, totalCost, shortages };
+}
+
+/** Fulfil an outstanding line after stock has been replenished. */
+export async function fulfilGuestAmenityShortage(tx: any, fulfillmentId: string, actorId: string) {
+  // Serialize competing fulfilment clicks for the same line.
+  await tx.$queryRaw`SELECT id FROM "GuestAmenityFulfillment" WHERE id = ${fulfillmentId}::uuid FOR UPDATE`;
+  const fulfillment = await tx.guestAmenityFulfillment.findUnique({ where: { id: fulfillmentId } });
+  if (!fulfillment) throw new Error('NOT_FOUND:Guest amenity fulfilment not found.');
+  if (fulfillment.status === 'FULFILLED' || fulfillment.status === 'WAIVED' || fulfillment.status === 'VOIDED') return fulfillment;
+
+  // The queue is for in-house guests only. Revalidate at the moment stock is
+  // issued because a guest may have checked out after Night Audit created the
+  // operational exception.
+  const reservation = await tx.reservation.findUnique({ where: { id: fulfillment.reservationId }, select: { status: true } });
+  if (!reservation || reservation.status !== 'CHECKED_IN') {
+    return tx.guestAmenityFulfillment.update({
+      where: { id: fulfillmentId },
+      data: {
+        status: 'VOIDED',
+        reason: 'Voided because the guest is no longer checked in.',
+        voidedAt: new Date(),
+      },
+    });
+  }
+
+  const remaining = Math.max(0, Number(fulfillment.requiredQuantity) - Number(fulfillment.issuedQuantity));
+  if (remaining <= 0) {
+    return tx.guestAmenityFulfillment.update({ where: { id: fulfillmentId }, data: { status: 'FULFILLED', shortageQuantity: 0, estimatedShortageValue: 0 } });
+  }
+  if (!fulfillment.stockItemId) {
+    return tx.guestAmenityFulfillment.update({ where: { id: fulfillmentId }, data: { status: 'PENDING', reason: 'Stock item is not configured yet.' } });
+  }
+
+  const stock = await tx.stockItem.findUnique({ where: { id: fulfillment.stockItemId } });
+  if (!stock || !stock.isActive) {
+    return tx.guestAmenityFulfillment.update({ where: { id: fulfillmentId }, data: { status: 'PENDING', reason: 'Stock item is unavailable.' } });
+  }
+
+  const stockBefore = Number(stock.quantityOnHand || 0);
+  const issueQuantity = Math.min(remaining, Math.max(0, stockBefore));
+  if (issueQuantity <= 0) {
+    return tx.guestAmenityFulfillment.update({ where: { id: fulfillmentId }, data: { status: 'PENDING', reason: 'No stock is currently available.' } });
+  }
+
+  const updated = await tx.stockItem.updateMany({
+    where: { id: stock.id, isActive: true, quantityOnHand: { gte: issueQuantity } },
+    data: { quantityOnHand: { decrement: issueQuantity } },
+  });
+  if (updated.count !== 1) throw new Error('CONFLICT:Stock changed before fulfilment could be completed. Retry.');
+
+  const after = await tx.stockItem.findUnique({
+    where: { id: stock.id },
+    select: { quantityOnHand: true, costPrice: true, stockUnits: { select: { unit: true, unitsInBase: true, purchaseCost: true, isPurchaseUnit: true } } },
+  });
+  const unitCost = resolveInventoryUnitCost(after) || resolveInventoryUnitCost(stock);
+  const stockOperationId = `${fulfillment.operationId}_REPLENISH_${String(fulfillment.issuedQuantity)}`;
+  const value = issueQuantity * unitCost;
+  await tx.stockTransaction.create({
+    data: {
+      propertyId: fulfillment.propertyId,
+      stockItemId: stock.id,
+      reservationId: fulfillment.reservationId,
+      roomId: fulfillment.roomId,
+      source: 'GUEST_AMENITY',
+      quantity: -issueQuantity,
+      unitCost,
+      quantityBefore: stockBefore,
+      quantityAfter: Number(after?.quantityOnHand || 0),
+      totalValue: -value,
+      currency: fulfillment.currency || 'NGN',
+      warehouseId: fulfillment.warehouseId || stock.warehouseId,
+      reference: fulfillment.reservationId,
+      notes: 'Replenished complimentary guest amenity fulfilment',
+      operationId: stockOperationId,
+      userId: actorId,
+      businessDate: fulfillment.businessDate,
+    },
+  });
+
+  const issuedQuantity = Number(fulfillment.issuedQuantity) + issueQuantity;
+  const shortageQuantity = Math.max(0, Number(fulfillment.requiredQuantity) - issuedQuantity);
+  return tx.guestAmenityFulfillment.update({
+    where: { id: fulfillmentId },
+    data: {
+      issuedQuantity,
+      shortageQuantity,
+      stockAfter: Number(after?.quantityOnHand || 0),
+      unitCost: unitCost || fulfillment.unitCost,
+      totalValue: Number(fulfillment.totalValue) + value,
+      estimatedShortageValue: shortageQuantity * (unitCost || Number(fulfillment.unitCost)),
+      status: shortageQuantity === 0 ? 'FULFILLED' : 'PARTIALLY_FULFILLED',
+      reason: shortageQuantity === 0 ? null : 'Partially fulfilled; remaining quantity is still pending.',
+      updatedAt: new Date(),
+    },
+  });
+}
+
+export async function waiveGuestAmenityShortage(tx: any, fulfillmentId: string, actorId: string, reason: string) {
+  if (!reason || reason.trim().length < 5) throw new Error('A waiver reason of at least 5 characters is required.');
+  const fulfillment = await tx.guestAmenityFulfillment.findUnique({ where: { id: fulfillmentId } });
+  if (!fulfillment) throw new Error('NOT_FOUND:Guest amenity fulfilment not found.');
+  if (['FULFILLED', 'WAIVED', 'VOIDED'].includes(fulfillment.status)) throw new Error('This fulfilment is already closed.');
+  return tx.guestAmenityFulfillment.update({
+    where: { id: fulfillmentId },
+    data: { status: 'WAIVED', reason: `Waived by ${actorId}: ${reason.trim()}`, updatedAt: new Date() },
+  });
 }

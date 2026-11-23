@@ -17,7 +17,7 @@ interface FrontDeskReencodeCardDialogProps {
 
 export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: FrontDeskReencodeCardDialogProps) {
   const router = useRouter();
-  const { provider, isOnline } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
 
   const [phase, setPhase] = useState<'SELECT' | 'PROMPT_ENCODE' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('SELECT');
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,7 +37,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
       // re-encoded room key.
       return (Array.isArray(rows) ? rows : []).filter((reservation: any) => reservation.status === 'CHECKED_IN');
     },
-    enabled: !isOnline && open && phase === 'SELECT',
+    enabled: isDesktopMode && open && phase === 'SELECT',
   });
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
   const handleSelectReservation = (reservation: any) => { setSelectedReservation(reservation); setPhase('PROMPT_ENCODE'); };
 
   const handleStartEncode = async () => {
-    if (isOnline) {
+    if (!isDesktopMode) {
       setErrorMsg('Re-encoding a key card is available only from the offline desktop terminal.');
       return;
     }
@@ -123,7 +123,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
             </div>
             <div>
               <h2 className="text-lg font-bold text-white leading-tight">Re-Encode Key Card</h2>
-              <p className="text-slate-500 text-xs font-medium mt-0.5">{isOnline ? 'Available on the offline desktop terminal' : 'Create a new key for an in-house guest'}</p>
+              <p className="text-slate-500 text-xs font-medium mt-0.5">{isDesktopMode ? 'Create a new key for an in-house guest' : 'Available on the offline desktop terminal'}</p>
             </div>
           </div>
           {phase !== 'ENCODING' && (
@@ -137,7 +137,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
         <div className="relative z-10 flex-1 overflow-hidden min-h-[380px] flex flex-col">
 
           {/* ONLINE NOTICE */}
-          {isOnline && (
+          {!isDesktopMode && (
             <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in zoom-in-95 duration-300">
               <div className="relative w-24 h-24 mb-7">
                 <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
@@ -159,7 +159,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
           )}
 
           {/* SELECT PHASE */}
-          {!isOnline && phase === 'SELECT' && (
+          {isDesktopMode && phase === 'SELECT' && (
             <div className="flex flex-col h-full overflow-hidden p-6 animate-in fade-in duration-200">
               <div className="relative mb-5 shrink-0">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -210,7 +210,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
           )}
 
           {/* PROMPT_ENCODE PHASE */}
-          {!isOnline && phase === 'PROMPT_ENCODE' && (
+          {isDesktopMode && phase === 'PROMPT_ENCODE' && (
             <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in zoom-in-95 duration-300">
               <div className="w-20 h-20 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-2xl font-black text-indigo-300 mb-6 shadow-[0_0_30px_-8px_rgba(99,102,241,0.4)]">
                 {initials}
@@ -233,7 +233,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
           )}
 
           {/* ENCODING PHASE */}
-          {!isOnline && phase === 'ENCODING' && (
+          {isDesktopMode && phase === 'ENCODING' && (
             <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in fade-in duration-300">
               <div className="relative w-24 h-24 mb-8">
                 <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping" />
@@ -247,7 +247,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
           )}
 
           {/* SUCCESS PHASE */}
-          {!isOnline && phase === 'SUCCESS' && (
+          {isDesktopMode && phase === 'SUCCESS' && (
             <div className="flex flex-col items-center justify-center h-full px-8 py-10 text-center animate-in zoom-in-95 duration-300">
               <div className="relative w-24 h-24 mb-8">
                 <div className="absolute inset-0 bg-emerald-500/15 rounded-full" />

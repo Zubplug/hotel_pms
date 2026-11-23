@@ -8,7 +8,7 @@ import { useLogout } from '@/hooks/useLogout';
 import { cn } from '@/lib/utils';
 import { PropertySelector } from '@/components/properties/PropertySelector';
 import {
-  BarChart3, Bell, ClipboardList, DoorOpen, LayoutDashboard, Package, ReceiptText,
+  BarChart3, Bell, ClipboardList, DoorOpen, LayoutDashboard, Package, PackageCheck, ReceiptText,
   LogOut, Menu, Sparkles, Wrench, X, FileSearch
 } from 'lucide-react';
 
@@ -18,6 +18,7 @@ const NAVIGATION = [
   { label: 'Maintenance control', href: '/housekeeping-manager/maintenance', icon: Wrench },
   { label: 'Room readiness', href: '/housekeeping-manager/rooms', icon: DoorOpen },
   { label: 'Housekeeping inventory', href: '/housekeeping-manager/inventory', icon: Package },
+  { label: 'Guest amenities', href: '/housekeeping-manager/amenities', icon: PackageCheck },
   { label: 'Request tracking', href: '/housekeeping-manager/requests', icon: FileSearch },
   { label: 'Expense requests', href: '/housekeeping-manager/expenses', icon: ReceiptText },
   { label: 'Performance reports', href: '/housekeeping-manager/reports', icon: BarChart3 },

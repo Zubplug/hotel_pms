@@ -17,18 +17,18 @@ interface FrontDeskReadCardDialogProps {
 
 export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: FrontDeskReadCardDialogProps) {
   const router = useRouter();
-  const { provider, isOnline } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [step, setStep] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'READING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   const [cardInfo, setCardInfo] = useState<any>(null);
   const [reservation, setReservation] = useState<any>(null);
 
   useEffect(() => {
-    if (open) { setStep(isOnline ? 'OFFLINE_REQUIRED' : 'IDLE'); setErrorMsg(''); setCardInfo(null); setReservation(null); }
-  }, [open, isOnline]);
+    if (open) { setStep(isDesktopMode ? 'IDLE' : 'OFFLINE_REQUIRED'); setErrorMsg(''); setCardInfo(null); setReservation(null); }
+  }, [open, isDesktopMode]);
 
   const handleReadCard = async () => {
-    if (isOnline) {
+    if (!isDesktopMode) {
       setStep('OFFLINE_REQUIRED');
       return;
     }

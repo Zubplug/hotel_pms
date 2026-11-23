@@ -15,18 +15,18 @@ datasource db {
 // -----------------------------------------------------------------------------
 
 model Organization {
-  id              String  @id @default(uuid()) @db.Uuid
-  name            String
-  slug            String  @unique
-  logoUrl         String?
-  primaryColor    String?
-  secondaryColor  String?
-  defaultCurrency String  @default("NGN")
-  defaultTimezone String  @default("Africa/Lagos")
-  defaultLocale   String  @default("en-NG")
-  settings        Json?
+  id                String  @id @default(uuid()) @db.Uuid
+  name              String
+  slug              String  @unique
+  logoUrl           String?
+  primaryColor      String?
+  secondaryColor    String?
+  defaultCurrency   String  @default("NGN")
+  defaultTimezone   String  @default("Africa/Lagos")
+  defaultLocale     String  @default("en-NG")
+  settings          Json?
   portalOwnerUserId String? @db.Uuid
-  portalOwner      User?    @relation("OrganizationPortalOwner", fields: [portalOwnerUserId], references: [id], onDelete: SetNull)
+  portalOwner       User?   @relation("OrganizationPortalOwner", fields: [portalOwnerUserId], references: [id], onDelete: SetNull)
 
   properties                 Property[]
   guests                     Guest[]
@@ -74,25 +74,25 @@ model Organization {
   demoAccounts                     DemoAccount[]
 
   // Booking Engine
-  bookingEngineConfigs       BookingEngineConfig[]
-  bookingSites               BookingSite[]
-  bookingPaymentAccounts     BookingPaymentAccount[]
-  referralPrograms           ReferralProgram[]
-  referralPartners           ReferralPartner[]
-  referralCampaigns          ReferralCampaign[]
-  referralClicks             ReferralClick[]
-  referralAttributions       ReferralAttribution[]
-  referralBookings           ReferralBooking[]
-  referralCommissions        ReferralCommission[]
-  referralLedgerEntries      ReferralLedgerEntry[]
-  reachCreativeGenerations   ReachCreativeGeneration[]
-  referralPayouts            ReferralPayout[]
-  referralPlatformFees       ReferralPlatformFee[]
-  referralActivationPayments ReferralActivationPayment[]
-  reachWallet                ReachWallet?
-  reachPropertyDebts         ReachPropertyDebt[]
-  customDomainRequests       CustomDomainRequest[]
-  customWebsiteRequests      CustomWebsiteRequest[]
+  bookingEngineConfigs         BookingEngineConfig[]
+  bookingSites                 BookingSite[]
+  bookingPaymentAccounts       BookingPaymentAccount[]
+  referralPrograms             ReferralProgram[]
+  referralPartners             ReferralPartner[]
+  referralCampaigns            ReferralCampaign[]
+  referralClicks               ReferralClick[]
+  referralAttributions         ReferralAttribution[]
+  referralBookings             ReferralBooking[]
+  referralCommissions          ReferralCommission[]
+  referralLedgerEntries        ReferralLedgerEntry[]
+  reachCreativeGenerations     ReachCreativeGeneration[]
+  referralPayouts              ReferralPayout[]
+  referralPlatformFees         ReferralPlatformFee[]
+  referralActivationPayments   ReferralActivationPayment[]
+  reachWallet                  ReachWallet?
+  reachPropertyDebts           ReachPropertyDebt[]
+  customDomainRequests         CustomDomainRequest[]
+  customWebsiteRequests        CustomWebsiteRequest[]
   organizationApprovalRequests OrganizationApprovalRequest[] @relation("OrganizationApprovalRequests")
 
   // Enterprise HR Suite
@@ -118,7 +118,7 @@ model Property {
   corporateAccounts                CorporateAccount[]
   corporatePortalIdentities        CorporatePortalIdentity[]
   corporateContractProperties      CorporateContractProperty[]
-  corporateDefaultContracts        CorporateContract[] @relation("CorporateContractDefaultProperty")
+  corporateDefaultContracts        CorporateContract[]               @relation("CorporateContractDefaultProperty")
   corporateRateRules               CorporateRateRule[]
   corporateRateNegotiationRequests CorporateRateNegotiationRequest[]
   apiPartnerCorporateAccounts      ApiPartnerCorporateAccount[]
@@ -141,10 +141,10 @@ model Property {
   baseCurrency        String   @default("NGN")
   supportedCurrencies String[]
 
-  businessDate DateTime? @db.Date
+  businessDate                     DateTime? @db.Date
   breakfastEligibilitySnapshotDate DateTime? @db.Date
-  lastAuditAt  DateTime? @db.Timestamptz
-  auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED'
+  lastAuditAt                      DateTime? @db.Timestamptz
+  auditStatus                      String? // 'OPEN' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED'
 
   isActive         Boolean   @default(true)
   suspendedAt      DateTime? @db.Timestamptz
@@ -232,6 +232,7 @@ model Property {
   warehouses               Warehouse[]
   stockItems               StockItem[]
   stockTransactions        StockTransaction[]
+  guestAmenityFulfillments GuestAmenityFulfillment[]
   kitchenWasteEntries      KitchenWasteEntry[]
   purchaseOrders           PurchaseOrder[]
   goodsReceivedNotes       GoodsReceivedNote[]
@@ -340,22 +341,22 @@ model Property {
 }
 
 model OrganizationApprovalRequest {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
   organization   Organization @relation("OrganizationApprovalRequests", fields: [organizationId], references: [id], onDelete: Cascade)
-  requestedById  String   @db.Uuid
-  requestedBy    User     @relation("OrganizationApprovalRequestedBy", fields: [requestedById], references: [id])
-  reviewedById   String?  @db.Uuid
-  reviewedBy     User?    @relation("OrganizationApprovalReviewedBy", fields: [reviewedById], references: [id])
+  requestedById  String       @db.Uuid
+  requestedBy    User         @relation("OrganizationApprovalRequestedBy", fields: [requestedById], references: [id])
+  reviewedById   String?      @db.Uuid
+  reviewedBy     User?        @relation("OrganizationApprovalReviewedBy", fields: [reviewedById], references: [id])
   type           String
-  status         String   @default("PENDING")
+  status         String       @default("PENDING")
   reason         String?
   payload        Json
   reviewNotes    String?
-  requestedAt    DateTime @default(now()) @db.Timestamptz
-  reviewedAt     DateTime? @db.Timestamptz
-  createdAt      DateTime @default(now()) @db.Timestamptz
-  updatedAt      DateTime @updatedAt @db.Timestamptz
+  requestedAt    DateTime     @default(now()) @db.Timestamptz
+  reviewedAt     DateTime?    @db.Timestamptz
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
 
   @@index([organizationId, status])
   @@index([requestedById, status])
@@ -563,7 +564,8 @@ model Room {
   lockCredentials               LockCredential[]
   lockOperations                LockOperation[]
   statusHistory                 RoomStatusHistory[]
-  guestAmenityStockTransactions StockTransaction[]  @relation("GuestAmenityStockRoom")
+  guestAmenityStockTransactions StockTransaction[]        @relation("GuestAmenityStockRoom")
+  guestAmenityFulfillments      GuestAmenityFulfillment[]
 
   createdAt     DateTime       @default(now()) @db.Timestamptz
   updatedAt     DateTime       @updatedAt @db.Timestamptz
@@ -946,7 +948,7 @@ model CorporateContract {
   organization                Organization                      @relation(fields: [organizationId], references: [id])
   corporateAccount            CorporateAccount?                 @relation(fields: [corporateAccountId], references: [id])
   corporateBookingApplication CorporateBookingApplication?      @relation(fields: [corporateBookingApplicationId], references: [id])
-  defaultProperty             Property?                        @relation("CorporateContractDefaultProperty", fields: [defaultPropertyId], references: [id])
+  defaultProperty             Property?                         @relation("CorporateContractDefaultProperty", fields: [defaultPropertyId], references: [id])
   properties                  CorporateContractProperty[]
   versions                    CorporateContractVersion[]
   negotiationRequests         CorporateRateNegotiationRequest[]
@@ -1189,6 +1191,7 @@ model Reservation {
   breakfastRedemptions          BreakfastRedemption[]
   poolEntries                   PoolEntry[]
   guestAmenityStockTransactions StockTransaction[]           @relation("GuestAmenityStock")
+  guestAmenityFulfillments      GuestAmenityFulfillment[]
   nightAuditMovementSnapshots   NightAuditMovementSnapshot[]
 }
 
@@ -1847,12 +1850,12 @@ model ComplimentaryRecord {
   guestId     String? @db.Uuid
   roomId      String? @db.Uuid
 
-  beneficiaryType String @default("GUEST")
-  settlementType String @default("DUTY_MANAGER")
-  staffId String? @db.Uuid
-  staff   Staff?  @relation("ComplimentaryBeneficiary", fields: [staffId], references: [id])
-  acknowledgedByStaffId String? @db.Uuid
-  acknowledgedBy        Staff?  @relation("ComplimentaryAcknowledgement", fields: [acknowledgedByStaffId], references: [id])
+  beneficiaryType       String    @default("GUEST")
+  settlementType        String    @default("DUTY_MANAGER")
+  staffId               String?   @db.Uuid
+  staff                 Staff?    @relation("ComplimentaryBeneficiary", fields: [staffId], references: [id])
+  acknowledgedByStaffId String?   @db.Uuid
+  acknowledgedBy        Staff?    @relation("ComplimentaryAcknowledgement", fields: [acknowledgedByStaffId], references: [id])
   acknowledgedAt        DateTime? @db.Timestamptz
 
   grossAmount    Decimal @db.Decimal(18, 4)
@@ -1961,14 +1964,64 @@ model NightAudit {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  folioItems        FolioItem[]
-  acknowledgements  NightAuditAcknowledgement[]
-  financialSnapshot NightAuditFinancialSnapshot?
-  closePackage      NightAuditClosePackage?
-  movementSnapshots NightAuditMovementSnapshot[]
-  journalEntries    JournalEntry[]
+  folioItems               FolioItem[]
+  acknowledgements         NightAuditAcknowledgement[]
+  financialSnapshot        NightAuditFinancialSnapshot?
+  closePackage             NightAuditClosePackage?
+  movementSnapshots        NightAuditMovementSnapshot[]
+  journalEntries           JournalEntry[]
+  guestAmenityFulfillments GuestAmenityFulfillment[]
+  voidedGuestAmenityFulfillments GuestAmenityFulfillment[] @relation("GuestAmenityVoidedByAudit")
 
   @@unique([propertyId, businessDate])
+}
+
+/// Operational record for complimentary amenity issuance. This is separate
+/// from StockTransaction so shortages can be recorded without pretending that
+/// inventory was issued or preventing financial night audit.
+model GuestAmenityFulfillment {
+  id            String      @id @default(uuid()) @db.Uuid
+  propertyId    String      @db.Uuid
+  property      Property    @relation(fields: [propertyId], references: [id])
+  nightAuditId  String      @db.Uuid
+  nightAudit    NightAudit  @relation(fields: [nightAuditId], references: [id])
+  reservationId String      @db.Uuid
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  roomId        String?     @db.Uuid
+  room          Room?       @relation(fields: [roomId], references: [id])
+  stockItemId   String?     @db.Uuid
+  stockItem     StockItem?  @relation(fields: [stockItemId], references: [id])
+  warehouseId   String?     @db.Uuid
+  warehouse     Warehouse?  @relation(fields: [warehouseId], references: [id])
+
+  businessDate           DateTime @db.Date
+  amenityKey             String
+  amenityName            String
+  unit                   String
+  guestCount             Int
+  requiredQuantity       Decimal  @db.Decimal(18, 4)
+  issuedQuantity         Decimal  @default(0) @db.Decimal(18, 4)
+  shortageQuantity       Decimal  @default(0) @db.Decimal(18, 4)
+  stockBefore            Decimal  @default(0) @db.Decimal(18, 4)
+  stockAfter             Decimal  @default(0) @db.Decimal(18, 4)
+  unitCost               Decimal  @default(0) @db.Decimal(18, 4)
+  totalValue             Decimal  @default(0) @db.Decimal(18, 4)
+  estimatedShortageValue Decimal  @default(0) @db.Decimal(18, 4)
+  currency               String   @default("NGN")
+  status                 String // FULFILLED | PARTIALLY_FULFILLED | PENDING | WAIVED | VOIDED
+  reason                 String?
+  operationId            String   @unique
+  voidedAt               DateTime? @db.Timestamptz
+  voidedByNightAuditId   String?  @db.Uuid
+  voidedByNightAudit     NightAudit? @relation("GuestAmenityVoidedByAudit", fields: [voidedByNightAuditId], references: [id])
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, businessDate, status])
+  @@index([reservationId, businessDate])
+  @@index([nightAuditId])
+  @@index([propertyId, status, voidedAt])
 }
 
 // Immutable evidence bundle for a completed business-date close.
@@ -2408,31 +2461,31 @@ model Staff {
   updatedAt DateTime  @updatedAt @db.Timestamptz
   deletedAt DateTime? @db.Timestamptz
 
-  posOrders              PosOrder[]
-  outletAccess           StaffPosOutletAccess[]
-  posProductionBatches   PosProductionBatch[]
-  posOperatorSessions    PosOperatorSession[]
-  primaryPosSessions     PosSession[]                @relation("PosSessionPrimaryOperator")
-  processedPosPayments   PosPayment[]                @relation("PaymentProcessedBy")
-  CashAccount            CashAccount[]
-  frontdeskSessions      FrontdeskSession[]
-  frontdeskAudits        FrontdeskSessionAudit[]
-  handoversGiven         CashHandover[]              @relation("HandoverGiver")
-  handoversReceived      CashHandover[]              @relation("HandoverReceiver")
-  complRecordsOperated   ComplimentaryRecord[]       @relation("ComplimentaryOperator")
-  complRecordsApproved   ComplimentaryRecord[]       @relation("ComplimentaryApprover")
-  complRecordsAudited    ComplimentaryRecord[]       @relation("ComplimentaryAuditor")
-  complRecordsBenefit    ComplimentaryRecord[]       @relation("ComplimentaryBeneficiary")
-  complimentaryAcknowledgements ComplimentaryRecord[] @relation("ComplimentaryAcknowledgement")
-  concessionAcknowledgements ApprovalRequest[] @relation("ApprovalAcknowledgement")
-  concessionBeneficiaries ApprovalRequest[] @relation("ApprovalStaffBeneficiary")
-  staffReceivables       StaffReceivable[]
-  bypassOperations       CheckInBypass[]             @relation("BypassOperator")
-  bypassAcknowledgements CheckInBypass[]             @relation("BypassAcknowledger")
-  bypassesReviewed       CheckInBypass[]             @relation("BypassReviewer")
-  headedDepartments      Department[]                @relation("DepartmentHead")
-  employeeInvitations    EmployeeInvitation[]
-  separationRequests     EmployeeSeparationRequest[]
+  posOrders                     PosOrder[]
+  outletAccess                  StaffPosOutletAccess[]
+  posProductionBatches          PosProductionBatch[]
+  posOperatorSessions           PosOperatorSession[]
+  primaryPosSessions            PosSession[]                @relation("PosSessionPrimaryOperator")
+  processedPosPayments          PosPayment[]                @relation("PaymentProcessedBy")
+  CashAccount                   CashAccount[]
+  frontdeskSessions             FrontdeskSession[]
+  frontdeskAudits               FrontdeskSessionAudit[]
+  handoversGiven                CashHandover[]              @relation("HandoverGiver")
+  handoversReceived             CashHandover[]              @relation("HandoverReceiver")
+  complRecordsOperated          ComplimentaryRecord[]       @relation("ComplimentaryOperator")
+  complRecordsApproved          ComplimentaryRecord[]       @relation("ComplimentaryApprover")
+  complRecordsAudited           ComplimentaryRecord[]       @relation("ComplimentaryAuditor")
+  complRecordsBenefit           ComplimentaryRecord[]       @relation("ComplimentaryBeneficiary")
+  complimentaryAcknowledgements ComplimentaryRecord[]       @relation("ComplimentaryAcknowledgement")
+  concessionAcknowledgements    ApprovalRequest[]           @relation("ApprovalAcknowledgement")
+  concessionBeneficiaries       ApprovalRequest[]           @relation("ApprovalStaffBeneficiary")
+  staffReceivables              StaffReceivable[]
+  bypassOperations              CheckInBypass[]             @relation("BypassOperator")
+  bypassAcknowledgements        CheckInBypass[]             @relation("BypassAcknowledger")
+  bypassesReviewed              CheckInBypass[]             @relation("BypassReviewer")
+  headedDepartments             Department[]                @relation("DepartmentHead")
+  employeeInvitations           EmployeeInvitation[]
+  separationRequests            EmployeeSeparationRequest[]
 
   // Enterprise Accounting Suite
   salaryStructure         SalaryStructure?
@@ -2471,19 +2524,19 @@ model Staff {
 /// Temporary management accounts provisioned from the public demo request.
 /// The organization and property are HQ-owned; only the account is temporary.
 model DemoAccount {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
-  propertyId     String   @db.Uuid
-  userId         String   @unique @db.Uuid
-  staffId        String   @unique @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  propertyId     String    @db.Uuid
+  userId         String    @unique @db.Uuid
+  staffId        String    @unique @db.Uuid
   email          String
   roleName       String
-  status         String   @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
+  status         String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
   createdIp      String?
-  expiresAt      DateTime @db.Timestamptz
+  expiresAt      DateTime  @db.Timestamptz
   expiredAt      DateTime? @db.Timestamptz
-  createdAt      DateTime @default(now()) @db.Timestamptz
-  updatedAt      DateTime @updatedAt @db.Timestamptz
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -2524,22 +2577,22 @@ model StaffPosOutletAccess {
 }
 
 model User {
-  id               String    @id @default(uuid()) @db.Uuid
-  staffId          String?   @db.Uuid
-  email            String    @unique
-  passwordHash     String
-  passwordSetAt    DateTime? @db.Timestamptz
-  mobilePinHash    String?
-  mobilePinFailedAttempts Int @default(0)
-  mobilePinLockedUntil DateTime? @db.Timestamptz
-  mobilePinSetAt    DateTime? @db.Timestamptz
-  firstName        String?
-  middleName       String?
-  lastName         String?
-  emailVerifiedAt  DateTime? @db.Timestamptz
+  id                      String    @id @default(uuid()) @db.Uuid
+  staffId                 String?   @db.Uuid
+  email                   String    @unique
+  passwordHash            String
+  passwordSetAt           DateTime? @db.Timestamptz
+  mobilePinHash           String?
+  mobilePinFailedAttempts Int       @default(0)
+  mobilePinLockedUntil    DateTime? @db.Timestamptz
+  mobilePinSetAt          DateTime? @db.Timestamptz
+  firstName               String?
+  middleName              String?
+  lastName                String?
+  emailVerifiedAt         DateTime? @db.Timestamptz
   // Deprecated compatibility alias. New code should use isLodgeCoreAdmin.
-  isSuperAdmin     Boolean   @default(false)
-  isLodgeCoreAdmin Boolean   @default(false)
+  isSuperAdmin            Boolean   @default(false)
+  isLodgeCoreAdmin        Boolean   @default(false)
 
   lastLoginAt DateTime? @db.Timestamptz
   lastLoginIp String?
@@ -2556,39 +2609,39 @@ model User {
 
   membership                            OrganizationMembership?
   demoAccount                           DemoAccount?
-  portalOwnerOrganizations             Organization[]              @relation("OrganizationPortalOwner")
-  requestedOrganizationApprovals       OrganizationApprovalRequest[] @relation("OrganizationApprovalRequestedBy")
-  reviewedOrganizationApprovals        OrganizationApprovalRequest[] @relation("OrganizationApprovalReviewedBy")
+  portalOwnerOrganizations              Organization[]                @relation("OrganizationPortalOwner")
+  requestedOrganizationApprovals        OrganizationApprovalRequest[] @relation("OrganizationApprovalRequestedBy")
+  reviewedOrganizationApprovals         OrganizationApprovalRequest[] @relation("OrganizationApprovalReviewedBy")
   roles                                 UserRole[]
-  requestedRefunds                      RefundRequest[]              @relation("RefundRequestedBy")
-  assignedRefunds                       RefundRequest[]              @relation("RefundCurrentApprover")
-  refundApprovals                       RefundApproval[]             @relation("RefundApprover")
-  refundApprovalRules                   RefundApprovalRule[]         @relation("RefundRuleApprover")
+  requestedRefunds                      RefundRequest[]               @relation("RefundRequestedBy")
+  assignedRefunds                       RefundRequest[]               @relation("RefundCurrentApprover")
+  refundApprovals                       RefundApproval[]              @relation("RefundApprover")
+  refundApprovalRules                   RefundApprovalRule[]          @relation("RefundRuleApprover")
   deviceTokens                          DeviceToken[]
   notificationPreferences               UserNotificationPreference[]
   externalAuditorAccesses               ExternalAuditorAccess[]
-  grantedExternalAuditorAccesses        ExternalAuditorAccess[]      @relation("ExternalAuditorAccessGrantedBy")
-  revokedExternalAuditorAccesses        ExternalAuditorAccess[]      @relation("ExternalAuditorAccessRevokedBy")
-  externalAuditorInvitations            ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationUser")
-  sentExternalAuditorInvitations        ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationInvitedBy")
-  customerInvitations                   CustomerInvitation[]         @relation("CustomerInvitationUser")
+  grantedExternalAuditorAccesses        ExternalAuditorAccess[]       @relation("ExternalAuditorAccessGrantedBy")
+  revokedExternalAuditorAccesses        ExternalAuditorAccess[]       @relation("ExternalAuditorAccessRevokedBy")
+  externalAuditorInvitations            ExternalAuditorInvitation[]   @relation("ExternalAuditorInvitationUser")
+  sentExternalAuditorInvitations        ExternalAuditorInvitation[]   @relation("ExternalAuditorInvitationInvitedBy")
+  customerInvitations                   CustomerInvitation[]          @relation("CustomerInvitationUser")
   portalEmailVerifications              PortalEmailVerification[]
   passwordResetTokens                   PasswordResetToken[]
-  sentCustomerInvitations               CustomerInvitation[]         @relation("CustomerInvitationCreatedBy")
-  employeeInvitations                   EmployeeInvitation[]         @relation("EmployeeInvitationUser")
-  sentEmployeeInvitations               EmployeeInvitation[]         @relation("EmployeeInvitationInvitedBy")
-  requestedEmployeeChanges              EmployeeChangeRequest[]      @relation("EmployeeChangeRequestRequestedBy")
-  reviewedEmployeeChanges               EmployeeChangeRequest[]      @relation("EmployeeChangeRequestReviewedBy")
-  requestedSeparations                  EmployeeSeparationRequest[]  @relation("SeparationRequestedBy")
-  reviewedSeparations                   EmployeeSeparationRequest[]  @relation("SeparationReviewedBy")
-  requestedPositionChanges              PositionChangeRequest[]      @relation("PositionChangeRequestedBy")
-  reviewedPositionChanges               PositionChangeRequest[]      @relation("PositionChangeReviewedBy")
-  requestedCompensationChanges          CompensationChangeRequest[]  @relation("CompensationChangeRequestedBy")
-  departmentReviewedCompensationChanges CompensationChangeRequest[]  @relation("CompensationChangeDepartmentReviewer")
-  hrReviewedCompensationChanges         CompensationChangeRequest[]  @relation("CompensationChangeHrReviewer")
-  approvedCompensationChanges           CompensationChangeRequest[]  @relation("CompensationChangeApprover")
-  publishedShiftRosters                 ShiftRoster[]                @relation("ShiftRosterPublishedBy")
-  cancelledShiftRosters                 ShiftRoster[]                @relation("ShiftRosterCancelledBy")
+  sentCustomerInvitations               CustomerInvitation[]          @relation("CustomerInvitationCreatedBy")
+  employeeInvitations                   EmployeeInvitation[]          @relation("EmployeeInvitationUser")
+  sentEmployeeInvitations               EmployeeInvitation[]          @relation("EmployeeInvitationInvitedBy")
+  requestedEmployeeChanges              EmployeeChangeRequest[]       @relation("EmployeeChangeRequestRequestedBy")
+  reviewedEmployeeChanges               EmployeeChangeRequest[]       @relation("EmployeeChangeRequestReviewedBy")
+  requestedSeparations                  EmployeeSeparationRequest[]   @relation("SeparationRequestedBy")
+  reviewedSeparations                   EmployeeSeparationRequest[]   @relation("SeparationReviewedBy")
+  requestedPositionChanges              PositionChangeRequest[]       @relation("PositionChangeRequestedBy")
+  reviewedPositionChanges               PositionChangeRequest[]       @relation("PositionChangeReviewedBy")
+  requestedCompensationChanges          CompensationChangeRequest[]   @relation("CompensationChangeRequestedBy")
+  departmentReviewedCompensationChanges CompensationChangeRequest[]   @relation("CompensationChangeDepartmentReviewer")
+  hrReviewedCompensationChanges         CompensationChangeRequest[]   @relation("CompensationChangeHrReviewer")
+  approvedCompensationChanges           CompensationChangeRequest[]   @relation("CompensationChangeApprover")
+  publishedShiftRosters                 ShiftRoster[]                 @relation("ShiftRosterPublishedBy")
+  cancelledShiftRosters                 ShiftRoster[]                 @relation("ShiftRosterCancelledBy")
 }
 
 // FCM device tokens for push notifications
@@ -3462,11 +3515,12 @@ model Warehouse {
   parentWarehouse   Warehouse?  @relation("WarehouseHierarchy", fields: [parentWarehouseId], references: [id])
   childWarehouses   Warehouse[] @relation("WarehouseHierarchy")
 
-  stockItems    StockItem[]
-  transactions  StockTransaction[]
-  transfersFrom StockTransfer[]    @relation("TransferFrom")
-  transfersTo   StockTransfer[]    @relation("TransferTo")
-  stocktakes    Stocktake[]
+  stockItems               StockItem[]
+  transactions             StockTransaction[]
+  guestAmenityFulfillments GuestAmenityFulfillment[]
+  transfersFrom            StockTransfer[]           @relation("TransferFrom")
+  transfersTo              StockTransfer[]           @relation("TransferTo")
+  stocktakes               Stocktake[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -3514,15 +3568,16 @@ model StockItem {
 
   isActive Boolean @default(true)
 
-  recipeIngredients RecipeIngredient[]
-  transactions      StockTransaction[]
-  alerts            InventoryAlert[]
-  transferItems     StockTransferItem[]
-  costAdjustments   CostAdjustment[]
-  kitchenWaste      KitchenWasteEntry[]
-  stocktakeItems    StocktakeItem[]
-  stockUnits        StockItemUnit[]
-  modifierLinks     PosProductModifier[] @relation("ModifierStockItem")
+  recipeIngredients        RecipeIngredient[]
+  transactions             StockTransaction[]
+  guestAmenityFulfillments GuestAmenityFulfillment[]
+  alerts                   InventoryAlert[]
+  transferItems            StockTransferItem[]
+  costAdjustments          CostAdjustment[]
+  kitchenWaste             KitchenWasteEntry[]
+  stocktakeItems           StocktakeItem[]
+  stockUnits               StockItemUnit[]
+  modifierLinks            PosProductModifier[]      @relation("ModifierStockItem")
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -3826,16 +3881,16 @@ model GoodsReceivedNoteItem {
 // -----------------------------------------------------------------------------
 
 model PosOutlet {
-  id              String   @id @default(uuid()) @db.Uuid
-  propertyId      String   @db.Uuid
-  property        Property @relation(fields: [propertyId], references: [id])
+  id              String          @id @default(uuid()) @db.Uuid
+  propertyId      String          @db.Uuid
+  property        Property        @relation(fields: [propertyId], references: [id])
   name            String
   type            String
   /// The terminal family used when provisioning a desktop terminal for this outlet.
   /// `type` remains the operational outlet classification used by reporting.
   posType         PosTerminalType @default(RESTAURANT_POS)
-  isActive        Boolean  @default(true)
-  autoLockSeconds Int      @default(60)
+  isActive        Boolean         @default(true)
+  autoLockSeconds Int             @default(60)
 
   categories ProductCategory[]
   sessions   PosSession[]
@@ -4985,12 +5040,12 @@ model ApprovalRequest {
   requestedAt DateTime @default(now()) @db.Timestamptz
 
   beneficiaryType       String?
-  beneficiaryGuestId    String? @db.Uuid
-  beneficiaryStaffId    String? @db.Uuid
-  acknowledgedByStaffId String? @db.Uuid
+  beneficiaryGuestId    String?   @db.Uuid
+  beneficiaryStaffId    String?   @db.Uuid
+  acknowledgedByStaffId String?   @db.Uuid
   acknowledgedAt        DateTime? @db.Timestamptz
-  acknowledgedBy        Staff? @relation("ApprovalAcknowledgement", fields: [acknowledgedByStaffId], references: [id])
-  beneficiaryStaff       Staff? @relation("ApprovalStaffBeneficiary", fields: [beneficiaryStaffId], references: [id])
+  acknowledgedBy        Staff?    @relation("ApprovalAcknowledgement", fields: [acknowledgedByStaffId], references: [id])
+  beneficiaryStaff      Staff?    @relation("ApprovalStaffBeneficiary", fields: [beneficiaryStaffId], references: [id])
 
   reviewedBy String?   @db.Uuid // Staff ID
   reviewedAt DateTime? @db.Timestamptz
@@ -5463,11 +5518,11 @@ model CityLedgerInvoice {
   createdAt         DateTime @default(now()) @db.Timestamptz
   updatedAt         DateTime @updatedAt @db.Timestamptz
 
-  property     Property               @relation(fields: [propertyId], references: [id])
-  account      CityLedgerAccount      @relation(fields: [accountId], references: [id])
-  eventInvoice EventInvoice?          @relation(fields: [eventInvoiceId], references: [id])
-  entries      CityLedgerEntry[]
-  allocations  CityLedgerAllocation[] @relation("InvoiceAllocations")
+  property                   Property                    @relation(fields: [propertyId], references: [id])
+  account                    CityLedgerAccount           @relation(fields: [accountId], references: [id])
+  eventInvoice               EventInvoice?               @relation(fields: [eventInvoiceId], references: [id])
+  entries                    CityLedgerEntry[]
+  allocations                CityLedgerAllocation[]      @relation("InvoiceAllocations")
   gatewayPaymentTransactions BookingPaymentTransaction[]
 
   @@unique([propertyId, invoiceNumber])
@@ -6878,10 +6933,10 @@ model BillingProduct {
   catalogVersion       Int     @default(1)
   metadata             Json?
 
-  prices       BillingPrice[]
-  entitlements Entitlement[]
-  planItems    BillingPlanItem[]
-  modules      Module[]
+  prices                BillingPrice[]
+  entitlements          Entitlement[]
+  planItems             BillingPlanItem[]
+  modules               Module[]
   organizationDiscounts OrganizationBillingDiscount[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -7050,36 +7105,36 @@ model BillingInvoice {
 // -----------------------------------------------------------------------------
 
 model BillingPlan {
-  id            String            @id @default(uuid()) @db.Uuid
-  code          String            @unique
-  name          String
-  description   String?
-  active        Boolean           @default(true)
-  displayOrder  Int               @default(0)
-  metadata      Json?
-  items         BillingPlanItem[]
-  subscriptions Subscription[]
+  id                    String                        @id @default(uuid()) @db.Uuid
+  code                  String                        @unique
+  name                  String
+  description           String?
+  active                Boolean                       @default(true)
+  displayOrder          Int                           @default(0)
+  metadata              Json?
+  items                 BillingPlanItem[]
+  subscriptions         Subscription[]
   organizationDiscounts OrganizationBillingDiscount[]
-  createdAt     DateTime          @default(now()) @db.Timestamptz
-  updatedAt     DateTime          @updatedAt @db.Timestamptz
+  createdAt             DateTime                      @default(now()) @db.Timestamptz
+  updatedAt             DateTime                      @updatedAt @db.Timestamptz
 }
 
 model OrganizationBillingDiscount {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  planId         String?      @db.Uuid
-  plan           BillingPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
-  productId      String?      @db.Uuid
-  product        BillingProduct? @relation(fields: [productId], references: [id], onDelete: Cascade)
-  percentage     Decimal      @db.Decimal(5, 2)
-  reason         String?
-  active         Boolean      @default(true)
-  startsAt       DateTime     @default(now()) @db.Timestamptz
-  endsAt         DateTime?    @db.Timestamptz
-  createdByUserId String?     @db.Uuid
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  id              String          @id @default(uuid()) @db.Uuid
+  organizationId  String          @db.Uuid
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId          String?         @db.Uuid
+  plan            BillingPlan?    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  productId       String?         @db.Uuid
+  product         BillingProduct? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  percentage      Decimal         @db.Decimal(5, 2)
+  reason          String?
+  active          Boolean         @default(true)
+  startsAt        DateTime        @default(now()) @db.Timestamptz
+  endsAt          DateTime?       @db.Timestamptz
+  createdByUserId String?         @db.Uuid
+  createdAt       DateTime        @default(now()) @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @db.Timestamptz
 
   @@index([organizationId, active])
   @@index([organizationId, planId])
@@ -7795,21 +7850,21 @@ model BookingHold {
 /// server. It is intentionally opaque until the partner credential model is
 /// finalized; callers must never be able to choose it from request payloads.
 model BookingQuote {
-  id                            String                       @id @default(uuid()) @db.Uuid
-  organizationId                String                       @db.Uuid
-  propertyId                    String                       @db.Uuid
+  id                            String                            @id @default(uuid()) @db.Uuid
+  organizationId                String                            @db.Uuid
+  propertyId                    String                            @db.Uuid
   principalId                   String
-  corporateAccountId            String?                      @db.Uuid
-  corporateBookingApplicationId String?                      @db.Uuid
-  corporateBookingApplication   CorporateBookingApplication? @relation(fields: [corporateBookingApplicationId], references: [id], onDelete: SetNull)
-  corporateRateNegotiations       CorporateRateNegotiationRequest[] @relation("CorporateRateNegotiationQuote")
-  approvedCorporateNegotiations   CorporateRateNegotiationRequest[] @relation("CorporateRateNegotiationApprovedQuote")
+  corporateAccountId            String?                           @db.Uuid
+  corporateBookingApplicationId String?                           @db.Uuid
+  corporateBookingApplication   CorporateBookingApplication?      @relation(fields: [corporateBookingApplicationId], references: [id], onDelete: SetNull)
+  corporateRateNegotiations     CorporateRateNegotiationRequest[] @relation("CorporateRateNegotiationQuote")
+  approvedCorporateNegotiations CorporateRateNegotiationRequest[] @relation("CorporateRateNegotiationApprovedQuote")
   requestFingerprint            String
-  status                        String                       @default("ACTIVE") // ACTIVE | EXPIRED | CONSUMED | INVALIDATED
-  expiresAt                     DateTime                     @db.Timestamptz
-  consumedAt                    DateTime?                    @db.Timestamptz
-  invalidatedAt                 DateTime?                    @db.Timestamptz
-  reservationId                 String?                      @db.Uuid
+  status                        String                            @default("ACTIVE") // ACTIVE | EXPIRED | CONSUMED | INVALIDATED
+  expiresAt                     DateTime                          @db.Timestamptz
+  consumedAt                    DateTime?                         @db.Timestamptz
+  invalidatedAt                 DateTime?                         @db.Timestamptz
+  reservationId                 String?                           @db.Uuid
 
   /// Full immutable contract, rate, tax/fee, inclusion, and policy snapshot.
   snapshot Json
@@ -7906,11 +7961,11 @@ model CorporatePaymentGroupReservation {
 /// On success, this drives creation of a native Payment record in the existing
 /// Folio/accounting pipeline. It is NOT a parallel accounting system.
 model BookingPaymentTransaction {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  propertyId     String  @db.Uuid
-  reservationId  String? @db.Uuid
-  holdId         String? @db.Uuid
+  id                  String  @id @default(uuid()) @db.Uuid
+  organizationId      String  @db.Uuid
+  propertyId          String  @db.Uuid
+  reservationId       String? @db.Uuid
+  holdId              String? @db.Uuid
   cityLedgerInvoiceId String? @unique @db.Uuid
 
   /// PAYSTACK | FLUTTERWAVE
@@ -7942,7 +7997,7 @@ model BookingPaymentTransaction {
   cityLedgerEntry         CityLedgerEntry?       @relation("CorporateSettlementEntry", fields: [cityLedgerEntryId], references: [id])
   corporatePaymentGroupId String?                @db.Uuid
   corporatePaymentGroup   CorporatePaymentGroup? @relation(fields: [corporatePaymentGroupId], references: [id])
-  cityLedgerInvoice       CityLedgerInvoice?      @relation(fields: [cityLedgerInvoiceId], references: [id])
+  cityLedgerInvoice       CityLedgerInvoice?     @relation(fields: [cityLedgerInvoiceId], references: [id])
 
   metadata Json?
 
@@ -8706,21 +8761,21 @@ model BreakfastRedemption {
 // breakfast is normally consumed the following morning, after Night Audit has
 // advanced the property business date.
 model BreakfastEligibilitySnapshot {
-  id                    String   @id @default(uuid()) @db.Uuid
-  propertyId            String   @db.Uuid
-  property             Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  businessDate          DateTime @db.Date
+  id                     String   @id @default(uuid()) @db.Uuid
+  propertyId             String   @db.Uuid
+  property               Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  businessDate           DateTime @db.Date
   redeemableBusinessDate DateTime @db.Date
-  reservationId         String   @db.Uuid
-  reservationRoomId     String   @db.Uuid
-  guestId               String   @db.Uuid
-  roomId                String?  @db.Uuid
-  roomNumber            String
-  guestName             String
-  maxCoversAllowed      Int
-  status                String   @default("ELIGIBLE")
-  reason                String?
-  createdAt             DateTime @default(now()) @db.Timestamptz
+  reservationId          String   @db.Uuid
+  reservationRoomId      String   @db.Uuid
+  guestId                String   @db.Uuid
+  roomId                 String?  @db.Uuid
+  roomNumber             String
+  guestName              String
+  maxCoversAllowed       Int
+  status                 String   @default("ELIGIBLE")
+  reason                 String?
+  createdAt              DateTime @default(now()) @db.Timestamptz
 
   @@unique([propertyId, redeemableBusinessDate, reservationRoomId])
   @@index([propertyId, redeemableBusinessDate])

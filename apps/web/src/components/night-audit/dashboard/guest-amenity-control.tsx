@@ -9,7 +9,8 @@ export function GuestAmenityControl({ data }: { data: NightAuditData }) {
   if (!ctrl) return null;
 
   const cur = data.property.baseCurrency || 'NGN';
-  const blocked = ctrl.blockers.length > 0;
+  const warnings = [...(ctrl.warnings || []), ...(ctrl.blockers || [])];
+  const hasShortage = warnings.length > 0;
 
   return (
     <Panel className="h-full">
@@ -17,10 +18,10 @@ export function GuestAmenityControl({ data }: { data: NightAuditData }) {
         icon={Package}
         title="Guest Amenity"
         subtitle="Inventory COGS preflight"
-        tone={blocked ? 'rose' : 'emerald'}
+        tone={hasShortage ? 'amber' : 'emerald'}
         actions={
-          <Badge tone={!ctrl.enabled ? 'neutral' : blocked ? 'rose' : 'emerald'}>
-            {!ctrl.enabled ? 'Disabled' : blocked ? 'Blocked' : 'Ready'}
+          <Badge tone={!ctrl.enabled ? 'neutral' : hasShortage ? 'amber' : 'emerald'}>
+            {!ctrl.enabled ? 'Disabled' : hasShortage ? 'Operational Exception' : 'Ready'}
           </Badge>
         }
       />
@@ -41,11 +42,11 @@ export function GuestAmenityControl({ data }: { data: NightAuditData }) {
             </div>
           ))}
 
-          {(blocked || ctrl.zeroCostItems.length > 0) && (
+          {(hasShortage || ctrl.zeroCostItems.length > 0) && (
             <div className="space-y-1 px-4 py-2.5">
-              {ctrl.blockers.map((b: string) => (
-                <div key={b} className="flex items-start gap-1.5 text-[11px] text-rose-300">
-                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />{b}
+              {warnings.map((warning: string) => (
+                <div key={warning} className="flex items-start gap-1.5 text-[11px] text-amber-300">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />{warning}
                 </div>
               ))}
               {ctrl.zeroCostItems.length > 0 && (
@@ -56,7 +57,7 @@ export function GuestAmenityControl({ data }: { data: NightAuditData }) {
             </div>
           )}
 
-          {!blocked && ctrl.zeroCostItems.length === 0 && (
+          {!hasShortage && ctrl.zeroCostItems.length === 0 && (
             <div className="flex items-center gap-1.5 px-4 py-2 text-[11.5px] text-emerald-300">
               <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />All amenity lines costed correctly
             </div>

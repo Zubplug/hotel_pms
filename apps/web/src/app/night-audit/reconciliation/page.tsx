@@ -74,6 +74,7 @@ export default function ReconciliationPage() {
     && proofRows.every((row: any) => row.status === 'PROVEN');
   const paymentTotal = useMemo(() => (data?.payments || []).reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0), [data]);
 
+
   if (loading && !data) return (
     <div className="flex min-h-[60vh] items-center justify-center" style={PAGE_BG}>
       <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
@@ -287,10 +288,12 @@ export default function ReconciliationPage() {
               Guest Amenity COGS
             </h3>
             <div className="mt-4 space-y-3 text-xs">
-              <div className="flex justify-between gap-3"><span className="text-slate-500">Stock issues</span><span className="font-semibold text-white">{data?.guestAmenity?.transactionCount || 0}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Amenity lines</span><span className="font-semibold text-white">{data?.guestAmenity?.fulfillmentCount || 0}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Issued / required</span><span className="font-semibold text-white">{data?.guestAmenity?.issuedQuantity || 0} / {data?.guestAmenity?.requiredQuantity || 0}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Short quantity</span><span className={`font-semibold ${(data?.guestAmenity?.shortageQuantity || 0) > 0 ? 'text-amber-200' : 'text-emerald-200'}`}>{data?.guestAmenity?.shortageQuantity || 0}</span></div>
               <div className="flex justify-between gap-3"><span className="text-slate-500">Inventory credit</span><span className="font-semibold text-rose-200">{money(data?.guestAmenity?.cost, currency)} · GL1300</span></div>
               <div className="flex justify-between gap-3"><span className="text-slate-500">COGS debit</span><span className="font-semibold text-rose-200">{money(data?.guestAmenity?.cost, currency)} · GL5000</span></div>
-              <div className="border-t border-white/[0.06] pt-3 text-slate-500">This cost is not a guest folio charge. It reduces room contribution for management reporting.</div>
+              <div className="border-t border-white/[0.06] pt-3 text-slate-500">This cost is not a guest folio charge. It reduces room contribution for management reporting. Shortages are operational exceptions and do not block Night Audit.</div>
             </div>
           </div>
         </section>

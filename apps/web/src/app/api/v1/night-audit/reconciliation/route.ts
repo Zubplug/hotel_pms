@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const businessDate = new Date(`${dateValue}T00:00:00.000Z`);
     if (Number.isNaN(businessDate.getTime())) return errorResponse('BAD_REQUEST', 'Invalid businessDate', 400);
 
-    const [property, audit, snapshot, items, posOrders, frontDeskPayments, posPayments, journalEntries, guestAmenityTransactions] = await Promise.all([
+    const [property, audit, snapshot, items, posOrders, frontDeskPayments, posPayments, journalEntries, guestAmenityTransactions, guestAmenityFulfillments] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, name: true, baseCurrency: true } }),
       prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } }, select: { id: true, status: true, startedAt: true, completedAt: true } }),
       prisma.nightAuditFinancialSnapshot.findFirst({ where: { nightAudit: { propertyId, businessDate } } }),
@@ -64,6 +64,27 @@ export async function GET(req: NextRequest) {
       prisma.stockTransaction.findMany({
         where: { propertyId, businessDate, source: 'GUEST_AMENITY' as any },
         select: { id: true, totalValue: true, stockItem: { select: { name: true } } },
+      }),
+      prisma.guestAmenityFulfillment.findMany({
+        where: { propertyId, businessDate },
+        orderBy: [{ status: 'asc' }, { amenityName: 'asc' }],
+        select: {
+          id: true,
+          reservationId: true,
+          amenityName: true,
+          unit: true,
+          guestCount: true,
+          requiredQuantity: true,
+          issuedQuantity: true,
+          shortageQuantity: true,
+          estimatedShortageValue: true,
+          stockBefore: true,
+          stockAfter: true,
+          status: true,
+          reason: true,
+          reservation: { select: { confirmationNumber: true, primaryGuest: { select: { firstName: true, lastName: true } } } },
+          room: { select: { number: true } },
+        },
       }),
     ]);
 
@@ -160,6 +181,12 @@ export async function GET(req: NextRequest) {
         netRoomContribution,
         transactionCount: guestAmenityTransactions.length,
         transactions: guestAmenityTransactions.map((transaction) => ({ id: transaction.id, item: transaction.stockItem?.name || 'Amenity', cost: Math.abs(Number(transaction.totalValue || 0)) })),
+        fulfillmentCount: guestAmenityFulfillments.length,
+        shortageCount: guestAmenityFulfillments.filter((item) => Number(item.shortageQuantity) > 0).length,
+        requiredQuantity: guestAmenityFulfillments.reduce((sum, item) => sum + Number(item.requiredQuantity), 0),
+        issuedQuantity: guestAmenityFulfillments.reduce((sum, item) => sum + Number(item.issuedQuantity), 0),
+        shortageQuantity: guestAmenityFulfillments.reduce((sum, item) => sum + Number(item.shortageQuantity), 0),
+        fulfillments: guestAmenityFulfillments,
       },
       variance: { grossRevenue: grossVariance, status: grossVariance === null ? 'NOT_RUN' : Math.abs(grossVariance) < 0.01 ? 'BALANCED' : 'REVIEW' },
       payments: [...payments.entries()].map(([method, value]) => ({ method, amount: round(value.amount), count: value.count })).sort((a, b) => b.amount - a.amount),

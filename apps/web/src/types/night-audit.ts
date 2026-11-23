@@ -89,6 +89,7 @@ export interface FinancialData {
     shortages: Array<{ name: string; required: number; available: number; unit: string }>;
     zeroCostItems: string[];
     blockers: string[];
+    warnings?: string[];
   };
 }
 

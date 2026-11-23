@@ -872,24 +872,6 @@ export async function executeNightAudit(
             await reconcileFolioBalanceFromCounters(tx, mainFolio.id);
           }
 
-          // Complimentary in-room amenities are free to the guest but are
-          // consumed from housekeeping/laundry stock at the current cost.
-          // This remains in the same reservation transaction and is idempotent
-          // per reservation, business date, and stock item.
-          // Stock-backed complimentary amenities are only available to
-          // Professional Operations properties. Starter properties retain
-          // the normal complimentary flow and do not consume inventory here.
-          if (professionalOperationsEnabled) {
-            await postGuestAmenityPackInTransaction(tx, {
-              propertyId,
-              reservationId: reservation.id,
-              roomId: activeRoom?.roomId || null,
-              businessDate,
-              guestCount: Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)),
-              actorId,
-            });
-          }
-
           // Generate Housekeeping Tasks Idempotently. Housekeeping is best
           // effort: a task conflict or room update failure must not roll back
           // the room charge that was already posted in this transaction.
@@ -954,6 +936,52 @@ export async function executeNightAudit(
             });
           }
         }, { maxWait: 10000, timeout: 30000 });
+
+        // Amenity fulfilment is deliberately outside the room-charge
+        // transaction. A shortage or configuration problem must never roll
+        // back an otherwise valid room charge or stop financial cutover.
+        if (professionalOperationsEnabled) {
+          try {
+            const amenityResult = await prisma.$transaction((tx: any) => postGuestAmenityPackInTransaction(tx, {
+              propertyId,
+              nightAuditId: auditRun.id,
+              reservationId: reservation.id,
+              roomId: reservation.reservationRooms[0]?.roomId || null,
+              businessDate,
+              guestCount: Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)),
+              actorId,
+            }), { maxWait: 10000, timeout: 30000 });
+
+            if (amenityResult.shortageQuantity > 0) {
+              errors += 1;
+              postingExceptions.push({
+                reservationId: reservation.id,
+                confirmationNumber: reservation.confirmationNumber,
+                guestName: reservation.primaryGuest
+                  ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
+                  : 'Unknown Guest',
+                roomNumber: reservation.reservationRooms[0]?.room?.number || null,
+                stage: 'GUEST_AMENITIES',
+                message: `Guest amenities partially fulfilled: ${amenityResult.issuedQuantity} issued, ${amenityResult.shortageQuantity} unavailable. ${amenityResult.shortages.map((item) => `${item.name}: ${item.shortage} ${item.unit} short`).join('; ')}`,
+              });
+            }
+          } catch (amenityError) {
+            // This is an operational exception, not a financial posting
+            // failure. The audit remains eligible to close and the exception
+            // is retained for housekeeping/inventory follow-up.
+            errors += 1;
+            postingExceptions.push({
+              reservationId: reservation.id,
+              confirmationNumber: reservation.confirmationNumber,
+              guestName: reservation.primaryGuest
+                ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
+                : 'Unknown Guest',
+              roomNumber: reservation.reservationRooms[0]?.room?.number || null,
+              stage: 'GUEST_AMENITIES',
+              message: `Guest amenity fulfilment could not be recorded: ${amenityError instanceof Error ? amenityError.message : String(amenityError)}`,
+            });
+          }
+        }
       } catch (e) {
         console.error(`[Night Audit] Failed to process stayover for reservation ${reservation.id}:`, e);
         errors++;
@@ -964,9 +992,7 @@ export async function executeNightAudit(
             ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
             : 'Unknown Guest',
           roomNumber: reservation.reservationRooms?.[0]?.room?.number || null,
-          stage: e instanceof Error && /GUEST_AMENITY|guest amenity/i.test(e.message)
-            ? 'GUEST_AMENITIES'
-            : 'ROOM_CHARGE',
+          stage: 'ROOM_CHARGE',
           message: e instanceof Error ? e.message : String(e),
         });
       }
@@ -1203,10 +1229,9 @@ export async function executeNightAudit(
   const journalBusinessDate = new Date(businessDate.getTime());
 
   const roomChargeExceptions = postingExceptions.filter((exception) => exception.stage === 'ROOM_CHARGE');
-  const guestAmenityExceptions = postingExceptions.filter((exception) => exception.stage === 'GUEST_AMENITIES');
-  if (roomChargeExceptions.length > 0 || guestAmenityExceptions.length > 0) {
+  if (roomChargeExceptions.length > 0) {
     throw new Error(
-      `BLOCKER:Night Audit could not post ${roomChargeExceptions.length} room charge(s) and ${guestAmenityExceptions.length} guest amenity stock deduction(s). Resolve the listed reservation errors and retry the audit.`,
+      `BLOCKER:Night Audit could not post ${roomChargeExceptions.length} room charge(s). Resolve the listed financial posting errors and retry the audit.`,
     );
   }
 
@@ -1522,6 +1547,25 @@ export async function executeNightAudit(
         adr,
         revpar,
       }
+    });
+
+    // A new business date closes the operational window for unresolved
+    // amenity shortages from earlier audits. They remain immutable evidence,
+    // but must never appear in the new housekeeping queue or be issued after
+    // the guest's audit window has expired.
+    await tx.guestAmenityFulfillment.updateMany({
+      where: {
+        propertyId,
+        businessDate: { lt: businessDate },
+        status: { in: ['PENDING', 'PARTIALLY_FULFILLED'] },
+        voidedAt: null,
+      },
+      data: {
+        status: 'VOIDED',
+        reason: 'Voided when a subsequent Night Audit completed for the property.',
+        voidedAt: new Date(),
+        voidedByNightAuditId: auditRun.id,
+      },
     });
 
     await tx.nightAuditFinancialSnapshot.create({

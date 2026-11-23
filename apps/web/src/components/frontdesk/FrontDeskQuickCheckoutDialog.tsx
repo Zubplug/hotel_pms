@@ -23,7 +23,7 @@ const formatCurrency = (amount: number) =>
 
 export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, initialReservation }: FrontDeskQuickCheckoutDialogProps) {
   const queryClient = useQueryClient();
-  const { provider, isOnline } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [step, setStep] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'LOADING' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   const [reservation, setReservation] = useState<any>(null);
@@ -35,7 +35,11 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     let cancelled = false;
     const load = async () => {
       setErrorMsg('');
-      if (isOnline) {
+      // The keycard encoder is a desktop capability. Network connectivity is
+      // not the same thing as desktop mode: an offline terminal may still be
+      // online, while a browser may be temporarily offline. Only the browser
+      // experience should show the desktop-required notice.
+      if (!isDesktopMode) {
         setReservation(null);
         setStep('OFFLINE_REQUIRED');
         return;
@@ -59,10 +63,10 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     };
     void load();
     return () => { cancelled = true; };
-  }, [open, initialReservation, isOnline, provider]);
+  }, [open, initialReservation, isDesktopMode, provider]);
 
   const handleReadCard = async () => {
-    if (isOnline) {
+    if (!isDesktopMode) {
       setStep('OFFLINE_REQUIRED');
       return;
     }
@@ -91,7 +95,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
   };
 
   const handleCheckout = async (managerId?: string, managerPin?: string, reason?: string) => {
-    if (isOnline) {
+    if (!isDesktopMode) {
       setStep('OFFLINE_REQUIRED');
       return;
     }
@@ -177,7 +181,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white leading-tight">Quick Checkout</h2>
-                <p className="text-slate-500 text-xs font-medium mt-0.5">{isOnline ? 'Available on the offline desktop terminal' : 'Read physical card to checkout guest'}</p>
+                <p className="text-slate-500 text-xs font-medium mt-0.5">{isDesktopMode ? 'Read physical card to checkout guest' : 'Available on the offline desktop terminal'}</p>
               </div>
             </div>
             {step !== 'CHECKING_OUT' && step !== 'ERASING' && (

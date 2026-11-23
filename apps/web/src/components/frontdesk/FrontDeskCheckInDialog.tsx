@@ -23,7 +23,7 @@ interface FrontDeskCheckInDialogProps {
 export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, propertyId }: FrontDeskCheckInDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { provider, isOnline } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   
   const [phase, setPhase] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'READING' | 'OVERWRITE_CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('IDLE');
   const [operationId, setOperationId] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       if (!reservationId) return null;
       return await provider.reservations.get(reservationId);
     },
-    enabled: !isOnline && !!reservationId && open,
+    enabled: isDesktopMode && !!reservationId && open,
   });
 
   const reservation = resData?.data;
@@ -95,7 +95,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   }, [phase, operationId, queryClient, propertyId]);
 
   const handleStartCheckIn = async () => {
-    if (isOnline) {
+    if (!isDesktopMode) {
       setPhase('OFFLINE_REQUIRED');
       return;
     }
@@ -108,7 +108,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   };
 
   const executeCheckInEncoding = async () => {
-    if (isOnline) {
+    if (!isDesktopMode) {
       setPhase('OFFLINE_REQUIRED');
       return;
     }
@@ -200,7 +200,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
             </div>
             <div>
               <h2 className="text-lg font-bold text-white leading-tight">Check-In Guest</h2>
-              <p className="text-slate-500 text-xs font-medium mt-0.5">{isOnline ? 'Available on the offline desktop terminal' : 'Issue keycard and authorize stay'}</p>
+              <p className="text-slate-500 text-xs font-medium mt-0.5">{isDesktopMode ? 'Issue keycard and authorize stay' : 'Available on the offline desktop terminal'}</p>
             </div>
           </div>
           {phase !== 'ENCODING' && phase !== 'READING' && (
@@ -213,7 +213,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         {/* Body */}
         <div className="relative z-10 flex-1 overflow-y-auto p-6 flex flex-col justify-center min-h-[300px]">
           
-          {isOnline ? (
+          {!isDesktopMode ? (
             <div className="flex flex-col items-center text-center gap-6 animate-in zoom-in-95 duration-300 px-2">
               <div className="relative">
                 <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
