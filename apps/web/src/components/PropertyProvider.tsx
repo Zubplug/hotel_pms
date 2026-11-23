@@ -17,7 +17,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   const [propertyId, setPropertyId] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { status: sessionStatus } = useLodgeCoreSession();
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const pathname = usePathname();
 
   useEffect(() => {
@@ -40,9 +40,9 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
     // Resolve the selection from the live authorized property list. A stored
     // browser value is only accepted when it is still in the user's scope.
     async function autoSelectProperty() {
-      try {
+      const sleep = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+      const readProperties = async () => {
         const result = await provider.properties.list();
-        // Support both { data: [...] } and paginated { data: { data: [...] } } shapes
         const list: { id: string }[] =
           Array.isArray(result?.data?.data)
             ? result.data.data
@@ -51,6 +51,31 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
             : Array.isArray(result)
             ? result
             : [];
+        return list;
+      };
+
+      try {
+        let list = await readProperties();
+
+        // A newly provisioned desktop has its terminal identity immediately,
+        // while the full property row is hydrated by the first sync. Wake the
+        // sync engine and retry the local projection instead of leaving the
+        // authenticated operator on an empty “No Property Selected” screen.
+        if (isDesktopMode && list.length === 0) {
+          const terminal = await provider.system?.getTerminalStatus?.();
+          const terminalPropertyId = terminal?.propertyId || terminal?.data?.propertyId;
+          if (terminalPropertyId) {
+            setPropertyId(terminalPropertyId);
+            localStorage.setItem('selectedPropertyId', terminalPropertyId);
+          }
+          await provider.system?.forceSync?.();
+          for (const delay of [250, 750, 1500]) {
+            await sleep(delay);
+            list = await readProperties();
+            if (list.length > 0) break;
+          }
+        }
+
         if (list.length > 0) {
           const resolvedId = stored && list.some((property) => property.id === stored)
             ? stored
@@ -66,7 +91,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
     }
 
     autoSelectProperty();
-  }, [provider, sessionStatus, pathname]);
+  }, [isDesktopMode, provider, sessionStatus, pathname]);
 
   const handleSetPropertyId = (id: string) => {
     setPropertyId(id);

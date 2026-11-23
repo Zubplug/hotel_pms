@@ -102,6 +102,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [roomChargeNotification, setRoomChargeNotification] = useState<FrontDeskRoomChargeNotification | null>(null);
+  const [syncingNow, setSyncingNow] = useState(false);
   const lastRoomChargeNotificationId = React.useRef<string | null>(null);
   const [acknowledgedRoomChargeNotificationIds] = React.useState<Set<string>>(() => readAcknowledgements('frontdesk'));
   const roomChargeChimeTimer = React.useRef<number | null>(null);
@@ -176,6 +177,20 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       void playRoomServiceChime();
     }, 5000);
   }, [stopRoomChargeChime]);
+
+  const handleSyncNow = async () => {
+    if (!isDesktopMode || syncingNow || !provider.system?.forceSync) return;
+    setSyncingNow(true);
+    try {
+      const result = await provider.system.forceSync();
+      if (result?.success === false) throw new Error(result.error || 'Sync could not be started');
+      toast.success('Sync started', { description: 'The desktop is refreshing its local data.' });
+    } catch (error: any) {
+      toast.error('Sync unavailable', { description: error?.message || 'Connect the desktop to the internet and try again.' });
+    } finally {
+      setSyncingNow(false);
+    }
+  };
 
   const dismissRoomChargeNotification = () => {
       stopRoomChargeChime();
@@ -545,13 +560,23 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           {/* Sync Center (desktop only). The detail view remains available even
               when the machine has internet but the AWS sync endpoint is down. */}
           {isDesktopMode && (
-            <button
-              className="hidden lg:flex items-center gap-2 h-8 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-400 hover:text-slate-300 transition-all"
-              onClick={() => router.push('/frontdesk/sync')}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Sync Center
-            </button>
+            <div className="hidden lg:flex items-center gap-2">
+              <button
+                className="flex items-center gap-2 h-8 px-3 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/20 text-xs font-semibold text-indigo-200 transition-all disabled:opacity-60"
+                onClick={() => void handleSyncNow()}
+                disabled={syncingNow}
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', syncingNow && 'animate-spin')} />
+                {syncingNow ? 'Syncing…' : 'Sync Now'}
+              </button>
+              <button
+                className="flex items-center gap-2 h-8 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-400 hover:text-slate-300 transition-all"
+                onClick={() => router.push('/frontdesk/sync')}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Sync Center
+              </button>
+            </div>
           )}
 
           {/* Offline sync indicator */}

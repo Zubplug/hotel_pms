@@ -42,13 +42,16 @@ export async function invokeDesktop<T = any>(method: string, params: Record<stri
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, { resolve, reject });
     
-    // 30 second timeout for hardware operations (like card reading)
+    // Sync can hydrate a freshly provisioned terminal and may legitimately
+    // take longer than an ordinary UI request. Keep every IPC call bounded,
+    // but give the explicit sync command a longer window.
+    const timeoutMs = method === 'system.forceSync' ? 120000 : 30000;
     setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id);
         reject(new Error(`Desktop IPC timeout for method: ${method}`));
       }
-    }, 30000);
+    }, timeoutMs);
 
     const payload = JSON.stringify({ id, method, params });
     (window as any).chrome.webview.postMessage(payload);

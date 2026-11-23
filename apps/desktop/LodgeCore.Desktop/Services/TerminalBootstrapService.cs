@@ -172,6 +172,51 @@ public class TerminalBootstrapService
         await Microsoft.Maui.Storage.SecureStorage.Default.SetAsync("LodgeCore_DeviceId", terminalInfo.Id);
 
         context.PosTerminals.Add(newTerminal);
+
+        // Keep the terminal usable while the first authoritative sync is in
+        // flight. Provisioning returns the property identity before the full
+        // property projection is downloaded; without this row the desktop
+        // property selector renders "No Property Selected" indefinitely.
+        if (!string.IsNullOrWhiteSpace(terminalInfo.PropertyId) &&
+            !await context.Properties.AnyAsync(p => p.Id == terminalInfo.PropertyId))
+        {
+            var propertyName = "Provisioned property";
+            var propertyCode = string.Empty;
+            var currency = "NGN";
+            var timezone = "UTC";
+            var businessDate = DateTime.UtcNow.Date;
+
+            if (result.Data.Snapshot.ValueKind == JsonValueKind.Object &&
+                result.Data.Snapshot.TryGetProperty("property", out var propertyProp) &&
+                propertyProp.ValueKind == JsonValueKind.Object)
+            {
+                if (propertyProp.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String)
+                    propertyName = nameProp.GetString() ?? propertyName;
+                if (propertyProp.TryGetProperty("code", out var codeProp) && codeProp.ValueKind == JsonValueKind.String)
+                    propertyCode = codeProp.GetString() ?? propertyCode;
+                if (propertyProp.TryGetProperty("currency", out var currencyProp) && currencyProp.ValueKind == JsonValueKind.String)
+                    currency = currencyProp.GetString() ?? currency;
+                if (propertyProp.TryGetProperty("timezone", out var timezoneProp) && timezoneProp.ValueKind == JsonValueKind.String)
+                    timezone = timezoneProp.GetString() ?? timezone;
+                if (propertyProp.TryGetProperty("businessDate", out var dateProp) &&
+                    dateProp.ValueKind == JsonValueKind.String &&
+                    DateTime.TryParse(dateProp.GetString(), out var parsedBusinessDate))
+                    businessDate = parsedBusinessDate;
+            }
+
+            context.Properties.Add(new LocalProperty
+            {
+                Id = terminalInfo.PropertyId,
+                Name = propertyName,
+                Code = propertyCode,
+                Currency = currency,
+                Timezone = timezone,
+                BusinessDate = businessDate,
+                AuditStatus = "OPEN",
+                IsActive = true,
+                BankingModel = "SERVER_BANKING"
+            });
+        }
         
         context.PosOutlets.RemoveRange(context.PosOutlets);
 
