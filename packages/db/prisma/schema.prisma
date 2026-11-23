@@ -4821,6 +4821,7 @@ model PosProductionBatchItem {
 enum PosTerminalType {
   RESTAURANT_POS
   BAR_POS
+  POOL_POS
   CLUB_POS
   FRONT_DESK
   KITCHEN_DISPLAY

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
     const propertyId = data.propertyId || (session.user as any).propertyId;
     const { name, isActive } = data;
-    const allowedPosTypes = ['RESTAURANT_POS', 'BAR_POS', 'CLUB_POS', 'FRONT_DESK', 'KITCHEN_DISPLAY', 'BACK_OFFICE'];
+    const allowedPosTypes = ['RESTAURANT_POS', 'BAR_POS', 'POOL_POS', 'CLUB_POS', 'FRONT_DESK', 'KITCHEN_DISPLAY', 'BACK_OFFICE'];
     const posType = data.posType ? String(data.posType) : 'RESTAURANT_POS';
 
     if (!propertyId || !name) {

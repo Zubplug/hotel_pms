@@ -126,10 +126,10 @@ export async function GET(req: NextRequest) {
     });
 
     const posTerminalsTotal = await prisma.posTerminal.count({
-      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS'] }, registrationState: 'REGISTERED', lastSeenAt: { not: null } }
+      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS', 'POOL_POS'] }, registrationState: 'REGISTERED', lastSeenAt: { not: null } }
     });
     const posTerminalsOnline = await prisma.posTerminal.count({
-      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS'] }, registrationState: 'REGISTERED', lastSeenAt: { gte: fiveMinutesAgo } }
+      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS', 'POOL_POS'] }, registrationState: 'REGISTERED', lastSeenAt: { gte: fiveMinutesAgo } }
     });
 
     // Determine latest sync time across any terminal

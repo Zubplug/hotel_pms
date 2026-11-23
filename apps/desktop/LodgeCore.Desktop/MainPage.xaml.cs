@@ -216,10 +216,15 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetTerminalStatusAsync();
                     break;
                 case "system.forceSync":
-                    // Wait for the requested cycle so a newly provisioned
-                    // terminal can hydrate its local property projection
-                    // before the WebView renders the front desk.
-                    responseData = await pmsInterop.ForceSyncAsync();
+                    var syncEngine = LodgeCore.Desktop.Services.SyncEngine.Instance;
+                    // The WebView IPC request has a 30-second timeout, while
+                    // a full initial sync can take longer. The setup screen
+                    // polls system.getSyncHealth, so only queue the cycle
+                    // here and return immediately.
+                    syncEngine?.TriggerManualSync();
+                    responseData = System.Text.Json.JsonSerializer.Serialize(
+                        new { success = syncEngine != null, started = syncEngine != null },
+                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                     break;
                 case "system.getSyncHealth":
                     responseData = await pmsInterop.GetSyncHealthAsync();

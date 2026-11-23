@@ -37,10 +37,15 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
 
     const stored = localStorage.getItem('selectedPropertyId');
 
-    // Resolve the selection from the live authorized property list. A stored
-    // browser value is only accepted when it is still in the user's scope.
+    // On desktop, the provisioned terminal property is authoritative. Never
+    // select an arbitrary first row when a terminal is bound to one property.
     async function autoSelectProperty() {
       const sleep = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+      const readTerminalPropertyId = async () => {
+        if (!isDesktopMode) return '';
+        const terminal = await provider.system?.getTerminalStatus?.();
+        return terminal?.propertyId || terminal?.data?.propertyId || '';
+      };
       const readProperties = async () => {
         const result = await provider.properties.list();
         const list: { id: string }[] =
@@ -55,33 +60,28 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
       };
 
       try {
+        const terminalPropertyId = await readTerminalPropertyId();
         let list = await readProperties();
 
-        // A newly provisioned desktop has its terminal identity immediately,
-        // while the full property row is hydrated by the first sync. Wake the
-        // sync engine and retry the local projection instead of leaving the
-        // authenticated operator on an empty “No Property Selected” screen.
-        if (isDesktopMode && list.length === 0) {
-          const terminal = await provider.system?.getTerminalStatus?.();
-          const terminalPropertyId = terminal?.propertyId || terminal?.data?.propertyId;
-          if (terminalPropertyId) {
-            setPropertyId(terminalPropertyId);
-            localStorage.setItem('selectedPropertyId', terminalPropertyId);
-          }
-          await provider.system?.forceSync?.();
-          for (const delay of [250, 750, 1500]) {
-            await sleep(delay);
-            list = await readProperties();
-            if (list.length > 0) break;
-          }
-        }
+        // The first-run setup gate normally guarantees this row exists. The
+        // short retry handles the WebView/SQLite startup race after setup.
+        for (const delay of [0, 250, 750, 1500]) {
+          if (delay > 0) await sleep(delay);
+          if (delay > 0) list = await readProperties();
 
-        if (list.length > 0) {
-          const resolvedId = stored && list.some((property) => property.id === stored)
-            ? stored
-            : list[0].id;
-          setPropertyId(resolvedId);
-          localStorage.setItem('selectedPropertyId', resolvedId);
+          if (terminalPropertyId) {
+            const terminalProperty = list.find((property) => property.id === terminalPropertyId);
+            if (terminalProperty) {
+              setPropertyId(terminalProperty.id);
+              localStorage.setItem('selectedPropertyId', terminalProperty.id);
+              return;
+            }
+          } else if (list.length > 0) {
+            const resolvedId = stored && list.some((property) => property.id === stored) ? stored : list[0].id;
+            setPropertyId(resolvedId);
+            localStorage.setItem('selectedPropertyId', resolvedId);
+            return;
+          }
         }
       } catch {
         // Silently fail — user can still pick manually from the dropdown

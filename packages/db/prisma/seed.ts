@@ -300,6 +300,7 @@ async function main() {
       propertyId: propLagos.id,
       name: 'Pool Bar',
       type: 'BAR',
+      posType: 'POOL_POS',
     }
   })
 

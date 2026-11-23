@@ -38,7 +38,13 @@ async function main() {
         propertyId: property.id,
         name: 'Pool Bar',
         type: 'BAR',
+        posType: 'POOL_POS',
       }
+    })
+  } else {
+    poolBar = await prisma.posOutlet.update({
+      where: { id: poolBar.id },
+      data: { type: 'BAR', posType: 'POOL_POS' }
     })
   }
 

@@ -315,27 +315,6 @@ public class OfflinePMSInterop
                 // prior POS shift. The switch screen must explicitly open or
                 // attach the shift after current state has been synchronized.
                 await _sessionManager.EstablishOperatorContextAsync(staff.Id);
-                // When online, complete synchronization before checking local
-                // shifts so a reinstall cannot create a duplicate of a shift
-                // that already exists on the server. Offline login continues
-                // immediately using the local database.
-                // A large server-side guest backfill can make the first sync
-                // take longer than the WebView IPC timeout. Authentication
-                // must remain usable while that sync continues in the
-                // background; ForceSyncAsync cancellation only cancels this
-                // waiter, not the running sync cycle.
-                if (SyncEngine.Instance != null)
-                {
-                    using var syncTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-                    try
-                    {
-                        await SyncEngine.Instance.ForceSyncAsync(syncTimeout.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        System.Diagnostics.Debug.WriteLine("Desktop login continuing while synchronization completes in the background.");
-                    }
-                }
             }
 
             var property = await _repo.GetPropertyAsync(propertyId);

@@ -216,6 +216,7 @@ export default function PosSettingsPage() {
                         <SelectContent>
                           <SelectItem value="RESTAURANT_POS">Restaurant POS</SelectItem>
                           <SelectItem value="BAR_POS">Bar POS</SelectItem>
+                          <SelectItem value="POOL_POS">Pool POS</SelectItem>
                           <SelectItem value="CLUB_POS">Club POS</SelectItem>
                           <SelectItem value="FRONT_DESK">Front Desk</SelectItem>
                           <SelectItem value="KITCHEN_DISPLAY">Kitchen Display</SelectItem>

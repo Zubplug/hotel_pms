@@ -62,7 +62,7 @@ export function usePosOperatorAuth({
   onAuthenticated: (operator: StaffProfile, token: string, authData?: any) => void;
   allowedRoles?: string[];
 }): UsePosOperatorAuthResult {
-  const { provider, isDesktopMode, isOnline } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
   const [terminalPropertyId, setTerminalPropertyId] = useState('');
   const sessionPropertyId = (session?.user as any)?.propertyId || '';
@@ -175,18 +175,8 @@ export function usePosOperatorAuth({
     setError(null);
 
     try {
-      // Never block local POS authentication on a cloud sync. A device can
-      // report online while the API is unreachable, and ForceSyncAsync waits
-      // for the complete cycle. The local SQLite projection is authoritative
-      // for login; sync can refresh approval state in the background.
-      if (isDesktopMode && isOnline) {
-        const syncPromise = provider.system?.forceSync?.();
-        if (syncPromise) {
-          void syncPromise.catch((syncError: unknown) => {
-            console.warn('[PosOperatorAuth] Background sync unavailable; continuing with local login.', syncError);
-          });
-        }
-      }
+      // First-run setup has already completed the authoritative bootstrap.
+      // Operator authentication is local and must not start another full sync.
       const existingSessionId =
         localStorage.getItem('lodgecore_pos_session_id') ||
         (session as any)?.sessionId ||

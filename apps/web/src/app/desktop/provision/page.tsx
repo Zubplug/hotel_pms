@@ -30,6 +30,11 @@ export default function ProvisionTerminalPage() {
         throw new Error(res.error || 'Provisioning failed');
       }
 
+      // Preserve the terminal's requested property while the first complete
+      // synchronization is running. PropertyProvider validates this against
+      // the local authorized property projection before Front Desk opens.
+      localStorage.setItem('selectedPropertyId', propertyId.trim());
+
       // Redirect to the new Setup Sync screen to hydrate the database
       router.push('/desktop/setup-sync');
     } catch (err: any) {

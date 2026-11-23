@@ -11,21 +11,15 @@ export default function SetupSyncPage() {
   const { provider, isDesktopMode } = useLodgeCore();
   
   const [health, setHealth] = useState<any>(null);
-  const [hasTriggered, setHasTriggered] = useState(false);
-
   useEffect(() => {
     if (!isDesktopMode) {
       router.push('/desktop');
       return;
     }
 
-    // Trigger force sync once on mount
-    if (!hasTriggered && provider.system?.forceSync) {
-      setHasTriggered(true);
-      provider.system.forceSync().catch(console.error);
-    }
-
-    // Poll health every 500ms
+    // Provisioning already wakes the native sync engine. This screen is the
+    // single first-run gate and waits for the complete initial cycle rather
+    // than starting a second overlapping cycle.
     const interval = setInterval(async () => {
       try {
         if (provider.system?.getSyncHealth) {
@@ -35,10 +29,22 @@ export default function SetupSyncPage() {
             
             // If up to date, auto-redirect after a short delay
             if (res.data.sync === 'UP_TO_DATE' || res.data.sync === 'UpToDate') {
-              clearInterval(interval);
-              setTimeout(() => {
-                router.push('/desktop');
-              }, 1500);
+              const terminal = await provider.system?.getTerminalStatus?.();
+              const properties = await provider.properties.list();
+              const terminalPropertyId = terminal?.propertyId || terminal?.data?.propertyId;
+              const localProperties = properties?.data ?? properties ?? [];
+              const propertyReady = Boolean(
+                terminalPropertyId &&
+                Array.isArray(localProperties) &&
+                localProperties.some((property: any) => property?.id === terminalPropertyId),
+              );
+
+              // Full sync is not sufficient by itself: the exact provisioned
+              // property must also be visible in local SQLite before login.
+              if (propertyReady) {
+                clearInterval(interval);
+                setTimeout(() => router.push('/desktop'), 1500);
+              }
             }
           }
         }
@@ -48,7 +54,7 @@ export default function SetupSyncPage() {
     }, 500);
 
     return () => clearInterval(interval);
-  }, [isDesktopMode, provider, hasTriggered, router]);
+  }, [isDesktopMode, provider, router]);
 
   const handleRetry = () => {
     if (provider.system?.forceSync) {
