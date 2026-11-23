@@ -133,21 +133,14 @@ export default function ManageLaundryOrderPage() {
     
     setProcessingPayment(true);
     try {
-      const res = await fetch('/api/v1/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          folioId: folio.id,
-          amount: amountValue(folio.balance),
-          currency: folio.currency,
-          method: paymentMethod,
-          idempotencyKey: `laundry_pay_${order.id}_${Date.now()}`,
-          notes: 'Walk-in laundry payment settled via frontdesk'
-        })
+      const data = await provider.folios.addPayment(folio.id, {
+        amount: amountValue(folio.balance),
+        currency: folio.currency,
+        method: paymentMethod,
+        idempotencyKey: `laundry_pay_${order.id}_${Date.now()}`,
+        notes: 'Walk-in laundry payment settled via frontdesk'
       });
-      
-      const data = await res.json();
-      if (res.ok || res.status === 201 || res.status === 200) {
+      if (data && data.success !== false && !data.error) {
         setPaymentConfirmationOpen(false);
         await fetchOrder();
         setSuccessDialog({
@@ -156,10 +149,10 @@ export default function ManageLaundryOrderPage() {
           description: 'The payment was recorded successfully and the folio has been updated.'
         });
       } else {
-        alert(data.error || 'Failed to process payment');
+        alert(data?.error?.message || data?.error || 'Failed to process payment');
       }
     } catch (e: any) {
-      alert('Network error while processing payment');
+      alert(e?.message || 'Unable to process payment');
     } finally {
       setProcessingPayment(false);
     }

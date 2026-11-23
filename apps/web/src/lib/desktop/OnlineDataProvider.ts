@@ -134,6 +134,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     async closeSession(sessionId: string, declaredCash: number) {
       return apiFetch(`/api/v1/frontdesk/sessions/${sessionId}/close`, { method: 'POST', body: JSON.stringify({ declaredCash }) });
     },
+    async initiateHandover(propertyId: string, frontdeskSessionIds: string[]) {
+      return apiFetch('/api/v1/financial-control/handovers', { method: 'POST', headers: { 'Idempotency-Key': `frontdesk-handover:${frontdeskSessionIds.join(',')}` }, body: JSON.stringify({ propertyId, frontdeskSessionIds }) });
+    },
     async reconcileSession(sessionId: string, decision: string, notes?: string) {
       return apiFetch(`/api/v1/frontdesk/sessions/${sessionId}/reconcile`, { method: 'POST', body: JSON.stringify({ decision, notes }) });
     },
@@ -639,6 +642,8 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getItems: async (propertyId: string) => {
       return apiFetchResult(`/api/v1/laundry/items?propertyId=${propertyId}`);
     },
+    createItem: async (data: any) => apiFetchResult('/api/v1/laundry/items', { method: 'POST', body: JSON.stringify(data) }),
+    updateItem: async (itemId: string, data: any) => apiFetchResult(`/api/v1/laundry/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     getOrders: async (propertyId: string, status?: string) => {
       let url = `/api/v1/laundry/orders?propertyId=${propertyId}`;
       if (status) url += `&status=${status}`;

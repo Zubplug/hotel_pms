@@ -105,7 +105,7 @@ function TentCard({ room, token, propertyName }: {
 export default function QrRoomServicePage() {
   const router = useRouter();
   const { propertyId } = useProperty();
-  const { provider, isOnline } = useLodgeCoreProvider();
+  const { provider, isOnline, isDesktopMode } = useLodgeCoreProvider();
 
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -120,12 +120,16 @@ export default function QrRoomServicePage() {
   const [propertyName, setPropertyName] = useState('LodgeCore Hotel');
   useEffect(() => {
     if (!propertyId) return;
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
-    fetch(`${apiBase}/api/v1/properties/${propertyId}`)
-      .then(r => r.json())
-      .then(d => { if (d?.data?.name) setPropertyName(d.data.name); })
-      .catch(() => {});
-  }, [propertyId]);
+    let cancelled = false;
+    void provider.properties.list().then((result: any) => {
+      const list = Array.isArray(result?.data?.data)
+        ? result.data.data
+        : Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+      const selected = list.find((property: any) => property.id === propertyId);
+      if (!cancelled && selected?.name) setPropertyName(selected.name);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [propertyId, provider.properties]);
 
   // ── Fetch rooms ───────────────────────────────────────────────────
   const { data, isLoading, isError, refetch } = useQuery({
@@ -152,7 +156,7 @@ export default function QrRoomServicePage() {
 
     // The desktop shell can be offline. Do not wait on a cloud token request;
     // use the last signed token cache and refresh it only when connected.
-    if (!isOnline || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    if (isDesktopMode || !isOnline || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
 
     const roomIds = rawRooms.map(r => r.id);
     const controller = new AbortController();
@@ -182,7 +186,7 @@ export default function QrRoomServicePage() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [roomIdsKey, propertyId, isOnline]);
+  }, [roomIdsKey, propertyId, isDesktopMode, isOnline]);
 
   const filteredRooms = rawRooms.filter(r => {
     if (!search) return true;

@@ -83,6 +83,9 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
       let paymentId = null;
 
       if (isGateway) {
+        if (isDesktopMode) {
+          throw new Error('Online payment gateway is unavailable in offline desktop mode. Use cash, card, transfer, or room-charge settlement.');
+        }
         const endpoint = '/api/v1/payments/online/initialize';
         const payload = {
           folioId: folio.id,

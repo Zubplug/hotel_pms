@@ -103,6 +103,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getReport: async (propertyId: string, startDate: string, endDate: string) => invokeDesktop('frontdesk.report.get', { propertyId, startDate, endDate }),
     openSession: async (data: any) => invokeDesktop('frontdesk.session.open', data),
     closeSession: async (sessionId: string, declaredCash: number) => invokeDesktop('frontdesk.session.close', { sessionId, declaredCash }),
+    initiateHandover: async () => ({ success: false, error: 'Cash handover requires an online connection and is not available offline.' }),
     reconcileSession: async (sessionId: string, decision: string, notes?: string) => invokeDesktop('frontdesk.session.reconcile', { sessionId, decision, notes }),
   },
   properties: {
@@ -221,16 +222,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('roomTypes.list', { propertyId });
     },
     create: async (data: any) => {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        throw new Error("Internet connection is required to create a new room type.");
-      }
-      const res = await fetch('/api/v1/room-types', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      void data;
+      throw new Error('Creating room types is not available in offline desktop mode. Use the online web application.');
     }
   },
   
@@ -367,16 +360,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('rooms.updateStatus', { roomId, newStatus, source });
     },
     create: async (data: any) => {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        throw new Error("Internet connection is required to create a new physical room.");
-      }
-      const res = await fetch('/api/v1/rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      void data;
+      throw new Error('Creating physical rooms is not available in offline desktop mode. Use the online web application.');
     }
   },
   
@@ -682,6 +667,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getItems: async (propertyId: string) => {
       return invokeDesktop('laundry.getItems', { propertyId });
     },
+    createItem: async () => ({ data: null, error: 'Laundry catalog changes require an online connection.' }),
+    updateItem: async () => ({ data: null, error: 'Laundry catalog changes require an online connection.' }),
     getOrders: async (propertyId: string, status?: string) => {
       return invokeDesktop('laundry.getOrders', { propertyId, status });
     },

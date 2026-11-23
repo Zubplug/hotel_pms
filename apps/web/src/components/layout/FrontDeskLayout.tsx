@@ -186,7 +186,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       if (isDesktopMode && provider.system?.acknowledgeOfflineBookingNotification) {
         void provider.system.acknowledgeOfflineBookingNotification(propertyId, roomChargeNotification.id).catch(() => undefined);
       }
-      if (isOnline) {
+      if (isOnline && !isDesktopMode) {
         void fetch('/api/v1/frontdesk/notifications', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },

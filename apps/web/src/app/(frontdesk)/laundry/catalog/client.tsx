@@ -40,19 +40,11 @@ export function LaundryCatalogClient({ managementMode = false }: { managementMod
     e.preventDefault();
     if (!newItemName || !newItemPrice) return;
 
-    const response = await fetch(editingItem ? `/api/v1/laundry/items/${editingItem.id}` : '/api/v1/laundry/items', {
-      method: editingItem ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        propertyId,
-        name: newItemName,
-        basePrice: parseFloat(newItemPrice)
-      })
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => null);
-      throw new Error(error?.error?.message || 'Unable to save catalog item');
-    }
+    const payload = { propertyId, name: newItemName, basePrice: parseFloat(newItemPrice) };
+    const response = editingItem
+      ? await provider.laundry.updateItem?.(editingItem.id, payload)
+      : await provider.laundry.createItem?.(payload);
+    if (!response || response.error) throw new Error(response?.error || 'Unable to save catalog item');
     setNewItemName('');
     setNewItemPrice('');
     setEditingItem(null);

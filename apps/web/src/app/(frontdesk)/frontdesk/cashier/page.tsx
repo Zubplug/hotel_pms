@@ -141,15 +141,9 @@ export default function FrontdeskCashierPage() {
 
   const initiateHandover = () => run(async () => {
     if (!propertyId || !current?.id) return;
-    const res = await fetch('/api/v1/financial-control/handovers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': `frontdesk-handover:${current.id}` },
-      body: JSON.stringify({ propertyId, frontdeskSessionIds: [current.id] })
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Failed to initiate handover');
-    }
+    if (!provider.frontdesk.initiateHandover) throw new Error('Cash handover is unavailable in this client.');
+    const result = await provider.frontdesk.initiateHandover(propertyId, [current.id]);
+    if (result?.error) throw new Error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error));
     setMessage('Handover initiated successfully. Please deliver your cash to the General Cashier.');
     setShowHandoverSuccess(true);
     return true;

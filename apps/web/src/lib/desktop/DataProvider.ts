@@ -30,6 +30,7 @@ export interface LodgeCoreDataProvider {
     getReport(propertyId: string, startDate: string, endDate: string): Promise<any>;
     openSession(data: { propertyId: string; cashAccountId: string; openingFloat: number }): Promise<any>;
     closeSession(sessionId: string, declaredCash: number): Promise<any>;
+    initiateHandover?(propertyId: string, frontdeskSessionIds: string[]): Promise<any>;
     reconcileSession?(sessionId: string, decision: string, notes?: string): Promise<any>;
   };
   properties: {
@@ -205,6 +206,8 @@ export interface LodgeCoreDataProvider {
   };
   laundry: {
     getItems(propertyId: string): Promise<{ data: any[], error: string | null }>;
+    createItem?(data: any): Promise<{ data: any, error: string | null }>;
+    updateItem?(itemId: string, data: any): Promise<{ data: any, error: string | null }>;
     getOrders(propertyId: string, status?: string): Promise<{ data: any[], error: string | null }>;
     createOrder(data: any): Promise<{ data: any, error: string | null }>;
     updateOrderStatus(orderId: string, status: string): Promise<{ data: any, error: string | null }>;
