@@ -109,7 +109,7 @@ export async function POST(
       return 'KITCHEN';
     }
 
-    // Atomic execution with concurrency-safe KOT generation.
+    // Atomic execution with concurrency-safe production-ticket generation.
     //
     // Fix 2: Serializable isolation prevents two simultaneous acknowledgements
     // from both reading existingBatchesCount=0 and each creating duplicate KOT
@@ -255,8 +255,8 @@ export async function POST(
       batchesCreated: updated.batchesCreated,
       alreadyHadBatches: updated.alreadyHadBatches,
       message: updated.alreadyHadBatches
-        ? 'Order acknowledged (production batches were already dispatched).'
-        : 'Order acknowledged and kitchen order tickets fired successfully.',
+        ? 'Order accepted (production tickets were already dispatched).'
+        : 'Order accepted and routed to the correct production stations.',
     });
   } catch (err: any) {
     console.error('[POST /api/v1/room-service/orders/[orderId]/acknowledge]', err);

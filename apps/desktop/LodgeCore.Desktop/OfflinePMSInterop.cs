@@ -528,6 +528,22 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> RecoverPosShiftLockedAsync(string propertyId, string orderId, string sessionId)
+    {
+        try
+        {
+            var context = await _sessionManager.GetActiveContextAsync();
+            if (context == null || string.IsNullOrWhiteSpace(context.SessionId) || context.SessionId != sessionId)
+                throw new UnauthorizedAccessException("Open a POS shift before recovering this payment.");
+            var recovered = await _repo.RecoverPosShiftLockedAsync(propertyId, orderId, sessionId);
+            return JsonSerializer.Serialize(new { success = recovered }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     /// <summary>
     /// Returns all guests with available guest credit (REFUND_OWED) for the
     /// current property.  Displayed on the Front Desk "Guest Credits" tab.
@@ -2244,6 +2260,19 @@ public class OfflinePMSInterop
                 : posCtx.SessionId;
             var res = await _repo.GetActiveOrdersAsync(effectiveSessionId, filter, posCtx.StaffId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetPendingRoomServiceOrderSummaryAsync(string propertyId)
+    {
+        try
+        {
+            var summary = await _repo.GetPendingRoomServiceOrderSummaryAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = summary }, _jsonOptions);
         }
         catch (Exception ex)
         {

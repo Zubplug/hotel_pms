@@ -69,6 +69,7 @@ const POS_NOTIFICATION_TYPES = new Set([
   'SHIFT_APPROVED',
   'SHIFT_RETURNED',
   'SHIFT_APPROVED_WITH_VARIANCE',
+  'POS_SYNC_RECOVERY_REQUIRED',
 ]);
 
 function isPosNotification(notification: any): boolean {
@@ -79,6 +80,14 @@ function isPosNotification(notification: any): boolean {
     try { metadata = JSON.parse(notification.metadataJson); } catch { metadata = {}; }
   }
   return String(metadata?.shiftType || '').toUpperCase() === 'POS';
+}
+
+function getNotificationMetadata(notification: any): any {
+  if (notification?.metadata) return notification.metadata;
+  if (notification?.metadataJson) {
+    try { return JSON.parse(notification.metadataJson); } catch { return {}; }
+  }
+  return {};
 }
 
 type ViewMode = 'menu' | 'tables';
@@ -203,6 +212,8 @@ export default function PosApp() {
   // ── Room Service Notifications ───────────────────────────────────
   const [pendingRoomServiceOrders, setPendingRoomServiceOrders] = useState<any[]>([]);
   const [showRoomServiceAlert, setShowRoomServiceAlert] = useState(false);
+  const [pendingRoomServiceCount, setPendingRoomServiceCount] = useState(0);
+  const openRoomServiceOnLogin = useRef(false);
   const seenRoomServiceIds = useRef<Set<string>>(new Set());
   const roomServiceChimeTimer = useRef<number | null>(null);
   // A poll can finish after an acknowledgement request and contain the old
@@ -231,6 +242,15 @@ export default function PosApp() {
 
   const pollRoomServiceOrders = useCallback(async () => {
     try {
+      // Before login, only request the non-sensitive count. Order details and
+      // guest information are loaded after operator authentication.
+      if (!activeOperator) {
+        if (propertyId && provider.system?.getPendingRoomServiceOrderSummary) {
+          const summary = await provider.system.getPendingRoomServiceOrderSummary(propertyId);
+          setPendingRoomServiceCount(Number(summary?.data?.count || 0));
+        }
+        return;
+      }
       let orders: any[] = [];
 
       if (isDesktopMode) {
@@ -269,10 +289,15 @@ export default function PosApp() {
         setShowRoomServiceAlert(true);
       }
       setPendingRoomServiceOrders(orders);
+      setPendingRoomServiceCount(orders.length);
+      if (openRoomServiceOnLogin.current && orders.length > 0) {
+        setShowRoomServiceAlert(true);
+        openRoomServiceOnLogin.current = false;
+      }
     } catch {
       // Polling errors are non-critical — suppress silently
     }
-  }, [acknowledgedRoomServiceIds, isDesktopMode, operatorToken, posSessionId, provider.pos, startRoomServiceChime]);
+  }, [acknowledgedRoomServiceIds, activeOperator, isDesktopMode, operatorToken, posSessionId, propertyId, provider.pos, provider.system, startRoomServiceChime]);
 
   useEffect(() => {
     if (pendingRoomServiceOrders.length === 0) stopRoomServiceChime();
@@ -303,7 +328,7 @@ export default function PosApp() {
   }, [stopOfflineBookingChime]);
 
   const pollOfflineBookingNotifications = useCallback(async () => {
-    if (!isDesktopMode || !propertyId || !provider.system?.getOfflineBookingNotifications) return;
+    if (!isDesktopMode || !activeOperator || !propertyId || !provider.system?.getOfflineBookingNotifications) return;
     try {
       const result = await provider.system.getOfflineBookingNotifications(propertyId);
       const next = (result?.data || []).find(isPosNotification);
@@ -316,7 +341,7 @@ export default function PosApp() {
     } catch {
       // Offline notification polling must never interrupt POS operations.
     }
-  }, [acknowledgedOfflineBookingNotificationIds, isDesktopMode, offlineBookingNotification?.id, propertyId, provider.system, startOfflineBookingChime]);
+  }, [acknowledgedOfflineBookingNotificationIds, activeOperator, isDesktopMode, offlineBookingNotification?.id, propertyId, provider.system, startOfflineBookingChime]);
 
   useEffect(() => {
     void pollOfflineBookingNotifications();
@@ -348,6 +373,21 @@ export default function PosApp() {
       toast.error(error?.message || 'Could not acknowledge notification');
     }
   }, [acknowledgedOfflineBookingNotificationIds, offlineBookingNotification, propertyId, provider.system, stopOfflineBookingChime]);
+
+  const startPosShiftRecovery = useCallback(() => {
+    if (!offlineBookingNotification) return;
+    const metadata = getNotificationMetadata(offlineBookingNotification);
+    if (!metadata.orderId) {
+      void acknowledgeOfflineBookingNotification();
+      return;
+    }
+    localStorage.setItem('lodgecore_pos_recovery_order_id', String(metadata.orderId));
+    localStorage.setItem('lodgecore_pos_recovery_notification_id', String(offlineBookingNotification.id));
+    stopOfflineBookingChime();
+    // The new shift must be selected through the normal operator PIN/shift
+    // flow. No payment is recreated here.
+    lockOperator();
+  }, [acknowledgeOfflineBookingNotification, lockOperator, offlineBookingNotification, stopOfflineBookingChime]);
 
   useEffect(() => {
     const handleAcknowledged = (event: Event) => {
@@ -1797,11 +1837,35 @@ export default function PosApp() {
           }
 
           setActiveOperator(normalizedOperator);
+          openRoomServiceOnLogin.current = true;
           setOperatorToken(token || null);
           if (token) {
             localStorage.setItem('lodgecore_pos_operator_token', token);
           } else {
             localStorage.removeItem('lodgecore_pos_operator_token');
+          }
+
+          const recoveryOrderId = localStorage.getItem('lodgecore_pos_recovery_order_id');
+          const recoveryNotificationId = localStorage.getItem('lodgecore_pos_recovery_notification_id');
+          if (recoveryOrderId && newSessionId && provider.system?.recoverPosShiftLocked) {
+            void (async () => {
+              const result = await provider.system?.recoverPosShiftLocked?.(propertyId, recoveryOrderId, newSessionId);
+              if (result?.success === false || result?.error) {
+                toast.error(result?.error || 'The payment could not be queued for the new shift.');
+                return;
+              }
+              localStorage.removeItem('lodgecore_pos_recovery_order_id');
+              localStorage.removeItem('lodgecore_pos_recovery_notification_id');
+              if (recoveryNotificationId) {
+                acknowledgedOfflineBookingNotificationIds.add(recoveryNotificationId);
+                rememberAcknowledgement('pos-booking', recoveryNotificationId);
+                await provider.system?.acknowledgeOfflineBookingNotification?.(propertyId, recoveryNotificationId);
+              }
+              stopOfflineBookingChime();
+              setOfflineBookingNotification(null);
+              await provider.system?.forceSync?.();
+              toast.success('Payment recovery queued. The original payment will sync with the new shift.');
+            })().catch((error: any) => toast.error(error?.message || 'Payment recovery could not be completed.'));
           }
           setShowSwitchPad(false);
         }}
@@ -2104,7 +2168,12 @@ export default function PosApp() {
       <RoomServiceAlertModal
         isOpen={showRoomServiceAlert && pendingRoomServiceOrders.length > 0}
         orders={pendingRoomServiceOrders}
-        onClose={() => setShowRoomServiceAlert(false)}
+        onClose={() => {
+          // Remind me later only closes the presentation. The order remains
+          // SUBMITTED and will be returned by the next authoritative poll.
+          setShowRoomServiceAlert(false);
+          stopRoomServiceChime();
+        }}
         onAcknowledge={async (orderId: string) => {
           const result = await provider.pos.acknowledgeRoomServiceOrder(orderId, operatorToken ?? undefined);
           if (result?.error) {
@@ -2121,6 +2190,7 @@ export default function PosApp() {
           }
           // Remove from pending list and refresh all-orders panel
           setPendingRoomServiceOrders(prev => prev.filter(o => o.id !== orderId));
+          setPendingRoomServiceCount(prev => Math.max(0, prev - 1));
           await refreshActiveOrders();
         }}
         onReject={async (orderId: string, reason: string) => {
@@ -2136,6 +2206,7 @@ export default function PosApp() {
           }
           toast.warning('Room service order declined. Guest has been notified.');
           setPendingRoomServiceOrders(prev => prev.filter(o => o.id !== orderId));
+          setPendingRoomServiceCount(prev => Math.max(0, prev - 1));
         }}
         onSelectOrder={(order: any) => {
           // Future: load the room service order directly into the cart
@@ -2144,6 +2215,38 @@ export default function PosApp() {
         }}
         currency={(session?.user as any)?.currency || 'NGN'}
       />
+
+      {!activeOperator && pendingRoomServiceCount > 0 && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-auto fixed bottom-5 left-1/2 z-[240] w-[min(460px,calc(100vw-2rem))] -translate-x-1/2 animate-in slide-in-from-bottom-4 fade-in duration-300"
+        >
+          <div className="flex items-center gap-3 rounded-2xl border border-amber-400/30 bg-slate-950/95 px-4 py-3 shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-xl">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-300">
+              <span className="absolute inset-0 rounded-xl bg-amber-400/20 animate-pulse" />
+              <Bell className="relative h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">Room-service queue</p>
+              <p className="mt-0.5 text-sm font-semibold text-white">
+                {pendingRoomServiceCount} new order{pendingRoomServiceCount === 1 ? '' : 's'} waiting
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">Sign in to review and place the order.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSwitchPad(true);
+                void unlockAudio();
+              }}
+              className="shrink-0 rounded-xl bg-amber-400 px-3 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-300"
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
+      )}
 
       {offlineBookingNotification && (
         <div
@@ -2167,13 +2270,24 @@ export default function PosApp() {
               </p>
               <div className="flex items-center gap-2 rounded-xl bg-amber-400/10 px-3 py-2 text-[11px] font-semibold text-amber-300">
                 <span className="h-2 w-2 rounded-full bg-amber-400" />
-                Action required · Please review and acknowledge
+                {String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED'
+                  ? 'Action required · Open an approved POS shift'
+                  : 'Action required · Please review and acknowledge'}
               </div>
               <button
-                onClick={() => { void unlockAudio(); void acknowledgeOfflineBookingNotification(); }}
+                onClick={() => {
+                  void unlockAudio();
+                  if (String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED') {
+                    startPosShiftRecovery();
+                  } else {
+                    void acknowledgeOfflineBookingNotification();
+                  }
+                }}
                 className="w-full rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-400"
               >
-                Acknowledge
+                {String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED'
+                  ? 'Open shift & retry payment'
+                  : 'Acknowledge'}
               </button>
             </div>
           </div>

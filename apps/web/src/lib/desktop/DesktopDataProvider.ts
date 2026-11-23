@@ -81,8 +81,14 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getOfflineBookingNotifications: async (propertyId: string) => {
       return invokeDesktop('sync.offlineBookingNotifications', { propertyId });
     },
+    getPendingRoomServiceOrderSummary: async (propertyId: string) => {
+      return invokeDesktop('pos.pendingRoomServiceSummary', { propertyId });
+    },
     acknowledgeOfflineBookingNotification: async (propertyId: string, notificationId: string) => {
       return invokeDesktop('sync.acknowledgeOfflineBookingNotification', { propertyId, notificationId });
+    },
+    recoverPosShiftLocked: async (propertyId: string, orderId: string, sessionId: string) => {
+      return invokeDesktop('sync.recoverPosShiftLocked', { propertyId, orderId, sessionId });
     },
     retryDeadLetters: async () => {
       return invokeDesktop('sync.retryDeadLetters');

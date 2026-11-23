@@ -480,6 +480,12 @@ public partial class MainPage : ContentPage
                         parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["notificationId"]?.ToString() ?? "");
                     break;
+                case "sync.recoverPosShiftLocked":
+                    responseData = await pmsInterop.RecoverPosShiftLockedAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["sessionId"]?.ToString() ?? "");
+                    break;
                 case "refunds.list":
                     responseData = await pmsInterop.GetRefundRequestsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
@@ -734,6 +740,10 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetActiveOrdersAsync(
                         parameters?["filter"]?.ToString() ?? "",
                         parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.pendingRoomServiceSummary":
+                    responseData = await pmsInterop.GetPendingRoomServiceOrderSummaryAsync(
+                        parameters?["propertyId"]?.ToString() ?? "");
                     break;
 
                 case "pos.getOrder":

@@ -48,6 +48,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       throw new Error('login is only supported on Desktop offline auth');
     }
   },
+  system: {
+    getPendingRoomServiceOrderSummary: async (_propertyId: string) => {
+      return apiFetchResult('/api/v1/room-service/pending-summary');
+    },
+  },
   properties: {
     async list() {
       return apiFetch(`/api/v1/properties`);

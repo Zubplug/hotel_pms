@@ -77,6 +77,14 @@ export function RoomServiceAlertModal({
   const items = currentOrder.items || [];
   const roomLabel = currentOrder.tableNumber || currentOrder.displayName || 'Guest Room';
   const isRoomCharge = currentOrder.folioId || currentOrder.notes?.toLowerCase().includes('charge to room');
+  const resolveStation = (item: any) => String(
+    item.productionStation ||
+    item.station ||
+    item.product?.productionStation ||
+    item.product?.category?.productionStation ||
+    'KITCHEN'
+  ).toUpperCase();
+  const productionStations: string[] = Array.from(new Set<string>(items.map(resolveStation)));
 
   const handleMuteToggle = () => {
     const nextMuted = !isAudioMuted();
@@ -259,6 +267,14 @@ export function RoomServiceAlertModal({
             <h4 className="text-xs uppercase font-bold text-slate-400 tracking-wider">
               Ordered Items ({items.length})
             </h4>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+              <span className="font-semibold text-slate-500">Routes to:</span>
+              {productionStations.map((station) => (
+                <span key={station} className="rounded-full border border-indigo-400/20 bg-indigo-400/10 px-2 py-0.5 font-semibold text-indigo-200">
+                  {station === 'DIRECT' || station === 'NONE' ? 'DIRECT SERVICE' : station}
+                </span>
+              ))}
+            </div>
             <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden bg-slate-950/40">
               {items.map((item: any, i: number) => (
                 <div key={item.id || i} className="p-3 flex items-start justify-between text-sm">
@@ -281,6 +297,11 @@ export function RoomServiceAlertModal({
                     {item.notes && (
                       <p className="text-xs text-slate-500 italic pl-7">{item.notes}</p>
                     )}
+                    <span className="ml-7 inline-flex rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-300">
+                      {resolveStation(item) === 'DIRECT' || resolveStation(item) === 'NONE'
+                        ? 'Direct service'
+                        : `${resolveStation(item)} production`}
+                    </span>
                   </div>
                   <span className="font-semibold text-slate-200 whitespace-nowrap">
                     {currency} {Number(item.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -402,7 +423,7 @@ export function RoomServiceAlertModal({
                 ) : (
                   <>
                     <Flame className="w-4 h-4 text-slate-950" />
-                    Acknowledge &amp; Fire to Kitchen
+                    Accept &amp; Send to Production
                   </>
                 )}
               </button>

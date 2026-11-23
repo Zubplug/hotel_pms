@@ -40,7 +40,17 @@ export async function GET(req: NextRequest) {
         status: statusFilter as any,
       },
       include: {
-        items: { include: { modifiers: true } },
+        items: {
+          include: {
+            modifiers: true,
+            product: {
+              select: {
+                productionStation: true,
+                category: { select: { productionStation: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });

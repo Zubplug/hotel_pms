@@ -129,7 +129,7 @@ public class LocalRepository
     /// Pending sync envelopes are moved with the order so the cloud receives
     /// the repaired shift ID as well.
     /// </summary>
-    public async Task<bool> RebindOrderToOpenSessionAsync(string orderId, string? targetSessionId)
+    public async Task<bool> RebindOrderToOpenSessionAsync(string orderId, string? targetSessionId, bool triggerSync = true)
     {
         if (string.IsNullOrWhiteSpace(targetSessionId)) return false;
 
@@ -158,7 +158,7 @@ public class LocalRepository
         order.UpdatedAt = DateTime.UtcNow;
 
         var pendingEvents = await _dbContext.SyncEvents
-            .Where(e => e.EntityId == orderId && e.Status != "SYNCED")
+            .Where(e => e.Status != "SYNCED" && (e.EntityId == orderId || e.PayloadJson.Contains(orderId)))
             .ToListAsync();
 
         foreach (var syncEvent in pendingEvents)
@@ -183,8 +183,41 @@ public class LocalRepository
         }
 
         await _dbContext.SaveChangesAsync();
-        SyncEngine.Instance?.TriggerManualSync();
+        if (triggerSync) SyncEngine.Instance?.TriggerManualSync();
         return !string.Equals(oldSessionId, target.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Recovers one POS order whose original shift was locked before the
+    /// offline events reached the cloud. This never creates a second payment;
+    /// it moves and requeues only the order's own unsynced events.
+    /// </summary>
+    public async Task<bool> RecoverPosShiftLockedAsync(string propertyId, string orderId, string? targetSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(targetSessionId)) return false;
+
+        var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId && o.PropertyId == propertyId);
+        if (order == null) throw new InvalidOperationException("The offline POS order could not be found.");
+
+        await RebindOrderToOpenSessionAsync(orderId, targetSessionId, triggerSync: false);
+
+        var relatedEvents = await _dbContext.SyncEvents
+            .Where(e => e.Status != "SYNCED" && (e.EntityId == orderId || e.PayloadJson.Contains(orderId)))
+            .ToListAsync();
+
+        foreach (var syncEvent in relatedEvents)
+        {
+            syncEvent.SessionId = targetSessionId;
+            syncEvent.Status = "PENDING";
+            syncEvent.AttemptCount = 0;
+            syncEvent.LastAttemptAt = null;
+            syncEvent.ErrorCode = null;
+            syncEvent.ErrorMessage = null;
+        }
+
+        await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
+        return relatedEvents.Count > 0;
     }
 
     private static void ReplaceSessionIds(JsonNode? node, string sessionId)
@@ -623,11 +656,61 @@ public class LocalRepository
 
     public async Task<List<LocalOfflineNotification>> GetOfflineBookingNotificationsAsync(string propertyId)
     {
-        var metadata = await _dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton");
-        if (metadata == null || string.IsNullOrWhiteSpace(metadata.OfflineNotificationsJson)) return new List<LocalOfflineNotification>();
+        await OfflineNotificationStore.Gate.WaitAsync();
         try
         {
-            return (JsonSerializer.Deserialize<List<LocalOfflineNotification>>(metadata.OfflineNotificationsJson) ?? new List<LocalOfflineNotification>())
+            var metadata = await _dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton");
+            if (metadata == null) return new List<LocalOfflineNotification>();
+            var notifications = string.IsNullOrWhiteSpace(metadata.OfflineNotificationsJson)
+                ? new List<LocalOfflineNotification>()
+                : JsonSerializer.Deserialize<List<LocalOfflineNotification>>(metadata.OfflineNotificationsJson) ?? new List<LocalOfflineNotification>();
+
+            // Materialize locally-generated recovery alerts so an error that
+            // happened before the next application start is still shown once
+            // after the operator logs in.
+            var lockedEvents = await _dbContext.SyncEvents
+                .Where(e => e.Status != "SYNCED" &&
+                    (e.ErrorCode == "SHIFT_LOCKED" || (e.ErrorMessage != null && e.ErrorMessage.Contains("SHIFT_LOCKED"))) &&
+                    (e.EntityType == "POS_ORDER" || e.EntityType == "POS_PAYMENT"))
+                .OrderByDescending(e => e.CreatedAt)
+                .ToListAsync();
+            foreach (var syncEvent in lockedEvents)
+            {
+                var orderId = syncEvent.EntityType == "POS_ORDER" ? syncEvent.EntityId : null;
+                if (string.IsNullOrWhiteSpace(orderId))
+                {
+                    try
+                    {
+                        var payload = JsonNode.Parse(syncEvent.PayloadJson)?.AsObject();
+                        orderId = payload?["OrderId"]?.ToString() ?? payload?["orderId"]?.ToString();
+                    }
+                    catch (Exception) { }
+                }
+                if (string.IsNullOrWhiteSpace(orderId) && syncEvent.EntityType == "POS_PAYMENT")
+                    orderId = (await _dbContext.PosPayments.FirstOrDefaultAsync(p => p.Id == syncEvent.EntityId))?.OrderId;
+                if (string.IsNullOrWhiteSpace(orderId)) continue;
+
+                var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId && o.PropertyId == propertyId);
+                if (order == null) continue;
+                var notificationId = $"pos-shift-recovery:{orderId}";
+                if (notifications.Any(n => n.Id == notificationId && n.PropertyId == propertyId)) continue;
+                notifications.Add(new LocalOfflineNotification
+                {
+                    Id = notificationId,
+                    PropertyId = propertyId,
+                    NotificationType = "POS_SYNC_RECOVERY_REQUIRED",
+                    Subject = "Payment needs shift recovery",
+                    Body = $"Order {order.OrderNumber} was preserved locally, but its original POS shift is closed. Open an approved shift to retry the original payment. Do not charge the guest again.",
+                    Category = "POS",
+                    Priority = "HIGH",
+                    MetadataJson = JsonSerializer.Serialize(new { shiftType = "POS", recoveryType = "SHIFT_LOCKED", orderId, orderNumber = order.OrderNumber, operationId = syncEvent.OperationId }),
+                    CreatedAt = syncEvent.CreatedAt,
+                    Acknowledged = false,
+                });
+            }
+            metadata.OfflineNotificationsJson = JsonSerializer.Serialize(notifications);
+            await _dbContext.SaveChangesAsync();
+            return notifications
                 .Where(n => n.PropertyId == propertyId && !n.Acknowledged)
                 .OrderByDescending(n => n.CreatedAt)
                 .ToList();
@@ -635,6 +718,10 @@ public class LocalRepository
         catch
         {
             return new List<LocalOfflineNotification>();
+        }
+        finally
+        {
+            OfflineNotificationStore.Gate.Release();
         }
     }
 
@@ -6136,6 +6223,34 @@ public class LocalRepository
             : await _dbContext.Staff
                 .Where(s => staffIds.Contains(s.Id))
                 .ToDictionaryAsync(s => s.Id, s => s.FirstName + " " + s.LastName);
+        var productIds = orders
+            .SelectMany(o => o.Items ?? new List<LocalPosOrderItem>())
+            .Where(i => !string.IsNullOrWhiteSpace(i.ProductId))
+            .Select(i => i.ProductId!)
+            .Distinct()
+            .ToList();
+        var productMap = productIds.Count == 0
+            ? new Dictionary<string, LocalPosProduct>()
+            : await _dbContext.PosProducts
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+        var categoryIds = productMap.Values.Select(p => p.CategoryId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+        var categoryStations = categoryIds.Count == 0
+            ? new Dictionary<string, string?>()
+            : await _dbContext.ProductCategories
+                .Where(c => categoryIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.ProductionStation);
+
+        string ResolveStation(LocalPosOrderItem item)
+        {
+            if (!string.IsNullOrWhiteSpace(item.ProductId) && productMap.TryGetValue(item.ProductId, out var product))
+            {
+                if (!string.IsNullOrWhiteSpace(product.ProductionStation)) return product.ProductionStation.Trim().ToUpperInvariant();
+                if (categoryStations.TryGetValue(product.CategoryId, out var categoryStation) && !string.IsNullOrWhiteSpace(categoryStation))
+                    return categoryStation.Trim().ToUpperInvariant();
+            }
+            return "KITCHEN";
+        }
 
         var result = new List<object>();
         foreach (var o in orders)
@@ -6163,6 +6278,7 @@ public class LocalRepository
                     quantity = item.Quantity,
                     unitPrice = item.UnitPrice,
                     total = item.Total,
+                    productionStation = ResolveStation(item),
                     modifiers = (item.Modifiers ?? new List<LocalPosOrderItemModifier>()).Select(modifier => new {
                         name = modifier.Name,
                         price = modifier.Price,
@@ -6172,6 +6288,27 @@ public class LocalRepository
         }
         
         return result;
+    }
+
+    /// <summary>
+    /// Returns only a non-sensitive pending room-service count for the
+    /// provisioned terminal. This is intentionally available before operator
+    /// login so the terminal can request authentication without exposing guest
+    /// or order details.
+    /// </summary>
+    public async Task<object> GetPendingRoomServiceOrderSummaryAsync(string propertyId)
+    {
+        var terminal = await _dbContext.PosTerminals.AsNoTracking().FirstOrDefaultAsync();
+        if (terminal == null || !string.Equals(terminal.PropertyId, propertyId, StringComparison.OrdinalIgnoreCase))
+            return new { count = 0 };
+
+        var query = _dbContext.PosOrders.AsNoTracking().Where(o =>
+            o.PropertyId == propertyId &&
+            o.OutletId == terminal.OutletId &&
+            o.OrderType == "ROOM_SERVICE" &&
+            o.Status == "SUBMITTED");
+
+        return new { count = await query.CountAsync() };
     }
 
     public async Task<List<object>> GetPendingOrdersForSessionAsync(string sessionId)
