@@ -187,6 +187,8 @@ export interface LodgeCoreDataProvider {
     getInHouseGuests(query: string): Promise<{ data: any[], error: string | null }>;
     /** Read breakfast entitlement from the provider's authoritative local/online source. */
     getBreakfastEntitlement(reservationId: string, roomNumber: string): Promise<{ data: any, error: string | null }>;
+    getBreakfastEntitlements(): Promise<{ data: any, error: string | null }>;
+    printBreakfastEntitlements(data: any): Promise<{ data: any, error: string | null }>;
   };
   approvals: {
     requestItemModification(payload: any): Promise<{ success: boolean, requiresApproval?: boolean, error?: string, order?: any }>;

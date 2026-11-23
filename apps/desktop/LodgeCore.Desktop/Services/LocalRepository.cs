@@ -428,6 +428,44 @@ public class LocalRepository
         };
     }
 
+    public async Task<object> GetBreakfastEntitlementsAsync(string propertyId)
+    {
+        var property = await _dbContext.Properties.AsNoTracking().FirstOrDefaultAsync(p => p.Id == propertyId);
+        if (property == null) throw new InvalidOperationException("Property is not available offline.");
+        var businessDate = property.BusinessDate.Date;
+        if (!property.BreakfastEligibilitySnapshotDate.HasValue || property.BreakfastEligibilitySnapshotDate.Value.Date != businessDate)
+        {
+            return new { available = false, reason = "Night Audit has not completed the breakfast eligibility snapshot for the current business date.", businessDate = businessDate.ToString("yyyy-MM-dd"), auditedBusinessDate = (string?)null, rows = new List<object>() };
+        }
+
+        var snapshots = await _dbContext.BreakfastEligibilitySnapshots.AsNoTracking()
+            .Where(s => s.PropertyId == propertyId && s.RedeemableBusinessDate.Date == businessDate && s.Status == "ELIGIBLE")
+            .OrderBy(s => s.RoomNumber).ThenBy(s => s.GuestName)
+            .ToListAsync();
+        var reservationIds = snapshots.Select(s => s.ReservationId).Distinct().ToList();
+        var redemptions = await _dbContext.BreakfastRedemptions.AsNoTracking()
+            .Where(r => r.PropertyId == propertyId && r.BusinessDate.Date == businessDate && reservationIds.Contains(r.ReservationId))
+            .ToListAsync();
+        var redeemedByReservation = redemptions.GroupBy(r => r.ReservationId).ToDictionary(g => g.Key, g => g.Sum(r => r.CoversRedeemed));
+        var rows = snapshots.Select(snapshot =>
+        {
+            var redeemed = redeemedByReservation.TryGetValue(snapshot.ReservationId, out var value) ? value : 0;
+            return new
+            {
+                reservationId = snapshot.ReservationId,
+                roomNumber = snapshot.RoomNumber,
+                guestName = snapshot.GuestName,
+                maxCoversAllowed = snapshot.MaxCoversAllowed,
+                coversRedeemed = redeemed,
+                remainingCovers = Math.Max(0, snapshot.MaxCoversAllowed - redeemed),
+            };
+        }).Where(row => row.remainingCovers > 0).Cast<object>().ToList();
+
+        var propertyName = property.Name;
+        var auditedDate = snapshots.FirstOrDefault()?.BusinessDate.ToString("yyyy-MM-dd");
+        return new { available = true, propertyName, businessDate = businessDate.ToString("yyyy-MM-dd"), auditedBusinessDate = auditedDate, rows };
+    }
+
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)
     {
         await AssertNightAuditAllowsAsync(reservation.PropertyId);

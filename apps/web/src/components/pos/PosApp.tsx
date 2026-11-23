@@ -90,6 +90,24 @@ function getNotificationMetadata(notification: any): any {
   return {};
 }
 
+function escapePrintHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[character] || character));
+}
+
+function formatBusinessDate(value: unknown): string {
+  if (!value) return '—';
+  const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 type ViewMode = 'menu' | 'tables';
 
 export default function PosApp() {
@@ -141,6 +159,7 @@ export default function PosApp() {
   const [isVoidingOrder, setIsVoidingOrder] = useState(false);
 
   const [isPrintingCustomerReceipt, setIsPrintingCustomerReceipt] = useState(false);
+  const [isPrintingBreakfastEntitlements, setIsPrintingBreakfastEntitlements] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
   const [customerDisplayEnabled, setCustomerDisplayEnabled] = useState(false);
@@ -1116,6 +1135,102 @@ export default function PosApp() {
     }
   };
 
+  const handlePrintBreakfastEntitlements = useCallback(async () => {
+    if (isPrintingBreakfastEntitlements) return;
+    setIsPrintingBreakfastEntitlements(true);
+    try {
+      const result = await provider.pos.getBreakfastEntitlements();
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      const data = result?.data;
+      if (!data?.available) {
+        toast.warning(data?.reason || 'The breakfast list is unavailable until Night Audit is completed.');
+        return;
+      }
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      if (rows.length === 0) {
+        toast.info('No eligible complimentary breakfast covers remain for today.');
+        return;
+      }
+
+      if (isDesktopMode) {
+        const operatorName = activeOperator
+          ? `${activeOperator.firstName || ''} ${activeOperator.lastName || ''}`.trim() || activeOperator.name || 'Operator'
+          : 'Operator';
+        const printResult = await provider.pos.printBreakfastEntitlements({
+          ...data,
+          operatorName,
+        });
+        if (printResult?.error) {
+          toast.error(printResult.error);
+          return;
+        }
+        toast.success('Breakfast entitlement list sent to the desktop printer.');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank', 'width=960,height=720');
+      if (!printWindow) {
+        toast.error('Please allow pop-ups to print the breakfast list.');
+        return;
+      }
+
+      const totalCovers = rows.reduce((sum: number, row: any) => sum + Number(row.remainingCovers || 0), 0);
+      const operatorName = activeOperator
+        ? `${activeOperator.firstName || ''} ${activeOperator.lastName || ''}`.trim() || activeOperator.name || 'Operator'
+        : 'Operator';
+      const propertyName = data.propertyName || (session?.user as any)?.propertyName || 'Property';
+      const printedAt = new Date().toLocaleString();
+      const tableRows = rows.map((row: any, index: number) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td class="room">${escapePrintHtml(row.roomNumber || '—')}</td>
+          <td>${escapePrintHtml(row.guestName || 'Guest')}</td>
+          <td class="number">${Number(row.maxCoversAllowed || 0)}</td>
+          <td class="number">${Number(row.coversRedeemed || 0)}</td>
+          <td class="number strong">${Number(row.remainingCovers || 0)}</td>
+        </tr>`).join('');
+
+      printWindow.document.write(`<!doctype html><html><head><title>Complimentary Breakfast List</title>
+        <style>
+          @page { size: A4 portrait; margin: 16mm; }
+          * { box-sizing: border-box; }
+          body { margin: 0; color: #172033; font: 13px Arial, sans-serif; }
+          .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #172033; padding-bottom: 16px; }
+          h1 { margin: 0 0 6px; font-size: 22px; }
+          h2 { margin: 0; color: #4f46e5; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; }
+          .meta { color: #64748b; line-height: 1.7; text-align: right; }
+          .notice { margin: 18px 0; padding: 11px 13px; border: 1px solid #c7d2fe; background: #eef2ff; border-radius: 6px; color: #3730a3; }
+          table { width: 100%; border-collapse: collapse; }
+          th { background: #f1f5f9; color: #475569; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; text-align: left; }
+          th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 8px; }
+          .room { font-weight: 700; }
+          .number { text-align: center; }
+          .strong { color: #3730a3; font-weight: 700; }
+          .summary { display: flex; justify-content: flex-end; gap: 32px; margin-top: 16px; font-weight: 700; }
+          .footer { margin-top: 34px; color: #64748b; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+        </style></head><body>
+          <div class="header"><div><h1>${escapePrintHtml(propertyName)}</h1><h2>Complimentary Breakfast Entitlement List</h2></div>
+            <div class="meta"><b>Business date</b><br>${escapePrintHtml(formatBusinessDate(data.businessDate))}<br><b>Night Audit source</b><br>${escapePrintHtml(formatBusinessDate(data.auditedBusinessDate))}</div></div>
+          <div class="notice">Eligibility was carried forward from the completed Night Audit. Only remaining, unredeemed covers are shown.</div>
+          <table><thead><tr><th>#</th><th>Room</th><th>Guest</th><th>Covers allowed</th><th>Redeemed</th><th>Remaining</th></tr></thead><tbody>${tableRows}</tbody></table>
+          <div class="summary"><span>${rows.length} eligible guest${rows.length === 1 ? '' : 's'}</span><span>${totalCovers} remaining cover${totalCovers === 1 ? '' : 's'}</span></div>
+          <div class="footer">Printed by ${escapePrintHtml(operatorName)} on ${escapePrintHtml(printedAt)}. This is an operational entitlement list; redemption must still be recorded at service.</div>
+        </body></html>`);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.onafterprint = () => printWindow.close();
+      window.setTimeout(() => printWindow.print(), 250);
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not prepare the breakfast list for printing.');
+    } finally {
+      setIsPrintingBreakfastEntitlements(false);
+    }
+  }, [activeOperator, isDesktopMode, isPrintingBreakfastEntitlements, provider.pos, session]);
+
   // ─────────────────────────────────────────────────────────────────
   // Totals
   // ─────────────────────────────────────────────────────────────────
@@ -1302,6 +1417,7 @@ export default function PosApp() {
           isPoolOutlet={isPoolOutlet}
           pendingRoomServiceCount={pendingRoomServiceOrders.length}
           onOpenRoomService={() => setShowRoomServiceAlert(true)}
+          onPrintBreakfastEntitlements={() => void handlePrintBreakfastEntitlements()}
         />
 
         {/* Restricted mode overlay */}

@@ -604,6 +604,8 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getBreakfastEntitlement: async (reservationId: string, roomNumber: string) => {
       return apiFetchResult(`/api/v1/fnb/breakfast/entitlement?reservationId=${encodeURIComponent(reservationId)}&roomNumber=${encodeURIComponent(roomNumber)}`);
     },
+    getBreakfastEntitlements: async () => apiFetchResult('/api/v1/fnb/breakfast/entitlements'),
+    printBreakfastEntitlements: async () => ({ data: null, error: 'Direct printer output is available in the offline desktop application.' }),
   },
 
   approvals: {

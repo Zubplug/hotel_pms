@@ -6,7 +6,7 @@ import Image from 'next/image';
 import {
   LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat, Wallet,
   Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer,
-  AlertTriangle, ChevronLeft, ChevronRight, ArrowRightLeft, Hotel, Waves,
+  AlertTriangle, ChevronLeft, ChevronRight, ArrowRightLeft, Hotel, Waves, Coffee,
 } from 'lucide-react';
 
 interface PosSidebarProps {
@@ -19,6 +19,7 @@ interface PosSidebarProps {
   onOpenPrinterSettings: () => void;
   onOpenSyncCenter: () => void;
   onOpenRoomService?: () => void;
+  onPrintBreakfastEntitlements?: () => void;
   onLock: () => void;
   onEmergencyOverride?: () => void;
   isOnline: boolean;
@@ -39,6 +40,7 @@ export function PosSidebar({
   onOpenPrinterSettings,
   onOpenSyncCenter,
   onOpenRoomService,
+  onPrintBreakfastEntitlements,
   onLock,
   onEmergencyOverride,
   isOnline,
@@ -176,6 +178,7 @@ export function PosSidebar({
         )}
 
         <NavItem icon={ChefHat}    label="Kitchen"      onClick={onOpenKitchen} />
+        <NavItem icon={Coffee}     label="Breakfast List" onClick={() => onPrintBreakfastEntitlements?.()} />
         {pendingRoomServiceCount > 0 && (
           <NavItem
             icon={Hotel}

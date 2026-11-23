@@ -958,6 +958,13 @@ public partial class MainPage : ContentPage
                         parameters?["reservationId"]?.ToString() ?? "",
                         parameters?["roomNumber"]?.ToString() ?? "");
                     break;
+                case "pos.getBreakfastEntitlements":
+                    responseData = await pmsInterop.GetBreakfastEntitlementsAsync();
+                    break;
+                case "hardware.printBreakfastEntitlements":
+                    responseData = await pmsInterop.PrintBreakfastEntitlementsAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));
+                    break;
 
 
                 // ── Printer Management ────────────────────────────────────────

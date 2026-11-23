@@ -661,6 +661,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getBreakfastEntitlement: async (reservationId: string, roomNumber: string) => {
       return invokeDesktop('pos.getBreakfastEntitlement', { reservationId, roomNumber });
     },
+    getBreakfastEntitlements: async () => invokeDesktop('pos.getBreakfastEntitlements'),
+    printBreakfastEntitlements: async (data: any) => invokeDesktop('hardware.printBreakfastEntitlements', { data }),
   },
   approvals: {
     requestItemModification: async (payload: any) => {

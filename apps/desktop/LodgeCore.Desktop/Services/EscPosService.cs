@@ -38,6 +38,24 @@ public class LocalPrinterConfig
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class BreakfastEntitlementPrintData
+{
+    public string? PropertyName { get; set; }
+    public string? BusinessDate { get; set; }
+    public string? AuditedBusinessDate { get; set; }
+    public List<BreakfastEntitlementPrintRow> Rows { get; set; } = new();
+    public string? OperatorName { get; set; }
+}
+
+public class BreakfastEntitlementPrintRow
+{
+    public string? RoomNumber { get; set; }
+    public string? GuestName { get; set; }
+    public int MaxCoversAllowed { get; set; }
+    public int CoversRedeemed { get; set; }
+    public int RemainingCovers { get; set; }
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  EscPosService – the actual driver
 // ─────────────────────────────────────────────────────────────────
@@ -621,6 +639,62 @@ public class EscPosService
         }
 
         AddPrintFooter(builder, "Waiter copy - retain for service", kot.FiredAt);
+        builder.AddCommand(EscPosBuilder.CutPartial);
+
+        return await SendToPrinterAsync(printer, builder.Build());
+    }
+
+    public async Task<(bool success, string? error)> PrintBreakfastEntitlementsAsync(
+        BreakfastEntitlementPrintData data, string? outletId = null)
+    {
+        // The breakfast entitlement list belongs to POS operations. Never
+        // route it to the FRONTDESK printer, even when the POS receipt printer
+        // is not configured; the operator must fix the POS printer setup.
+        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId);
+        if (printer == null)
+            return (false, "No active POS receipt printer configured for this outlet.");
+
+        var profile = new PrinterProfile {
+            PaperWidth = printer.PaperWidth,
+            HotelName = printer.HotelName ?? data.PropertyName,
+            HotelAddress = printer.HotelAddress,
+        };
+        var builder = new EscPosBuilder(profile);
+        builder.PrintHeader("COMPLIMENTARY BREAKFAST");
+        builder.AddCommand(EscPosBuilder.AlignCenter);
+        builder.AddLine($"BUSINESS DATE: {data.BusinessDate ?? "—"}");
+        builder.AddLine($"AUDIT SOURCE : {data.AuditedBusinessDate ?? "—"}");
+        builder.AddCommand(EscPosBuilder.AlignLeft);
+        builder.AddDivider('-');
+        builder.AddCommand(EscPosBuilder.BoldOn);
+        builder.AddLine("ROOM   GUEST");
+        builder.AddLine("       REMAINING COVERS");
+        builder.AddCommand(EscPosBuilder.BoldOff);
+
+        foreach (var row in data.Rows)
+        {
+            var room = (row.RoomNumber ?? "—").Trim();
+            var guest = (row.GuestName ?? "Guest").Trim();
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddLine($"{room}  {guest}");
+            builder.AddCommand(EscPosBuilder.BoldOff);
+            builder.AddLine($"       {row.RemainingCovers} remaining  (allowed {row.MaxCoversAllowed}, redeemed {row.CoversRedeemed})");
+            builder.AddLineFeed();
+        }
+
+        var totalCovers = data.Rows.Sum(row => Math.Max(0, row.RemainingCovers));
+        builder.AddDivider('=');
+        builder.AddCommand(EscPosBuilder.BoldOn);
+        builder.AddRow("ELIGIBLE GUESTS", data.Rows.Count.ToString());
+        builder.AddRow("REMAINING COVERS", totalCovers.ToString());
+        builder.AddCommand(EscPosBuilder.BoldOff);
+        builder.AddLineFeed();
+        builder.AddLine("Eligibility carried forward from Night Audit.");
+        builder.AddLine($"Printed by: {data.OperatorName ?? "Operator"}");
+        builder.AddLine($"Printed at : {DateTime.Now:yyyy-MM-dd HH:mm}");
+        builder.AddCommand(EscPosBuilder.AlignCenter);
+        builder.AddLine("REDEMPTION MUST BE RECORDED AT SERVICE");
+        builder.AddLineFeed(2);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());

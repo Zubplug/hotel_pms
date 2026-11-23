@@ -1937,6 +1937,41 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetBreakfastEntitlementsAsync()
+    {
+        try
+        {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var result = await _repo.GetBreakfastEntitlementsAsync(ctx.PropertyId);
+            return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> PrintBreakfastEntitlementsAsync(string printDataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var data = JsonSerializer.Deserialize<BreakfastEntitlementPrintData>(
+                printDataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (data == null || data.Rows.Count == 0)
+                return JsonSerializer.Serialize(new { success = false, error = "There are no breakfast entitlements to print." }, _jsonOptions);
+
+            data.OperatorName ??= ctx.UserId;
+            var result = await _escPos.PrintBreakfastEntitlementsAsync(data, ctx.OutletId);
+            return JsonSerializer.Serialize(new { success = result.success, error = result.error }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetPosProductsAsync(string propertyId, string outletId = "")
     {
         try
