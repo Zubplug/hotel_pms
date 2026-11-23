@@ -24,7 +24,7 @@ export function resolveSelectedModifiers(
   product: { name?: string; modifiers?: ModifierRecord[] },
   requested: RequestedModifier[] | null | undefined,
 ) {
-  const available = (product.modifiers || []).filter((modifier) => modifier.isActive !== false);
+  const active = (product.modifiers || []).filter((modifier) => modifier.isActive !== false);
   const selections = Array.isArray(requested) ? requested : [];
   const selected: ModifierRecord[] = [];
   const selectedIds = new Set<string>();
@@ -32,9 +32,10 @@ export function resolveSelectedModifiers(
   for (const input of selections) {
     const inputId = typeof input?.id === 'string' ? input.id : '';
     const inputName = typeof input?.name === 'string' ? input.name.trim().toLowerCase() : '';
-    const modifier = available.find((candidate) =>
-      (inputId && candidate.id === inputId) ||
-      (!inputId && inputName && candidate.name.trim().toLowerCase() === inputName),
+    const modifier = active.find((candidate) =>
+      inputId && candidate.id === inputId,
+    ) || active.find((candidate) =>
+      inputName && candidate.name.trim().toLowerCase() === inputName,
     );
     if (!modifier) throw new Error(`INVALID_MODIFIER: ${input.name || input.id || 'unknown option'} is not active for ${product.name || 'this item'}`);
     if (selectedIds.has(modifier.id)) throw new Error(`DUPLICATE_MODIFIER: ${modifier.name}`);
@@ -43,7 +44,7 @@ export function resolveSelectedModifiers(
   }
 
   const groups = new Map<string, ModifierRecord[]>();
-  for (const modifier of available) {
+  for (const modifier of active) {
     if (!modifier.groupName) continue;
     const members = groups.get(modifier.groupName) || [];
     members.push(modifier);

@@ -8272,9 +8272,14 @@ public class LocalRepository
             foreach (var input in requested)
             {
                 var inputName = input.Name.Trim();
+                // Order-line modifiers have their own IDs, so an existing
+                // offline order may carry an ID that is not the catalog
+                // modifier ID. Prefer the catalog ID, then safely fall back
+                // to the canonical catalog name.
                 var modifier = available.FirstOrDefault(candidate =>
-                    (!string.IsNullOrWhiteSpace(input.Id) && candidate.Id.Equals(input.Id, StringComparison.OrdinalIgnoreCase)) ||
-                    (!string.IsNullOrWhiteSpace(inputName) && candidate.Name.Equals(inputName, StringComparison.OrdinalIgnoreCase)));
+                    !string.IsNullOrWhiteSpace(input.Id) && candidate.Id.Equals(input.Id, StringComparison.OrdinalIgnoreCase))
+                    ?? available.FirstOrDefault(candidate =>
+                        !string.IsNullOrWhiteSpace(inputName) && candidate.Name.Equals(inputName, StringComparison.OrdinalIgnoreCase));
                 if (modifier == null)
                     throw new InvalidOperationException($"INVALID_MODIFIER: {input.Name} is not active for {products[item.ProductId].Name}.");
                 if (!selectedIds.Add(modifier.Id))
