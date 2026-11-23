@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,42 +82,6 @@ function formatClock(date: Date): string {
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
-
-async function getOutletId(): Promise<string | null> {
-  const sessionId = localStorage.getItem('lodgecore_pos_session_id');
-  if (!sessionId) return null;
-  try {
-    const res = await fetch(`/api/v1/pos/sessions/${sessionId}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.outlet?.id ?? data?.outletId ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchBatches(outletId: string, station: Station): Promise<ProductionBatch[]> {
-  const res = await fetch(
-    `/api/v1/pos/outlets/${outletId}/production-batches?station=${station}`,
-    { cache: 'no-store' }
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return Array.isArray(data) ? data : (data?.batches ?? data?.data ?? []);
-}
-
-async function advanceBatchStatus(batchId: string, newStatus: BatchStatus): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/v1/pos/production-batches/${batchId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 // ─── Station Selector ─────────────────────────────────────────────────────────
 
@@ -285,6 +250,7 @@ interface KdsDisplayProps {
 }
 
 function KdsDisplay({ station, outletId, outletName }: KdsDisplayProps) {
+  const { provider } = useLodgeCoreProvider();
   const [batches, setBatches] = useState<ProductionBatch[]>([]);
   const [advancing, setAdvancing] = useState<Record<string, boolean>>({});
   const [completing, setCompleting] = useState<Record<string, boolean>>({});
@@ -300,7 +266,9 @@ function KdsDisplay({ station, outletId, outletName }: KdsDisplayProps) {
   // Load batches
   const loadBatches = useCallback(async () => {
     try {
-      const data = await fetchBatches(outletId, station);
+      const result = await provider.pos.getProductionBatches(outletId, station);
+      if (result?.error) throw new Error(result.error);
+      const data = Array.isArray(result?.data) ? result.data : [];
       setBatches((prev) => {
         const existingIds = new Set(prev.map((b) => b.id));
         // Keep completed ones that are fading out
@@ -317,7 +285,7 @@ function KdsDisplay({ station, outletId, outletName }: KdsDisplayProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [outletId, station, completing]);
+  }, [outletId, provider.pos, station, completing]);
 
   // Poll every 10s
   useEffect(() => {
@@ -345,7 +313,8 @@ function KdsDisplay({ station, outletId, outletName }: KdsDisplayProps) {
 
     setAdvancing((prev) => ({ ...prev, [batch.id]: true }));
 
-    const ok = await advanceBatchStatus(batch.id, nextStatus);
+    const result = await provider.pos.updateBatchStatus(batch.id, nextStatus);
+    const ok = !result?.error && (result as any)?.success !== false;
 
     if (ok) {
       if (nextStatus === 'COMPLETED') {
@@ -474,6 +443,7 @@ function KdsDisplay({ station, outletId, outletName }: KdsDisplayProps) {
 // ─── Inner page (reads searchParams) ─────────────────────────────────────────
 
 function KdsPageInner() {
+  const { provider } = useLodgeCoreProvider();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -500,25 +470,18 @@ function KdsPageInner() {
   // Resolve outletId from session
   useEffect(() => {
     const resolve = async () => {
-      const id = await getOutletId();
+      const sessionId = localStorage.getItem('lodgecore_pos_session_id');
+      const sessionResult = sessionId ? await provider.pos.getSessionContext(sessionId) : null;
+      const sessionData = sessionResult?.data;
+      const id = sessionData?.outlet?.id ?? sessionData?.outletId ?? null;
       if (id) {
         setOutletId(id);
-        // Attempt to get outlet name from session data
-        const sessionId = localStorage.getItem('lodgecore_pos_session_id');
-        if (sessionId) {
-          try {
-            const res = await fetch(`/api/v1/pos/sessions/${sessionId}`);
-            if (res.ok) {
-              const data = await res.json();
-              setOutletName(data?.outlet?.name ?? '');
-            }
-          } catch {}
-        }
+        setOutletName(sessionData?.outlet?.name ?? '');
       }
       setLoadingOutlet(false);
     };
     resolve();
-  }, []);
+  }, [provider.pos]);
 
   const handleStationSelect = (s: Station) => {
     setStation(s);

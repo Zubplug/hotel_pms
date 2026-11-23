@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { ShieldAlert, MonitorCheck, Loader2 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export default function DeviceRegistrationPage() {
   const router = useRouter();
+  const { isDesktopMode } = useLodgeCoreProvider();
   const { data: session, status } = useLodgeCoreSession();
   const propertyId = (session?.user as any)?.propertyId || '';
   const [deviceName, setDeviceName] = useState('');
@@ -20,7 +22,7 @@ export default function DeviceRegistrationPage() {
   const [outlets, setOutlets] = useState<any[]>([]);
 
   React.useEffect(() => {
-    if (propertyId) {
+    if (propertyId && !isDesktopMode) {
       fetch(`/api/v1/pos/outlets?propertyId=${propertyId}`)
         .then(res => res.json())
         .then(data => {
@@ -30,7 +32,7 @@ export default function DeviceRegistrationPage() {
         })
         .catch(console.error);
     }
-  }, [propertyId]);
+  }, [propertyId, isDesktopMode]);
 
   const role = (session?.user as any)?.role;
   const needsAdminOverride = role !== 'SUPER_ADMIN' && role !== 'HOTEL_MANAGER';
@@ -49,6 +51,12 @@ export default function DeviceRegistrationPage() {
 
     setLoading(true);
     setError('');
+
+    if (isDesktopMode) {
+      setError('POS device registration requires the online web application.');
+      setLoading(false);
+      return;
+    }
 
     const identifier = generateDeviceIdentifier();
 
