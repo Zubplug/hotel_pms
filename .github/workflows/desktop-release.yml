@@ -125,19 +125,6 @@ jobs:
         $version = $env:APP_VERSION
         $repo = "${{ github.repository }}"
 
-        # Find the main package and any framework packages emitted beside it.
-        $msixFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" |
-                     Where-Object { $_.Name -notlike "*Dependencies*" }
-        $msixFile = $msixFiles |
-                    Where-Object { $_.Name -eq "LodgeCore.Desktop_${version}_x86.msix" } |
-                    Select-Object -First 1
-        if (-not $msixFile) {
-          Write-Error "Main MSIX LodgeCore.Desktop_${version}_x86.msix not found!"
-          exit 1
-        }
-        $msixName = $msixFile.Name
-        Write-Host "MSIX: $msixName"
-
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         function Get-AppxIdentity($packagePath) {
           $archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
@@ -155,6 +142,25 @@ jobs:
             $archive.Dispose()
           }
         }
+
+        # Find the main package and any framework packages emitted beside it.
+        # Do not infer the App Installer identity from the project name: the
+        # identity embedded in the MSIX is authoritative.
+        $msixFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" |
+                     Where-Object { $_.Name -notlike "*Dependencies*" }
+        $msixFile = $msixFiles |
+                    Where-Object { $_.Name -match "_${version}_x86\.msix$" } |
+                    Select-Object -First 1
+        if (-not $msixFile) {
+          Write-Error "Main x86 MSIX for version $version not found!"
+          exit 1
+        }
+        $msixName = $msixFile.Name
+        $mainIdentity = Get-AppxIdentity $msixFile.FullName
+        if ($mainIdentity.Version -ne $version) { throw "MSIX identity version $($mainIdentity.Version) does not match $version" }
+        if ($mainIdentity.ProcessorArchitecture -ne 'x86') { throw "MSIX architecture $($mainIdentity.ProcessorArchitecture) is not x86" }
+        Write-Host "MSIX: $msixName"
+        Write-Host "MSIX identity: $($mainIdentity.Name) | Publisher: $($mainIdentity.Publisher) | Version: $($mainIdentity.Version) | Architecture: $($mainIdentity.ProcessorArchitecture)"
 
         # The build emits framework packages for multiple architectures. The
         # desktop package is x86, so include only one x86 dependency per
@@ -196,11 +202,11 @@ jobs:
         $writer.WriteAttributeString('Version', $version)
         # MainPackage
         $writer.WriteStartElement('MainPackage', $appInstallerNamespace)
-        $writer.WriteAttributeString('Name', 'com.lodgecore.frontdesk')
-        $writer.WriteAttributeString('Version', $version)
-        $writer.WriteAttributeString('Publisher', $env:CERT_SUBJECT)
+        $writer.WriteAttributeString('Name', $mainIdentity.Name)
+        $writer.WriteAttributeString('Version', $mainIdentity.Version)
+        $writer.WriteAttributeString('Publisher', $mainIdentity.Publisher)
         $writer.WriteAttributeString('Uri', $msixUrl)
-        $writer.WriteAttributeString('ProcessorArchitecture', 'x86')
+        $writer.WriteAttributeString('ProcessorArchitecture', $mainIdentity.ProcessorArchitecture)
         $writer.WriteEndElement()
 
         if ($dependencyPackages.Count -gt 0) {
@@ -244,10 +250,10 @@ jobs:
         $appInstallerNs.AddNamespace('ai', 'http://schemas.microsoft.com/appx/appinstaller/2021')
         $mainPackage = $appInstallerXml.SelectSingleNode('/ai:AppInstaller/ai:MainPackage', $appInstallerNs)
         if (-not $mainPackage) { throw 'Generated AppInstaller has no MainPackage element' }
-        if ($mainPackage.Name -ne 'com.lodgecore.frontdesk') { throw "Unexpected package name: $($mainPackage.Name)" }
-        if ($mainPackage.Version -ne $version) { throw "AppInstaller version $($mainPackage.Version) does not match $version" }
-        if ($mainPackage.Publisher -ne $env:CERT_SUBJECT) { throw 'AppInstaller publisher does not match the signing certificate' }
-        if ($mainPackage.ProcessorArchitecture -ne 'x86') { throw 'AppInstaller architecture must be x86' }
+        if ($mainPackage.Name -ne $mainIdentity.Name) { throw "AppInstaller package name $($mainPackage.Name) does not match MSIX identity $($mainIdentity.Name)" }
+        if ($mainPackage.Version -ne $mainIdentity.Version) { throw "AppInstaller version $($mainPackage.Version) does not match MSIX version $($mainIdentity.Version)" }
+        if ($mainPackage.Publisher -ne $mainIdentity.Publisher) { throw 'AppInstaller publisher does not match the MSIX publisher' }
+        if ($mainPackage.ProcessorArchitecture -ne $mainIdentity.ProcessorArchitecture) { throw 'AppInstaller architecture does not match the MSIX architecture' }
         if (-not $mainPackage.Uri.EndsWith($msixName)) { throw "AppInstaller URI does not reference $msixName" }
         $dependencyNodes = $appInstallerXml.SelectNodes('/ai:AppInstaller/ai:Dependencies/ai:Package', $appInstallerNs)
         if ($dependencyNodes.Count -ne $dependencyPackages.Count) {
