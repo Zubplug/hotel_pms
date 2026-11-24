@@ -596,6 +596,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             await dbContext.SaveChangesAsync(stoppingToken);
         }
 
+        // A permanently rejected ORDER_CREATED must stop its dependent local
+        // events as well. Otherwise payment/completion events keep receiving
+        // RETRYABLE_ORDER_NOT_FOUND forever even though the parent order can
+        // never be materialized in the cloud.
+        await DeadLetterDependentPosEventsAsync(dbContext, stoppingToken);
+
         var pendingEvents = await dbContext.SyncEvents
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED")
             .OrderBy(e => e.SequenceNumber)
@@ -729,10 +735,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             }
                             else
                             {
-                                evt.Status = "FAILED";
-                                evt.ErrorMessage = rejectionError.StartsWith("RETRYABLE_", StringComparison.OrdinalIgnoreCase)
-                                    ? $"TRANSIENT: {rejectionError}"
-                                    : rejectionError;
+                                var isRetryable = rejectionError.StartsWith("RETRYABLE_", StringComparison.OrdinalIgnoreCase);
+                                evt.Status = isRetryable ? "FAILED" : "DEAD_LETTER";
+                                evt.ErrorMessage = isRetryable ? $"TRANSIENT: {rejectionError}" : rejectionError;
+                                if (!isRetryable) evt.NextAttemptAt = null;
                             }
                         }
                         else if (result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Status == "RETRY")
@@ -775,6 +781,58 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         }
 
         await dbContext.SaveChangesAsync(stoppingToken);
+    }
+
+    private static async Task DeadLetterDependentPosEventsAsync(
+        LocalDbContext dbContext,
+        CancellationToken stoppingToken)
+    {
+        var rejectedOrders = await dbContext.SyncEvents
+            .Where(e => e.Status == "DEAD_LETTER"
+                && e.EntityType == "POS_ORDER"
+                && e.OperationType == "ORDER_CREATED")
+            .Select(e => new { e.EntityId, e.ErrorMessage })
+            .ToListAsync(stoppingToken);
+
+        if (rejectedOrders.Count == 0) return;
+
+        var pendingDependents = await dbContext.SyncEvents
+            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "PROCESSING")
+            .Where(e => e.EntityType == "POS_PAYMENT"
+                || e.EntityType == "POS_ORDER"
+                || e.EntityType == "POS_ORDER_ITEM")
+            .ToListAsync(stoppingToken);
+
+        var changed = false;
+        foreach (var rejectedOrder in rejectedOrders)
+        {
+            if (string.IsNullOrWhiteSpace(rejectedOrder.EntityId)) continue;
+            var parentError = rejectedOrder.ErrorMessage ?? "The POS order was rejected by cloud validation.";
+
+            foreach (var dependent in pendingDependents)
+            {
+                if (dependent.EntityType == "POS_ORDER"
+                    && string.Equals(dependent.EntityId, rejectedOrder.EntityId, StringComparison.OrdinalIgnoreCase)
+                    && dependent.OperationType == "ORDER_CREATED")
+                {
+                    continue;
+                }
+
+                if (!dependent.PayloadJson.Contains(rejectedOrder.EntityId, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(dependent.EntityId, rejectedOrder.EntityId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                dependent.Status = "DEAD_LETTER";
+                dependent.ErrorCode = "PARENT_ORDER_REJECTED";
+                dependent.ErrorMessage = $"Blocked because POS order {rejectedOrder.EntityId} was rejected: {parentError}";
+                dependent.NextAttemptAt = null;
+                changed = true;
+            }
+        }
+
+        if (changed) await dbContext.SaveChangesAsync(stoppingToken);
     }
 
     private class SyncPushResponse
