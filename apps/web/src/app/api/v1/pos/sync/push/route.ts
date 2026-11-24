@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
     const alreadyProcessed: string[] = [];
     const rejected: string[] = [];
     const conflicts: string[] = [];
+    const blockedParentOrderIds = new Set<string>();
     let lastSequenceNumber = 0;
 
     // Desktop normally sends sequence order, but older clients can batch
@@ -155,6 +156,27 @@ export async function POST(req: NextRequest) {
           } else if (event.aggregateType === 'POS_SESSION' && legacyOperation === 'UPDATE') {
             event.eventType = 'POS_SESSION_UPDATED';
           }
+        }
+
+        // A parent order can be permanently rejected by validation (for
+        // example, an inactive modifier). Do not execute its payment,
+        // completion, or item events in the same batch; those events cannot
+        // succeed without a cloud parent and must not be reported as
+        // retryable ORDER_NOT_FOUND failures.
+        const dependentParentId = event.aggregateType === 'POS_ORDER'
+          ? event.aggregateId
+          : (payload.OrderId || payload.orderId || payload.PosOrderId || payload.posOrderId);
+        if (typeof dependentParentId === 'string'
+          && blockedParentOrderIds.has(dependentParentId)
+          && !(event.aggregateType === 'POS_ORDER' && event.eventType === 'ORDER_CREATED')) {
+          rejected.push(event.id);
+          results.push({
+            id: event.id,
+            status: 'FAILED',
+            idempotencyKey: event.idempotencyKey,
+            error: `PARENT_ORDER_REJECTED: POS order ${dependentParentId} was rejected by cloud validation`,
+          });
+          continue;
         }
         
         // POS payment replay can include GL mapping, journal lines, audit-log
@@ -1772,6 +1794,9 @@ export async function POST(req: NextRequest) {
            alreadyProcessed.push(event.id);
            results.push({ id: event.id, status: err.existingEvent?.syncConflict ? 'CONFLICT' : 'SYNCED', idempotencyKey: event.idempotencyKey });
         } else if (err.message === 'CONCURRENCY_CONFLICT') {
+           if (event.aggregateType === 'POS_ORDER' && event.eventType === 'ORDER_CREATED') {
+             blockedParentOrderIds.add(event.aggregateId);
+           }
            let expectedVersion = err.currentVersion || event.aggregateVersion;
            try {
              await prisma.$transaction(async (tx2: any) => {
@@ -1818,6 +1843,9 @@ export async function POST(req: NextRequest) {
            results.push({ id: event.id, status: 'RETRY', idempotencyKey: event.idempotencyKey, error: `RETRYABLE_TRANSACTION: ${err.message}` });
         } else {
            console.error(`Error processing POS event ${event.id}:`, err);
+           if (event.aggregateType === 'POS_ORDER' && event.eventType === 'ORDER_CREATED') {
+             blockedParentOrderIds.add(event.aggregateId);
+           }
            rejected.push(event.id);
            results.push({ id: event.id, status: 'FAILED', idempotencyKey: event.idempotencyKey, error: err.message });
         }

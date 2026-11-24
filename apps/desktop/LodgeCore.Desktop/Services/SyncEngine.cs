@@ -646,7 +646,23 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         }
         
         // Ensure we only push events for THIS terminal/device
-        var eventsToPush = eligibleEvents.Where(e => e.TerminalId == identity.DeviceId || e.TerminalId == identity.TerminalId).ToList();
+        var terminalEvents = eligibleEvents
+            .Where(e => e.TerminalId == identity.DeviceId || e.TerminalId == identity.TerminalId)
+            .ToList();
+
+        // Never send a child POS event in the same batch as a new parent
+        // order. The cloud processes events independently; if ORDER_CREATED
+        // is rejected (for example because a modifier is no longer active),
+        // PAYMENT_RECORDED/ORDER_COMPLETED would otherwise race ahead and
+        // produce misleading ORDER_NOT_FOUND failures.
+        var parentOrderIdsInBatch = terminalEvents
+            .Where(e => e.EntityType == "POS_ORDER" && e.OperationType == "ORDER_CREATED")
+            .Select(e => e.EntityId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var eventsToPush = terminalEvents
+            .Where(e => !IsDependentOnNewOrder(e, parentOrderIdsInBatch))
+            .ToList();
         if (!eventsToPush.Any()) return;
 
         _logger.LogInformation("[PUSH-POS] Preparing {EventCount} events. PropertyId={PropertyId} TerminalId={TerminalId} DeviceId={DeviceId}", eventsToPush.Count, identity.PropertyId, identity.TerminalId, identity.DeviceId);
@@ -781,6 +797,25 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         }
 
         await dbContext.SaveChangesAsync(stoppingToken);
+
+        // The parent rejection is now persisted, so dependent events that
+        // were held back from the batch can be conclusively dead-lettered in
+        // the same sync cycle.
+        await DeadLetterDependentPosEventsAsync(dbContext, stoppingToken);
+    }
+
+    private static bool IsDependentOnNewOrder(LocalSyncEvent evt, HashSet<string> parentOrderIds)
+    {
+        if (parentOrderIds.Count == 0) return false;
+        if (evt.EntityType == "POS_ORDER"
+            && evt.OperationType == "ORDER_CREATED") return false;
+        if (evt.EntityType != "POS_ORDER"
+            && evt.EntityType != "POS_PAYMENT"
+            && evt.EntityType != "POS_ORDER_ITEM") return false;
+
+        if (parentOrderIds.Contains(evt.EntityId)) return true;
+        return parentOrderIds.Any(orderId =>
+            evt.PayloadJson.Contains(orderId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task DeadLetterDependentPosEventsAsync(
@@ -2305,9 +2340,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             localMod.GroupMaxSelect = m.TryGetProperty("groupMaxSelect", out var mgm) && mgm.ValueKind != System.Text.Json.JsonValueKind.Null && mgm.TryGetInt32(out var maxSelect) ? maxSelect : null;
                         }
 
-                        // Remove stale modifiers for THIS product
+                        // The product payload contains the complete
+                        // authoritative modifier set. This must also run for
+                        // incremental pulls: modifier-only updates are the
+                        // reason this product was included, and retaining a
+                        // deleted modifier leaves the offline till able to
+                        // create an order the cloud will reject.
                         var staleMods = await dbContext.PosProductModifiers.Where(m => m.ProductId == id && !modIds.Contains(m.Id)).ToListAsync(stoppingToken);
-                        if (staleMods.Any() && !isIncremental) dbContext.PosProductModifiers.RemoveRange(staleMods);
+                        if (staleMods.Any()) dbContext.PosProductModifiers.RemoveRange(staleMods);
                     }
                     else
                     {

@@ -394,11 +394,16 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
     
-    const categoryIds = posCategories.map(c => c.id);
-    const posProductsWhere: any = { propertyId, isActive: true };
-    if (terminalOutletId) {
-      posProductsWhere.categoryId = { in: categoryIds };
-    }
+    // Product sync is property-scoped for a terminal. POS tills may sell
+    // kitchen items routed through another outlet, and a modifier change does
+    // not change the category's updatedAt. Restricting this query to the
+    // categories returned in the current page can therefore drop a product
+    // whose modifier changed independently (especially when categoryIds is
+    // empty on an incremental pull).
+    const posProductsBaseWhere: any = {
+      propertyId,
+      category: { outlet: { propertyId } },
+    };
 
     // Modifiers are part of the POS product projection. A modifier can change
     // without the product itself changing, so include the parent product when
@@ -410,7 +415,7 @@ export async function GET(req: NextRequest) {
             updatedAt: { gt: since, lte: watermark },
             product: {
               propertyId,
-              ...(terminalOutletId ? { categoryId: { in: categoryIds } } : {}),
+              category: { outlet: { propertyId } },
             },
           },
           select: { productId: true },
@@ -418,7 +423,7 @@ export async function GET(req: NextRequest) {
       : [];
     const incrementalProductWhere = since
       ? {
-          ...posProductsWhere,
+          ...posProductsBaseWhere,
           OR: [
             { updatedAt: { gt: since, lte: watermark } },
             ...(changedModifierProductIds.length > 0
@@ -426,7 +431,11 @@ export async function GET(req: NextRequest) {
               : []),
           ],
         }
-      : buildWhere(posProductsWhere);
+      : buildWhere({
+          ...posProductsBaseWhere,
+          isActive: true,
+          category: { outlet: { propertyId }, isActive: true },
+        });
 
     const posProducts = await prisma.posProduct.findMany({
       where: incrementalProductWhere,

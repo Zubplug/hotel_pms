@@ -14,6 +14,11 @@ type ModifierRecord = {
 type RequestedModifier = {
   id?: string;
   name?: string;
+  // Offline desktop order-line modifiers use their C# property names in the
+  // sync payload. These are not catalog IDs, so the canonical name is the
+  // safe fallback when resolving them against the cloud catalog.
+  Id?: string;
+  Name?: string;
 };
 
 /**
@@ -30,14 +35,16 @@ export function resolveSelectedModifiers(
   const selectedIds = new Set<string>();
 
   for (const input of selections) {
-    const inputId = typeof input?.id === 'string' ? input.id : '';
-    const inputName = typeof input?.name === 'string' ? input.name.trim().toLowerCase() : '';
+    const rawId = input?.id ?? input?.Id;
+    const rawName = input?.name ?? input?.Name;
+    const inputId = typeof rawId === 'string' ? rawId : '';
+    const inputName = typeof rawName === 'string' ? rawName.trim().toLowerCase() : '';
     const modifier = active.find((candidate) =>
       inputId && candidate.id === inputId,
     ) || active.find((candidate) =>
       inputName && candidate.name.trim().toLowerCase() === inputName,
     );
-    if (!modifier) throw new Error(`INVALID_MODIFIER: ${input.name || input.id || 'unknown option'} is not active for ${product.name || 'this item'}`);
+    if (!modifier) throw new Error(`INVALID_MODIFIER: ${rawName || rawId || 'unknown option'} is not active for ${product.name || 'this item'}`);
     if (selectedIds.has(modifier.id)) throw new Error(`DUPLICATE_MODIFIER: ${modifier.name}`);
     selectedIds.add(modifier.id);
     selected.push(modifier);
