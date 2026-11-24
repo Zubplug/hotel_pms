@@ -76,11 +76,18 @@ jobs:
           done
 
           cd /opt/hotel_pms
-          COMPOSE=(sudo docker compose --env-file deploy/.env.aws -f deploy/docker-compose.aws.yml)
           export PMS_IMAGE="$ECR_REGISTRY/lodgecore-pms:$IMAGE_TAG"
           export WEBSITE_IMAGE="$ECR_REGISTRY/lodgecore-website:$IMAGE_TAG"
           export STANZEL_IMAGE="$ECR_REGISTRY/lodgecore-stanzel:$IMAGE_TAG"
           PREVIOUS_TAG="$(sudo cat deploy/.last-successful-image-tag 2>/dev/null || true)"
+
+          compose() {
+            sudo env \
+              PMS_IMAGE="$PMS_IMAGE" \
+              WEBSITE_IMAGE="$WEBSITE_IMAGE" \
+              STANZEL_IMAGE="$STANZEL_IMAGE" \
+              docker compose --env-file deploy/.env.aws -f deploy/docker-compose.aws.yml "$@"
+          }
 
           rollback() {
             if [[ -z "$PREVIOUS_TAG" ]]; then
@@ -91,14 +98,14 @@ jobs:
             export PMS_IMAGE="$ECR_REGISTRY/lodgecore-pms:$PREVIOUS_TAG"
             export WEBSITE_IMAGE="$ECR_REGISTRY/lodgecore-website:$PREVIOUS_TAG"
             export STANZEL_IMAGE="$ECR_REGISTRY/lodgecore-stanzel:$PREVIOUS_TAG"
-            "${COMPOSE[@]}" up -d --no-build --force-recreate pms website stanzel nginx || true
+            compose up -d --no-build --force-recreate pms website stanzel nginx || true
           }
           trap 'rollback' ERR
 
           aws ecr get-login-password --region "$AWS_REGION" |
             sudo docker login --username AWS --password-stdin "$ECR_REGISTRY"
-          "${COMPOSE[@]}" pull pms website stanzel nginx
-          "${COMPOSE[@]}" up -d --no-build --force-recreate pms website stanzel nginx
+          compose pull pms website stanzel nginx
+          compose up -d --no-build --force-recreate pms website stanzel nginx
           sudo docker exec deploy-nginx-1 nginx -t
           sudo docker exec deploy-nginx-1 nginx -s reload
           sleep 10
@@ -116,4 +123,4 @@ jobs:
 
           printf '%s\n' "$IMAGE_TAG" | sudo tee deploy/.last-successful-image-tag >/dev/null
           trap - ERR
-          "${COMPOSE[@]}" ps
+          compose ps
