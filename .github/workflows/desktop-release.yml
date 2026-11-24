@@ -184,23 +184,22 @@ jobs:
         # Direct download URL for the MSIX on GitHub Releases
         $msixUrl = "https://github.com/$repo/releases/download/$tag/$msixName"
 
-        # Build .appinstaller XML using the Microsoft App Installer schemas.
-        # The base document uses the 2017/2 namespace. Features introduced in
-        # the 2021 schema must use the s4 prefix; making 2021 the default
-        # namespace produces an invalid AppInstaller file on Windows.
+        # Build a broadly compatible .appinstaller XML document. Keep the
+        # manifest on the 2017/2 base schema so older supported Windows 10
+        # App Installer clients can parse it. OnLaunch provides update checks
+        # without requiring the optional 2021 (s4) schema.
         $xmlPath = ".\release-artifacts\LodgeCore.appinstaller"
         $settings = New-Object System.Xml.XmlWriterSettings
         $settings.Indent = $true
         $settings.IndentChars = "  "
-        $settings.Encoding = [System.Text.Encoding]::UTF8
+        # App Installer accepts UTF-8 without a byte-order mark only.
+        $settings.Encoding = [System.Text.UTF8Encoding]::new($false)
         $settings.OmitXmlDeclaration = $false
         New-Item -ItemType Directory -Force -Path .\release-artifacts | Out-Null
         $writer = [System.Xml.XmlWriter]::Create($xmlPath, $settings)
         $writer.WriteStartDocument()
         $appInstallerNamespace = 'http://schemas.microsoft.com/appx/appinstaller/2017/2'
-        $appInstallerS4Namespace = 'http://schemas.microsoft.com/appx/appinstaller/2021'
         $writer.WriteStartElement('AppInstaller', $appInstallerNamespace)
-        $writer.WriteAttributeString('xmlns', 's4', 'http://www.w3.org/2000/xmlns/', $appInstallerS4Namespace)
         $writer.WriteAttributeString('Uri', $appinstallerUrl)
         $writer.WriteAttributeString('Version', $version)
         # MainPackage
@@ -236,9 +235,6 @@ jobs:
         $writer.WriteAttributeString('ShowPrompt', 'true')
         $writer.WriteAttributeString('UpdateBlocksActivation', 'true')
         $writer.WriteEndElement() # OnLaunch
-        $writer.WriteStartElement('s4', 'AutomaticBackgroundTask', $appInstallerS4Namespace)
-        $writer.WriteEndElement()
-        $writer.WriteElementString('s4', 'ForceUpdateFromAnyVersion', $appInstallerS4Namespace, 'true')
         $writer.WriteEndElement() # UpdateSettings
         $writer.WriteEndElement() # AppInstaller
         $writer.WriteEndDocument()
@@ -252,13 +248,8 @@ jobs:
         [xml]$appInstallerXml = Get-Content $xmlPath -Raw
         $appInstallerNs = New-Object System.Xml.XmlNamespaceManager($appInstallerXml.NameTable)
         $appInstallerNs.AddNamespace('ai', 'http://schemas.microsoft.com/appx/appinstaller/2017/2')
-        $appInstallerNs.AddNamespace('s4', 'http://schemas.microsoft.com/appx/appinstaller/2021')
         $mainPackage = $appInstallerXml.SelectSingleNode('/ai:AppInstaller/ai:MainPackage', $appInstallerNs)
         if (-not $mainPackage) { throw 'Generated AppInstaller has no MainPackage element' }
-        $automaticBackgroundTask = $appInstallerXml.SelectSingleNode('/ai:AppInstaller/ai:UpdateSettings/s4:AutomaticBackgroundTask', $appInstallerNs)
-        if (-not $automaticBackgroundTask) { throw 'Generated AppInstaller has no s4:AutomaticBackgroundTask element' }
-        $forceUpdateFromAnyVersion = $appInstallerXml.SelectSingleNode('/ai:AppInstaller/ai:UpdateSettings/s4:ForceUpdateFromAnyVersion', $appInstallerNs)
-        if (-not $forceUpdateFromAnyVersion -or $forceUpdateFromAnyVersion.InnerText -ne 'true') { throw 'Generated AppInstaller has no valid s4:ForceUpdateFromAnyVersion element' }
         if ($mainPackage.Name -ne $mainIdentity.Name) { throw "AppInstaller package name $($mainPackage.Name) does not match MSIX identity $($mainIdentity.Name)" }
         if ($mainPackage.Version -ne $mainIdentity.Version) { throw "AppInstaller version $($mainPackage.Version) does not match MSIX version $($mainIdentity.Version)" }
         if ($mainPackage.Publisher -ne $mainIdentity.Publisher) { throw 'AppInstaller publisher does not match the MSIX publisher' }
