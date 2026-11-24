@@ -94,7 +94,7 @@ export async function executeNightAudit(
   // Preparation checks happen before the short cutover lock. Existing shifts
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
-    const { openPosSessions, openFrontdeskSessions, financialSyncConflicts, openPosOrders } = await getSystemIntegrity(ctx, propertyId);
+    const { openPosSessions, openFrontdeskSessions, shiftReviews, financialSyncConflicts, openPosOrders } = await getSystemIntegrity(ctx, propertyId);
     const operationalReview = await getOperationalReview(ctx, propertyId);
     const { unverifiedComplimentary, pendingCheckInBypasses } = await getFinancialAudit(ctx, propertyId);
     const { unverifiedTransactions } = await getCashReconciliation(ctx, propertyId);
@@ -106,6 +106,7 @@ export async function executeNightAudit(
     
     if (openPosSessions.length > 0 || additionalFnbOpenSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
     if (openFrontdeskSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
+    if (shiftReviews.length > 0) throw new Error('BLOCKER:Cannot execute audit. Cashier shifts must be independently reviewed and approved first.');
     if (openPosOrders.length > 0 || additionalFnbOpenOrders.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS orders.');
 
     if (operationalReview.arrivals.length > 0) {

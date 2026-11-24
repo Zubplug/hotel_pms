@@ -485,7 +485,11 @@ public class OfflinePMSInterop
     {
         try
         {
-            var notifications = await _repo.GetOfflineBookingNotificationsAsync(propertyId);
+            var context = await _sessionManager.GetActiveContextAsync();
+            var operatorId = context != null && string.Equals(context.PropertyId, propertyId, StringComparison.OrdinalIgnoreCase)
+                ? context.StaffId
+                : null;
+            var notifications = await _repo.GetOfflineBookingNotificationsAsync(propertyId, operatorId);
             return JsonSerializer.Serialize(new { success = true, data = notifications }, _jsonOptions);
         }
         catch (Exception ex)
@@ -498,7 +502,11 @@ public class OfflinePMSInterop
     {
         try
         {
-            var acknowledged = await _repo.AcknowledgeOfflineBookingNotificationAsync(propertyId, notificationId);
+            var context = await _sessionManager.GetActiveContextAsync();
+            var operatorId = context != null && string.Equals(context.PropertyId, propertyId, StringComparison.OrdinalIgnoreCase)
+                ? context.StaffId
+                : null;
+            var acknowledged = await _repo.AcknowledgeOfflineBookingNotificationAsync(propertyId, notificationId, operatorId);
             return JsonSerializer.Serialize(new { success = acknowledged }, _jsonOptions);
         }
         catch (Exception ex)
@@ -514,7 +522,9 @@ public class OfflinePMSInterop
             var context = await _sessionManager.GetActiveContextAsync();
             if (context == null || string.IsNullOrWhiteSpace(context.SessionId) || context.SessionId != sessionId)
                 throw new UnauthorizedAccessException("Open a POS shift before recovering this payment.");
-            var recovered = await _repo.RecoverPosShiftLockedAsync(propertyId, orderId, sessionId);
+            if (!string.Equals(context.PropertyId, propertyId, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("The active POS operator is not signed in to this property.");
+            var recovered = await _repo.RecoverPosShiftLockedAsync(propertyId, orderId, sessionId, context.StaffId);
             return JsonSerializer.Serialize(new { success = recovered }, _jsonOptions);
         }
         catch (Exception ex)

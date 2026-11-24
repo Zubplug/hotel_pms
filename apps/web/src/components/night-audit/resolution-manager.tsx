@@ -15,6 +15,7 @@ export type ResolutionAction =
   | { type: 'DEPARTURES'; item: any }
   | { type: 'ROOM_DISCREPANCY'; item: any }
   | { type: 'POS_SESSION'; item: any }
+  | { type: 'SHIFT_REVIEW'; item: any }
   | { type: 'POS_ORDER'; item: any }
   | { type: 'FRONTDESK_SHIFT'; item: any }
   | { type: 'FOLIO_PREVIEW'; item: any }
@@ -48,6 +49,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'DEPARTURES' && <DepartureResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'ROOM_DISCREPANCY' && <RoomDiscrepancyResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'POS_SESSION' && <PosSessionResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
+        {action.type === 'SHIFT_REVIEW' && <ShiftReviewResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'POS_ORDER' && <PosOrderVoidResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FRONTDESK_SHIFT' && <FrontdeskShiftResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
@@ -113,6 +115,70 @@ function PosOrderVoidResolution({ item, onSuccess, onClose }: { item: any; onSuc
         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
         {loading ? 'Voiding…' : 'Confirm void'}
       </Button>
+    </DialogFooter>
+  </>;
+}
+
+function ShiftReviewResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [reasonCode, setReasonCode] = useState('CASH_COUNTING_ERROR');
+  const [showVariance, setShowVariance] = useState(Math.abs(Number(item.variance || 0)) > 0.01);
+  const variance = Number(item.variance || 0);
+  const isInReview = item.controlStatus === 'UNDER_REVIEW';
+
+  const postDecision = async (decision: 'APPROVED' | 'APPROVED_WITH_VARIANCE' | 'REJECTED') => {
+    if (decision === 'APPROVED_WITH_VARIANCE' && notes.trim().length < 5) {
+      setError('Enter a clear reason before approving a variance.');
+      return;
+    }
+    if (decision === 'REJECTED' && notes.trim().length < 5) {
+      setError('Explain what the cashier must correct before returning this shift.');
+      return;
+    }
+    setLoading(true); setError(null);
+    try {
+      if (!isInReview) {
+        const start = await fetch(`/api/v1/financial-control/shifts/${item.id}/start-review`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: item.type }),
+        });
+        const startBody = await start.json().catch(() => ({}));
+        if (!start.ok) throw new Error(startBody.error?.message || startBody.error || 'Unable to start shift review');
+      }
+      const response = await fetch(`/api/v1/reports/shift/${item.id}/approve`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, notes: notes.trim(), reasonCode: decision === 'APPROVED_WITH_VARIANCE' ? reasonCode : undefined }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to record shift decision');
+      toast.success(decision === 'REJECTED' ? 'Shift returned to cashier' : decision === 'APPROVED_WITH_VARIANCE' ? 'Shift approved with variance' : 'Shift approved');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Unable to record shift decision');
+    } finally { setLoading(false); }
+  };
+
+  return <>
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2 text-violet-200"><ShieldAlert className="h-5 w-5 text-violet-300" /> Independent shift review</DialogTitle>
+      <DialogDescription className="text-slate-400">{item.displayName} · submitted by {item.operatorName}</DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4 py-4 text-sm text-slate-300">
+      <div className="grid grid-cols-3 gap-2">
+        {[["Expected", item.expectedCash], ["Declared", item.declaredCash], ["Variance", variance]].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-white/[.08] bg-white/[.03] p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p><p className={`mt-1 font-bold ${label === 'Variance' && Math.abs(Number(value)) > .01 ? 'text-amber-200' : 'text-white'}`}>₦{Number(value).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>)}
+      </div>
+      <div className="rounded-xl border border-sky-300/20 bg-sky-300/[.06] p-3 text-xs leading-5 text-sky-100">Approval records your independent review and releases the shift for Night Audit. It does not close, reopen, or alter the cashier’s operational shift.</div>
+      {Math.abs(variance) > 0.01 && <label className="flex items-center gap-2 text-xs text-amber-200"><input type="checkbox" checked={showVariance} onChange={event => setShowVariance(event.target.checked)} /> I have reviewed the variance and want to use an approved variance decision.</label>}
+      {showVariance && Math.abs(variance) > 0.01 && <select value={reasonCode} onChange={event => setReasonCode(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-white/[.04] px-3 text-sm text-white outline-none"><option value="CASH_COUNTING_ERROR">Cash counting error</option><option value="MISSING_RECEIPT">Missing receipt</option><option value="WRONG_CHANGE">Wrong change</option><option value="CASH_DROP_ERROR">Cash drop error</option><option value="SYSTEM_ERROR">System error</option><option value="OTHER">Other</option></select>}
+      <textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="Review notes or correction instructions" className="min-h-24 w-full rounded-xl border border-white/10 bg-white/[.04] p-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-violet-300/50" />
+      {error && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-300">{error}</p>}
+    </div>
+    <DialogFooter className="flex-col gap-2 sm:flex-row">
+      <Button variant="ghost" onClick={onClose} disabled={loading} className="text-slate-300 hover:text-white">Cancel</Button>
+      <Button onClick={() => void postDecision('REJECTED')} disabled={loading || notes.trim().length < 5} variant="outline" className="border-rose-400/30 text-rose-200 hover:bg-rose-400/10">Return to cashier</Button>
+      {Math.abs(variance) > 0.01 && <Button onClick={() => void postDecision('APPROVED_WITH_VARIANCE')} disabled={loading || !showVariance || notes.trim().length < 5} className="bg-amber-400 text-slate-950 hover:bg-amber-300">Approve with variance</Button>}
+      <Button onClick={() => void postDecision('APPROVED')} disabled={loading || Math.abs(variance) > 0.01} className="bg-emerald-500 text-slate-950 hover:bg-emerald-400">{loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Approve shift</Button>
     </DialogFooter>
   </>;
 }

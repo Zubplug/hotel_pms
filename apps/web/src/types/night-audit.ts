@@ -47,6 +47,7 @@ export interface OperationalData {
 export interface SystemData {
   openPosSessions: any[];
   openFrontdeskSessions: any[];
+  shiftReviews?: any[];
   financialSyncConflicts: any[];
   openPosOrders: any[];
 }

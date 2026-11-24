@@ -167,6 +167,17 @@ export default function PosApp() {
   const [customerDisplayReason, setCustomerDisplayReason] = useState('');
   const [customerDisplayPayment, setCustomerDisplayPayment] = useState<{ amount: number; change: number; method: string } | null>(null);
 
+  // Authentication identifies the operator; an open POS shift authorizes
+  // financial and production actions. Never let the workspace appear usable
+  // while the terminal is authenticated but shiftless.
+  const hasOpenPosShift = Boolean(posSessionId && operatorToken);
+  const requireOpenPosShift = useCallback(() => {
+    if (hasOpenPosShift) return true;
+    toast.error('Open an approved POS shift before creating orders or taking payments.');
+    setShowSwitchPad(true);
+    return false;
+  }, [hasOpenPosShift]);
+
   const [showKitchenModal, setShowKitchenModal] = useState(false);
   const [showPrinterSettings, setShowPrinterSettings] = useState(false);
   const [showSyncCenter, setShowSyncCenter] = useState(false);
@@ -402,6 +413,12 @@ export default function PosApp() {
     }
     localStorage.setItem('lodgecore_pos_recovery_order_id', String(metadata.orderId));
     localStorage.setItem('lodgecore_pos_recovery_notification_id', String(offlineBookingNotification.id));
+    // Bind the pending recovery hand-off to the operator who owns the failed
+    // payment. This prevents a different cashier logging in on the same
+    // terminal from inheriting a recovery attempt left in local storage.
+    if (metadata.operatorId) {
+      localStorage.setItem('lodgecore_pos_recovery_operator_id', String(metadata.operatorId));
+    }
     stopOfflineBookingChime();
     // The new shift must be selected through the normal operator PIN/shift
     // flow. No payment is recreated here.
@@ -880,6 +897,7 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   const handleSendOrder = async () => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
+    if (!requireOpenPosShift()) return;
     if (cart.length === 0) { toast.error('Cart is empty'); return; }
     setIsProcessing(true);
     try {
@@ -934,6 +952,7 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   const handleFireMore = async () => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
+    if (!requireOpenPosShift()) return;
     if (!currentOrderId) { toast.error('No active order on this table'); return; }
     // Only fire items that have a pending (unsent) qty
     const itemsToFire = cart.filter((i) => (i.pendingQty ?? 0) > 0);
@@ -998,6 +1017,7 @@ export default function PosApp() {
     }
   ) => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
+    if (!requireOpenPosShift()) return;
     if (!currentOrderId) { toast.error('No active order to charge'); return; }
     setIsProcessing(true);
     if (isDesktopMode) {
@@ -1914,8 +1934,8 @@ export default function PosApp() {
       {/* Staff Switch */}
       <TerminalAuthScreen
         authMode="POS_OPERATOR"
-        isOpen={!activeOperator || showSwitchPad}
-        cancellable={!!activeOperator && showSwitchPad}
+        isOpen={!activeOperator || showSwitchPad || (Boolean(activeOperator) && !hasOpenPosShift)}
+        cancellable={!!activeOperator && showSwitchPad && hasOpenPosShift}
         outletId={sessionContext?.outlet?.id || sessionContext?.outletId}
         onCancel={() => setShowSwitchPad(false)}
         onAuthenticated={(operator: any, token: string, authData?: any) => {
@@ -1963,7 +1983,12 @@ export default function PosApp() {
 
           const recoveryOrderId = localStorage.getItem('lodgecore_pos_recovery_order_id');
           const recoveryNotificationId = localStorage.getItem('lodgecore_pos_recovery_notification_id');
-          if (recoveryOrderId && newSessionId && provider.system?.recoverPosShiftLocked) {
+          const recoveryOperatorId = localStorage.getItem('lodgecore_pos_recovery_operator_id');
+          if (recoveryOperatorId && recoveryOperatorId !== normalizedOperator.id) {
+            localStorage.removeItem('lodgecore_pos_recovery_order_id');
+            localStorage.removeItem('lodgecore_pos_recovery_notification_id');
+            localStorage.removeItem('lodgecore_pos_recovery_operator_id');
+          } else if (recoveryOrderId && newSessionId && provider.system?.recoverPosShiftLocked) {
             void (async () => {
               const result = await provider.system?.recoverPosShiftLocked?.(propertyId, recoveryOrderId, newSessionId);
               if (result?.success === false || result?.error) {
@@ -1972,6 +1997,7 @@ export default function PosApp() {
               }
               localStorage.removeItem('lodgecore_pos_recovery_order_id');
               localStorage.removeItem('lodgecore_pos_recovery_notification_id');
+              localStorage.removeItem('lodgecore_pos_recovery_operator_id');
               if (recoveryNotificationId) {
                 acknowledgedOfflineBookingNotificationIds.add(recoveryNotificationId);
                 rememberAcknowledgement('pos-booking', recoveryNotificationId);
@@ -2201,6 +2227,7 @@ export default function PosApp() {
         const allBar = cart.every(i => (i.station ?? '').toUpperCase() === 'BAR');
 
         const executeVoid = async (supervisorPin?: string) => {
+          if (!requireOpenPosShift()) return;
           if (!currentOrderId) return;
           setIsVoidingOrder(true);
           setShowVoidOrderModal(false);

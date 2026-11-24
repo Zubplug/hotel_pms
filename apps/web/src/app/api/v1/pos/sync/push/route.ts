@@ -157,6 +157,10 @@ export async function POST(req: NextRequest) {
           }
         }
         
+        // POS payment replay can include GL mapping, journal lines, audit-log
+        // writes, inventory posting, and session updates. Prisma's default
+        // 5-second interactive timeout is too short for that deliberate
+        // atomic boundary, especially on Neon under normal contention.
         await prisma.$transaction(async (tx: any) => {
           // 1. Idempotency Check
           const existingEvent = await tx.hotelEvent.findUnique({ 
@@ -1648,7 +1652,7 @@ export async function POST(req: NextRequest) {
           accepted.push(event.id);
           results.push({ id: event.id, status: 'SYNCED', idempotencyKey: event.idempotencyKey });
           lastSequenceNumber = event.sequence;
-        });
+        }, { maxWait: 10000, timeout: 30000 });
         
         // 5. Post-transaction notifications for mobile parity
         // Emit only after successful DB commit
@@ -1807,9 +1811,11 @@ export async function POST(req: NextRequest) {
              rejected.push(event.id);
              results.push({ id: event.id, status: 'FAILED', idempotencyKey: event.idempotencyKey, error: 'Failed to record conflict state.' });
            }
-        } else if (err.message?.startsWith('RETRYABLE_')) {
+        } else if (err.message?.startsWith('RETRYABLE_')
+          || err.code === 'P2028'
+          || /transaction (already closed|not found|expired)/i.test(String(err.message || ''))) {
            rejected.push(event.id);
-           results.push({ id: event.id, status: 'RETRY', idempotencyKey: event.idempotencyKey, error: err.message });
+           results.push({ id: event.id, status: 'RETRY', idempotencyKey: event.idempotencyKey, error: `RETRYABLE_TRANSACTION: ${err.message}` });
         } else {
            console.error(`Error processing POS event ${event.id}:`, err);
            rejected.push(event.id);

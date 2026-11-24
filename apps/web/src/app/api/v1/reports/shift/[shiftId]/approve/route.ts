@@ -12,6 +12,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
     if (!actor?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     const actorUserId = actor.user.id;
     const role = String((actor.user as any).role || '').toUpperCase();
+    const reviewerRoles = new Set([
+      'NIGHT_AUDITOR', 'GENERAL_CASHIER', 'FINANCE_MANAGER', 'MANAGER',
+      'HOTEL_MANAGER', 'GENERAL_MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN',
+    ]);
+    if (!reviewerRoles.has(role)) {
+      return errorResponse('FORBIDDEN', 'Only Night Audit, Cash Office, Finance, or authorized management staff can review shifts', 403);
+    }
     const { shiftId } = await params;
     const { decision, notes, reasonCode } = await req.json();
     const reviewNotes = typeof notes === 'string' ? notes.trim() : '';

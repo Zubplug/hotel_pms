@@ -1,6 +1,6 @@
 import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
-import { CheckCircle2, ClipboardList, AlertTriangle, Info } from 'lucide-react';
+import { CheckCircle2, ClipboardList, AlertTriangle, Info, ShieldCheck, Clock3 } from 'lucide-react';
 
 interface SystemControlReviewProps {
   data: NightAuditData;
@@ -10,7 +10,7 @@ interface SystemControlReviewProps {
 const GLASS = { background: 'rgba(255,255,255,0.025)' };
 
 export function SystemControlReview({ data, onResolve }: SystemControlReviewProps) {
-  const { openPosSessions, openFrontdeskSessions, financialSyncConflicts, openPosOrders } = data.system;
+  const { openPosSessions, openFrontdeskSessions, shiftReviews = [], financialSyncConflicts, openPosOrders } = data.system;
   const systemOrderIds = new Set((openPosOrders || []).map((order: any) => order.id));
   const systemSessionIds = new Set((openPosSessions || []).map((session: any) => session.id));
   const fnbOpenOrders = (data.fnb?.exceptions?.openOrders || []).filter((order: any) => !systemOrderIds.has(order.id));
@@ -18,6 +18,7 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
   const hasIssues =
     (openPosSessions?.length || 0) > 0 ||
     (openFrontdeskSessions?.length || 0) > 0 ||
+    shiftReviews.length > 0 ||
     (financialSyncConflicts?.length || 0) > 0 ||
     (openPosOrders?.length || 0) > 0 ||
     fnbOpenOrders.length > 0 ||
@@ -150,6 +151,49 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
         </div>
       )}
 
+      {/* ── Submitted shifts awaiting independent review ───────────────── */}
+      {shiftReviews.length > 0 && (
+        <div className="pt-2">
+          <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+            <div>
+              <h4 className="text-sm font-bold text-violet-200">Cashier Shifts Awaiting Review ({shiftReviews.length})</h4>
+              <p className="mt-0.5 text-xs text-violet-300/70">Review the cashier’s declaration and variance. Approval releases the shift for Night Audit; it does not close the shift.</p>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[.12em] text-violet-200">
+              <Clock3 className="h-3.5 w-3.5" /> Independent control
+            </span>
+          </div>
+          <div className="space-y-3">
+            {shiftReviews.map((shift: any) => {
+              const variance = Number(shift.variance || 0);
+              const hasVariance = Math.abs(variance) > 0.01;
+              return (
+                <div key={`${shift.type}-${shift.id}`} className="rounded-2xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[.08] to-indigo-400/[.03] p-4 shadow-sm">
+                  <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-300/20 bg-violet-300/10 text-violet-200"><ShieldCheck className="h-5 w-5" /></span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2"><p className="font-bold text-white">{shift.displayName}</p><span className="rounded-md border border-white/10 bg-white/[.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-300">{shift.controlStatus.replaceAll('_', ' ')}</span></div>
+                        <p className="mt-1 text-xs text-slate-400">Submitted by <span className="font-semibold text-slate-200">{shift.operatorName}</span>{shift.submittedAt ? ` · ${new Date(shift.submittedAt).toLocaleString()}` : ''}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-right text-xs sm:min-w-[290px]">
+                      <div className="rounded-xl border border-white/[.08] bg-black/10 px-3 py-2"><p className="text-slate-500">Expected</p><p className="mt-1 font-bold text-slate-200">₦{shift.expectedCash.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>
+                      <div className="rounded-xl border border-white/[.08] bg-black/10 px-3 py-2"><p className="text-slate-500">Declared</p><p className="mt-1 font-bold text-slate-200">₦{shift.declaredCash.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>
+                      <div className={`rounded-xl border px-3 py-2 ${hasVariance ? 'border-amber-300/20 bg-amber-300/[.08]' : 'border-emerald-300/20 bg-emerald-300/[.08]'}`}><p className={hasVariance ? 'text-amber-300/70' : 'text-emerald-300/70'}>Variance</p><p className={`mt-1 font-bold ${hasVariance ? 'text-amber-200' : 'text-emerald-200'}`}>₦{variance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[.07] pt-3 sm:flex-row sm:items-center">
+                    <p className="text-xs leading-5 text-slate-500">The cashier remains responsible for the submitted record. Any variance must include an approval reason.</p>
+                    <button type="button" onClick={() => onResolve('SHIFT_REVIEW', shift)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-400 px-4 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-violet-300 sm:w-auto"><ShieldCheck className="h-4 w-4" /> Open review</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Open POS Sessions ──────────────────────────────────────────── */}
       {openPosSessions?.length > 0 && (
         <div className="pt-2">
@@ -169,12 +213,9 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                     {` · ${pos.status || 'OPEN'}`}
                   </p>
                 </div>
-                <button
-                  onClick={() => onResolve('POS_SESSION', pos)}
-                  className="w-full shrink-0 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-bold text-rose-300 transition-all hover:bg-rose-400/20 sm:w-auto text-center"
-                >
-                  Resolve
-                </button>
+                <span className="w-full shrink-0 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2 text-center text-xs font-bold text-amber-300 sm:w-auto">
+                  Cashier action required
+                </span>
               </div>
             ))}
           </div>
@@ -195,12 +236,9 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                   <p className="font-bold text-rose-200">Shift Reference: {fd.shiftReference}</p>
                   <p className="mt-0.5 text-xs text-rose-300/80">Status: <span className="capitalize text-rose-200">{fd.status.toLowerCase()}</span></p>
                 </div>
-                <button
-                  onClick={() => onResolve('FRONTDESK_SHIFT', fd)}
-                  className="w-full shrink-0 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-bold text-rose-300 transition-all hover:bg-rose-400/20 sm:w-auto text-center"
-                >
-                  Resolve
-                </button>
+                <span className="w-full shrink-0 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2 text-center text-xs font-bold text-amber-300 sm:w-auto">
+                  Cashier action required
+                </span>
               </div>
             ))}
           </div>

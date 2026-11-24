@@ -84,7 +84,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ? await prisma.staff.findFirst({ where: { userId: actor.user.id }, select: { id: true, position: true } })
         : null;
     if (!actorStaff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
-    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'DIRECTOR', 'NIGHT_AUDITOR', 'NIGHT_AUDIT']);
+    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'DIRECTOR']);
     // Staff.position is a free-text HR field and may not match the system role
     // identifier exactly (e.g. "Night Auditor" vs "NIGHT_AUDITOR"). The JWT
     // session role (actor.user.role) is the authoritative RBAC signal for web
@@ -94,6 +94,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       privilegedPositions.has(normalizeRole(actorStaff.position)) ||
       privilegedPositions.has(sessionRole) ||
       !!(actor?.user as any)?.isSuperAdmin;
+    const isNightAuditor = ['NIGHT_AUDITOR', 'NIGHT_AUDIT'].includes(normalizeRole(actorStaff.position))
+      || ['NIGHT_AUDITOR', 'NIGHT_AUDIT'].includes(sessionRole);
+    if (isNightAuditor) {
+      return NextResponse.json(
+        { error: 'Night Auditors cannot close POS shifts. The cashier must submit the shift; Night Audit can review and approve it.' },
+        { status: 403 }
+      );
+    }
     const sessionOwnerId = current.primaryOperatorId || current.openedBy;
     if (actorStaff.id !== sessionOwnerId && !isPrivileged) {
       return NextResponse.json({ error: 'Only the POS cashier who opened this shift can close and submit it.' }, { status: 403 });

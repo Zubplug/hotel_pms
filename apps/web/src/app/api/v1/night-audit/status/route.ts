@@ -286,6 +286,7 @@ export async function GET(req: NextRequest) {
     // System blockers/warnings
     if (system.openPosSessions.length > 0) blockers++;
     if (system.openFrontdeskSessions.length > 0) blockers++;
+    if ((system.shiftReviews?.length ?? 0) > 0) blockers++;
     if (system.financialSyncConflicts.length > 0) blockers++;
     if ((system.openPosOrders?.length ?? 0) > 0) blockers++;
 

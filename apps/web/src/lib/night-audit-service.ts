@@ -168,6 +168,54 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
     };
   });
 
+  // Submitted shifts are operationally closed by the cashier, but still need
+  // an independent review before they are treated as fully controlled. Keep
+  // this separate from open-session blockers: the auditor reviews these
+  // records, but never closes the cashier's shift from the audit screen.
+  const [posShiftReviews, frontdeskShiftReviews] = await Promise.all([
+    prisma.posSession.findMany({
+      where: { propertyId, businessDate, controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW'] } },
+      select: {
+        id: true, status: true, controlStatus: true, openedAt: true, closedAt: true,
+        submittedAt: true, expectedCash: true, actualCash: true, variance: true,
+        outlet: { select: { name: true } },
+        primaryOperator: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { submittedAt: 'asc' },
+    }),
+    prisma.frontdeskSession.findMany({
+      where: { propertyId, businessDate, controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW'] } },
+      select: {
+        id: true, status: true, controlStatus: true, openedAt: true, closedAt: true,
+        submittedAt: true, systemExpectedCash: true, declaredCash: true, variance: true,
+        shiftReference: true,
+        staff: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { submittedAt: 'asc' },
+    }),
+  ]);
+
+  const shiftReviews = [
+    ...posShiftReviews.map(session => ({
+      ...session,
+      type: 'POS',
+      displayName: session.outlet?.name || 'POS register',
+      operatorName: session.primaryOperator ? `${session.primaryOperator.firstName} ${session.primaryOperator.lastName}`.trim() : 'Unknown operator',
+      expectedCash: Number(session.expectedCash || 0),
+      declaredCash: Number(session.actualCash || 0),
+      variance: Number(session.variance || 0),
+    })),
+    ...frontdeskShiftReviews.map(session => ({
+      ...session,
+      type: 'FRONT_DESK',
+      displayName: `Front Desk · ${session.shiftReference}`,
+      operatorName: `${session.staff.firstName} ${session.staff.lastName}`.trim(),
+      expectedCash: Number(session.systemExpectedCash || 0),
+      declaredCash: Number(session.declaredCash || 0),
+      variance: Number(session.variance || 0),
+    })),
+  ].sort((a, b) => new Date(a.submittedAt || a.closedAt || a.openedAt).getTime() - new Date(b.submittedAt || b.closedAt || b.openedAt).getTime());
+
   const syncConflicts = await prisma.syncConflict.findMany({
     where: { propertyId, status: 'PENDING' },
     include: { hotelEvent: true }
@@ -228,7 +276,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
     createdAt: o.createdAt,
     }));
 
-  return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts, openPosOrders };
+  return { openPosSessions, openFrontdeskSessions, shiftReviews, syncConflicts, financialSyncConflicts, openPosOrders };
 }
 
 /**

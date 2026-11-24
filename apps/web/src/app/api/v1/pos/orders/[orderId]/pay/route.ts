@@ -123,6 +123,10 @@ export async function POST(
     
     const idKey = reference || `PAY-${orderId}-${Date.now()}`;
 
+    // Payment posting atomically writes the payment, GL journal, journal
+    // lines, complimentary/folio records, inventory, and order settlement.
+    // The default Prisma 5-second interactive timeout is not sufficient for
+    // this accounting boundary on a hosted database.
     const result = await prisma.$transaction(async (tx: any) => {
       // Create payment
       const payment = await tx.posPayment.create({
@@ -289,7 +293,7 @@ export async function POST(
       }
 
       return { payment, order: updatedOrder };
-    });
+    }, { maxWait: 10000, timeout: 30000 });
 
     return NextResponse.json({ data: result, error: null }, { status: 201 });
   } catch (err: any) {

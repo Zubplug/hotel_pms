@@ -64,7 +64,7 @@ export async function assertNightAuditAllowsTransaction(propertyId: string, busi
 export async function assertCanOpenShift(propertyId: string) {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { businessDate: true, timezone: true },
+    select: { businessDate: true, timezone: true, auditStatus: true },
   });
   if (!property) return;
 
@@ -73,6 +73,22 @@ export async function assertCanOpenShift(propertyId: string) {
   if (businessDate.getTime() < today.getTime()) {
     const error = new Error(
       `NIGHT_AUDIT_REQUIRED:Night Audit is still pending for business date ${businessDate.toISOString().slice(0, 10)}. Complete it before opening a new shift.`
+    );
+    (error as Error & { code?: string; status?: number }).code = 'NIGHT_AUDIT_REQUIRED';
+    (error as Error & { status?: number }).status = 409;
+    throw error;
+  }
+
+  const auditStatus = String(property.auditStatus || 'OPEN').toUpperCase();
+  if (['IN_PROGRESS', 'POSTING'].includes(auditStatus)) {
+    const error = new Error('NIGHT_AUDIT_IN_PROGRESS:Night Audit is posting. Open a new shift after it completes.');
+    (error as Error & { code?: string; status?: number }).code = 'NIGHT_AUDIT_IN_PROGRESS';
+    (error as Error & { status?: number }).status = 409;
+    throw error;
+  }
+  if (['FAILED', 'PENDING', 'OVERDUE'].includes(auditStatus)) {
+    const error = new Error(
+      `NIGHT_AUDIT_REQUIRED:Complete the last Night Audit for business date ${businessDate.toISOString().slice(0, 10)} before opening a new shift.`
     );
     (error as Error & { code?: string; status?: number }).code = 'NIGHT_AUDIT_REQUIRED';
     (error as Error & { status?: number }).status = 409;

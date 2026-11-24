@@ -34,6 +34,8 @@ public class LocalRepository
         var currentDate = property.BusinessDate.Date;
         if ((status is "IN_PROGRESS" or "POSTING") && targetDate <= currentDate)
             throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: This business date is temporarily locked while Night Audit is posting.");
+        if (status is "FAILED" or "PENDING" or "OVERDUE")
+            throw new InvalidOperationException($"NIGHT_AUDIT_REQUIRED: Night Audit must be completed for business date {currentDate:yyyy-MM-dd} before POS transactions can continue.");
     }
 
     private async Task AssertLocalRoomAvailableAsync(
@@ -87,6 +89,14 @@ public class LocalRepository
         {
             throw new InvalidOperationException($"NIGHT_AUDIT_REQUIRED: Night Audit is still pending for business date {property.BusinessDate:yyyy-MM-dd}. Complete it before opening a new shift.");
         }
+        if (property.BusinessDate.Date > localToday)
+            throw new InvalidOperationException("NIGHT_AUDIT_REQUIRED: The terminal business date is ahead of the local date. Refresh the terminal before opening a new shift.");
+
+        var auditStatus = (property.AuditStatus ?? "OPEN").Trim().ToUpperInvariant();
+        if (auditStatus is "FAILED" or "PENDING" or "OVERDUE")
+            throw new InvalidOperationException($"NIGHT_AUDIT_REQUIRED: Complete the last Night Audit for business date {property.BusinessDate:yyyy-MM-dd} before opening a new shift.");
+        if (auditStatus is "IN_PROGRESS" or "POSTING")
+            throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: Night Audit is posting. Open a new shift after it completes.");
 
         await AssertNightAuditAllowsAsync(propertyId);
     }
@@ -99,6 +109,13 @@ public class LocalRepository
         var session = await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId);
         if (session == null || session.Status != "OPEN" || (!string.IsNullOrEmpty(session.ControlStatus) && session.ControlStatus != "OPEN"))
             throw new InvalidOperationException("This POS shift is closed or pending approval. Open a new approved shift before posting transactions.");
+
+        var property = await _dbContext.Properties.FindAsync(session.PropertyId);
+        if (property == null)
+            throw new InvalidOperationException("The POS property is not available offline.");
+        if (session.BusinessDate.Date != property.BusinessDate.Date)
+            throw new InvalidOperationException("This POS shift belongs to a different business date. Open the current approved shift before posting transactions.");
+        await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
     }
 
     private async Task<int> GetPendingPosTransactionCountAsync(string sessionId)
@@ -192,12 +209,32 @@ public class LocalRepository
     /// offline events reached the cloud. This never creates a second payment;
     /// it moves and requeues only the order's own unsynced events.
     /// </summary>
-    public async Task<bool> RecoverPosShiftLockedAsync(string propertyId, string orderId, string? targetSessionId)
+    public async Task<bool> RecoverPosShiftLockedAsync(string propertyId, string orderId, string? targetSessionId, string operatorId)
     {
-        if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(targetSessionId)) return false;
+        if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(targetSessionId) || string.IsNullOrWhiteSpace(operatorId)) return false;
 
         var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId && o.PropertyId == propertyId);
         if (order == null) throw new InvalidOperationException("The offline POS order could not be found.");
+
+        // Recovery is restricted to the operator recorded on the failed
+        // payment. A different cashier may open their own shift, but must not
+        // rebind or retry another cashier's payment.
+        var lockedEvents = await _dbContext.SyncEvents
+            .Where(e => e.Status != "SYNCED"
+                && (e.ErrorCode == "SHIFT_LOCKED" || (e.ErrorMessage != null && e.ErrorMessage.Contains("SHIFT_LOCKED")))
+                && (e.EntityId == orderId || e.PayloadJson.Contains(orderId)))
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync();
+        var paymentEvent = lockedEvents.FirstOrDefault(e => e.EntityType == "POS_PAYMENT");
+        var ownerId = paymentEvent?.OperatorId;
+        if (string.IsNullOrWhiteSpace(ownerId) && paymentEvent != null)
+        {
+            var payment = await _dbContext.PosPayments.FirstOrDefaultAsync(p => p.Id == paymentEvent.EntityId);
+            ownerId = payment?.ProcessedById;
+        }
+        ownerId ??= order.ServerStaffId ?? order.CreatedBy;
+        if (string.IsNullOrWhiteSpace(ownerId) || !string.Equals(ownerId, operatorId, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("This failed payment belongs to another POS operator. Sign in as the original operator to recover it.");
 
         await RebindOrderToOpenSessionAsync(orderId, targetSessionId, triggerSync: false);
 
@@ -692,7 +729,27 @@ public class LocalRepository
         return events;
     }
 
-    public async Task<List<LocalOfflineNotification>> GetOfflineBookingNotificationsAsync(string propertyId)
+    private static bool IsNotificationVisibleToOperator(LocalOfflineNotification notification, string? operatorId)
+    {
+        if (!string.Equals(notification.NotificationType, "POS_SYNC_RECOVERY_REQUIRED", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.IsNullOrWhiteSpace(operatorId)) return false;
+        try
+        {
+            var metadata = JsonNode.Parse(notification.MetadataJson)?.AsObject();
+            var ownerId = metadata?["operatorId"]?.ToString();
+            // Fail closed for legacy recovery alerts that cannot be attributed
+            // to a specific operator. They must never be shown property-wide.
+            return !string.IsNullOrWhiteSpace(ownerId)
+                && string.Equals(ownerId, operatorId, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<List<LocalOfflineNotification>> GetOfflineBookingNotificationsAsync(string propertyId, string? operatorId = null)
     {
         await OfflineNotificationStore.Gate.WaitAsync();
         try
@@ -731,7 +788,36 @@ public class LocalRepository
                 var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId && o.PropertyId == propertyId);
                 if (order == null) continue;
                 var notificationId = $"pos-shift-recovery:{orderId}";
-                if (notifications.Any(n => n.Id == notificationId && n.PropertyId == propertyId)) continue;
+                var failedPaymentEvent = lockedEvents
+                    .Where(e => e.EntityType == "POS_PAYMENT" && (e.EntityId == orderId || e.PayloadJson.Contains(orderId)))
+                    .OrderByDescending(e => e.CreatedAt)
+                    .FirstOrDefault();
+                var ownerId = failedPaymentEvent?.OperatorId;
+                if (string.IsNullOrWhiteSpace(ownerId) && failedPaymentEvent != null)
+                {
+                    var payment = await _dbContext.PosPayments.FirstOrDefaultAsync(p => p.Id == failedPaymentEvent.EntityId);
+                    ownerId = payment?.ProcessedById;
+                }
+                ownerId ??= order.ServerStaffId ?? order.CreatedBy ?? syncEvent.OperatorId;
+                if (string.IsNullOrWhiteSpace(ownerId)) continue;
+
+                var existing = notifications.FirstOrDefault(n => n.Id == notificationId && n.PropertyId == propertyId);
+                if (existing != null)
+                {
+                    // Backfill alerts created by older desktop builds, which
+                    // did not persist operator ownership.
+                    try
+                    {
+                        var existingMetadata = JsonNode.Parse(existing.MetadataJson)?.AsObject();
+                        if (existingMetadata != null && string.IsNullOrWhiteSpace(existingMetadata["operatorId"]?.ToString()))
+                        {
+                            existingMetadata["operatorId"] = ownerId;
+                            existing.MetadataJson = existingMetadata.ToJsonString();
+                        }
+                    }
+                    catch (Exception) { }
+                    continue;
+                }
                 notifications.Add(new LocalOfflineNotification
                 {
                     Id = notificationId,
@@ -741,7 +827,7 @@ public class LocalRepository
                     Body = $"Order {order.OrderNumber} was preserved locally, but its original POS shift is closed. Open an approved shift to retry the original payment. Do not charge the guest again.",
                     Category = "POS",
                     Priority = "HIGH",
-                    MetadataJson = JsonSerializer.Serialize(new { shiftType = "POS", recoveryType = "SHIFT_LOCKED", orderId, orderNumber = order.OrderNumber, operationId = syncEvent.OperationId }),
+                    MetadataJson = JsonSerializer.Serialize(new { shiftType = "POS", recoveryType = "SHIFT_LOCKED", orderId, orderNumber = order.OrderNumber, operationId = syncEvent.OperationId, operatorId = ownerId }),
                     CreatedAt = syncEvent.CreatedAt,
                     Acknowledged = false,
                 });
@@ -749,7 +835,7 @@ public class LocalRepository
             metadata.OfflineNotificationsJson = JsonSerializer.Serialize(notifications);
             await _dbContext.SaveChangesAsync();
             return notifications
-                .Where(n => n.PropertyId == propertyId && !n.Acknowledged)
+                .Where(n => n.PropertyId == propertyId && !n.Acknowledged && IsNotificationVisibleToOperator(n, operatorId))
                 .OrderByDescending(n => n.CreatedAt)
                 .ToList();
         }
@@ -763,7 +849,7 @@ public class LocalRepository
         }
     }
 
-    public async Task<bool> AcknowledgeOfflineBookingNotificationAsync(string propertyId, string notificationId)
+    public async Task<bool> AcknowledgeOfflineBookingNotificationAsync(string propertyId, string notificationId, string? operatorId = null)
     {
         await OfflineNotificationStore.Gate.WaitAsync();
         try
@@ -785,6 +871,7 @@ public class LocalRepository
         // race while closing the same alert; an already acknowledged row is a
         // successful outcome and must not cause the alert to be replayed.
         if (notification == null) return false;
+        if (!IsNotificationVisibleToOperator(notification, operatorId)) return false;
 
         // A sync retry can leave multiple local rows for the same cloud event.
         // Acknowledge the whole event group so the next polling cycle cannot
@@ -2523,6 +2610,15 @@ public class LocalRepository
     {
         var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.StaffId == staffId);
         if (session == null) throw new InvalidOperationException("Front desk session not found.");
+        var closingStaff = await _dbContext.Staff.FirstOrDefaultAsync(staff => staff.Id == staffId);
+        var closingRole = closingStaff?.Role ?? string.Empty;
+        if (closingRole.Contains("NIGHT_AUDITOR", StringComparison.OrdinalIgnoreCase)
+            || closingRole.Contains("NIGHT AUDITOR", StringComparison.OrdinalIgnoreCase)
+            || closingRole.Contains("NIGHT AUDIT", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new UnauthorizedAccessException(
+                "Night Auditors cannot close Front Desk shifts. The cashier must submit the shift; Night Audit can review and approve it.");
+        }
         await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
         // A returned shift remains operationally CLOSED on the server and is
         // reopened for declaration through controlStatus=RETURNED. Accept
@@ -7249,12 +7345,17 @@ public class LocalRepository
 
         var operatorStaff = await _dbContext.Staff.FirstOrDefaultAsync(staff => staff.Id == operatorId);
         var operatorRole = operatorStaff?.Role ?? string.Empty;
-        var privileged = operatorRole.Contains("MANAGER", StringComparison.OrdinalIgnoreCase)
-            || operatorRole.Contains("FINANCE", StringComparison.OrdinalIgnoreCase)
-            || operatorRole.Contains("ADMIN", StringComparison.OrdinalIgnoreCase)
-            || operatorRole.Contains("NIGHT_AUDITOR", StringComparison.OrdinalIgnoreCase)
+        var isNightAuditor = operatorRole.Contains("NIGHT_AUDITOR", StringComparison.OrdinalIgnoreCase)
             || operatorRole.Contains("NIGHT AUDITOR", StringComparison.OrdinalIgnoreCase)
             || operatorRole.Contains("NIGHT AUDIT", StringComparison.OrdinalIgnoreCase);
+        if (isNightAuditor)
+        {
+            throw new UnauthorizedAccessException(
+                "Night Auditors cannot close POS shifts. The cashier must submit the shift; Night Audit can review and approve it.");
+        }
+        var privileged = operatorRole.Contains("MANAGER", StringComparison.OrdinalIgnoreCase)
+            || operatorRole.Contains("FINANCE", StringComparison.OrdinalIgnoreCase)
+            || operatorRole.Contains("ADMIN", StringComparison.OrdinalIgnoreCase);
         if (!privileged && !string.Equals(session.UserId, operatorId, StringComparison.OrdinalIgnoreCase))
         {
             throw new UnauthorizedAccessException("Only the POS cashier who opened this shift can close and submit it.");

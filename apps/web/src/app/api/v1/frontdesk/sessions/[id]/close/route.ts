@@ -31,13 +31,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const privilegedPositions = new Set([
       'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN',
-      'CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'NIGHT_AUDITOR', 'NIGHT_AUDIT',
+      'CEO', 'DIRECTOR', 'GENERAL_MANAGER',
       'AUDITOR', 'GENERAL_CASHIER',
     ]);
     // Staff.position is a free-text HR field and may not match the system
     // role identifier (for example, "Night Auditor" vs "NIGHT_AUDITOR").
     // The session role is the authoritative RBAC signal for web users.
     const sessionRole = normalizeRole(session.user.role);
+    const isNightAuditor = ['NIGHT_AUDITOR', 'NIGHT_AUDIT'].includes(normalizeRole(staff.position))
+      || ['NIGHT_AUDITOR', 'NIGHT_AUDIT'].includes(sessionRole);
+    if (isNightAuditor) {
+      return errorResponse(
+        'FORBIDDEN',
+        'Night Auditors cannot close Front Desk shifts. The cashier must submit the shift; Night Audit can review and approve it.',
+        403
+      );
+    }
     const isPrivileged = privilegedPositions.has(normalizeRole(staff.position))
       || privilegedPositions.has(sessionRole)
       || session.user.isSuperAdmin;

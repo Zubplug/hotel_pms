@@ -47,6 +47,7 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
     data.operational.departures?.length ? `Pending check-outs (${data.operational.departures.length})` : null,
     data.system.openPosSessions?.length ? `Open POS sessions (${data.system.openPosSessions.length})` : null,
     data.system.openFrontdeskSessions?.length ? `Open Front Desk shifts (${data.system.openFrontdeskSessions.length})` : null,
+    data.system.shiftReviews?.length ? `Cashier shifts awaiting review (${data.system.shiftReviews.length})` : null,
     data.system.financialSyncConflicts?.length ? `Financial sync conflicts (${data.system.financialSyncConflicts.length})` : null,
     data.system.openPosOrders?.length ? `Open POS orders (${data.system.openPosOrders.length})` : null,
     data.financial.unverifiedComplimentary?.length ? `Unverified complimentary records (${data.financial.unverifiedComplimentary.length})` : null,
