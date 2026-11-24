@@ -4005,6 +4005,7 @@ model PosProductModifier {
   groupMaxSelect Int?
 
   createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model Recipe {

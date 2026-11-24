@@ -400,8 +400,36 @@ export async function GET(req: NextRequest) {
       posProductsWhere.categoryId = { in: categoryIds };
     }
 
+    // Modifiers are part of the POS product projection. A modifier can change
+    // without the product itself changing, so include the parent product when
+    // a modifier changed after the terminal's cursor. This prevents an offline
+    // terminal from offering an option that the cloud has already deactivated.
+    const changedModifierProductIds = since
+      ? Array.from(new Set((await prisma.posProductModifier.findMany({
+          where: {
+            updatedAt: { gt: since, lte: watermark },
+            product: {
+              propertyId,
+              ...(terminalOutletId ? { categoryId: { in: categoryIds } } : {}),
+            },
+          },
+          select: { productId: true },
+        })).map((modifier) => modifier.productId)))
+      : [];
+    const incrementalProductWhere = since
+      ? {
+          ...posProductsWhere,
+          OR: [
+            { updatedAt: { gt: since, lte: watermark } },
+            ...(changedModifierProductIds.length > 0
+              ? [{ id: { in: changedModifierProductIds } }]
+              : []),
+          ],
+        }
+      : buildWhere(posProductsWhere);
+
     const posProducts = await prisma.posProduct.findMany({
-      where: buildWhere(posProductsWhere),
+      where: incrementalProductWhere,
       include: { modifiers: true },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
