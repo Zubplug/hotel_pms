@@ -210,6 +210,18 @@ public class LocalDbContext : DbContext
             """);
     }
 
+    /// <summary>
+    /// Adds retry scheduling to the immutable sync-event queue for terminals
+    /// created before retry backoff was introduced. New databases receive the
+    /// column from the EF model; upgraded terminals need the additive change.
+    /// </summary>
+    public async Task ApplySyncEventSchemaAsync()
+    {
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE SyncEvents ADD COLUMN NextAttemptAt TEXT NULL"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex)
+            when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
     public async Task ApplyReachRoomTypeSchemaAsync()
     {
         var columns = new[]

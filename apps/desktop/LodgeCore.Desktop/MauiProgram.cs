@@ -115,6 +115,7 @@ public static class MauiProgram
             db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
             db.ApplyGuestProfileSchemaAsync().GetAwaiter().GetResult();
             db.ApplyGuestSyncCheckpointSchemaAsync().GetAwaiter().GetResult();
+            db.ApplySyncEventSchemaAsync().GetAwaiter().GetResult();
             db.ApplyReachRoomTypeSchemaAsync().GetAwaiter().GetResult();
             db.ApplyPosProductImageSchemaAsync().GetAwaiter().GetResult();
             db.ApplyEntitlementSchemaAsync().GetAwaiter().GetResult();

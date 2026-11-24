@@ -36,6 +36,7 @@ public class LocalSyncEvent
     
     public int AttemptCount { get; set; } = 0;
     public DateTime? LastAttemptAt { get; set; }
+    public DateTime? NextAttemptAt { get; set; }
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
     
