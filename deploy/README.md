@@ -14,9 +14,15 @@ Configure these repository variables and secrets before enabling the workflow:
 
 - Variable `AWS_ACCOUNT_ID`: the AWS account ID containing the ECR repositories.
 - Variable `AWS_REGION`: normally `eu-north-1`.
-- Secret `AWS_ECR_PUBLISH_ROLE_ARN`: an AWS IAM role trusted by GitHub OIDC,
-  with permission to push to the three `lodgecore-*` ECR repositories.
+- Secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`: temporary IAM user
+  credentials with permission to push only to the three `lodgecore-*` ECR
+  repositories. These are a temporary fallback until GitHub OIDC is available.
 - Secret `BUILD_AUTH_SECRET`: the same Auth.js build secret used by production.
+
+The preferred production configuration is GitHub OIDC using
+`AWS_ECR_PUBLISH_ROLE_ARN`. Do not add that role assumption step until the AWS
+OIDC provider is available. Rotate and remove the temporary access key secrets
+after migrating to OIDC.
 
 The EC2 instance role must be allowed to authenticate to ECR and pull images.
 The deployment runner also needs `aws`, Docker Compose, and the existing
