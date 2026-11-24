@@ -262,8 +262,11 @@ jobs:
         if ($dependencyNodes.Count -ne $dependencyPackages.Count) {
           throw "AppInstaller dependency count $($dependencyNodes.Count) does not match package count $($dependencyPackages.Count)"
         }
+        $expectedDependencyUris = @($dependencyPackages | ForEach-Object {
+          "$desktopUpdateBaseUrl/$($_.File.Name)"
+        })
         foreach ($dependencyNode in $dependencyNodes) {
-          if ($dependencyNode.Uri -notmatch "/releases/download/$tag/[^/]+\.msix$") {
+          if ($expectedDependencyUris -notcontains [string]$dependencyNode.Uri) {
             throw "Invalid dependency URI: $($dependencyNode.Uri)"
           }
         }
