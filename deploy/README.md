@@ -1,8 +1,26 @@
 # AWS EC2 deployment
 
-This is the first-stage deployment for LodgeCore. It runs the three server-rendered
-Next.js applications (`web`, `website`, and `hotel-stanzel`) on EC2 and keeps
-PostgreSQL on Neon.
+This deployment runs the three server-rendered Next.js applications (`web`,
+`website`, and `hotel-stanzel`) on EC2 and keeps PostgreSQL on Neon.
+
+Production does not build application images. GitHub Actions builds immutable
+images on a GitHub-hosted runner, publishes them to Amazon ECR, and the AWS
+deployment runner only pulls and starts the requested commit SHA. This keeps
+the production host out of the memory-intensive build path.
+
+## Required GitHub configuration
+
+Configure these repository variables and secrets before enabling the workflow:
+
+- Variable `AWS_ACCOUNT_ID`: the AWS account ID containing the ECR repositories.
+- Variable `AWS_REGION`: normally `eu-north-1`.
+- Secret `AWS_ECR_PUBLISH_ROLE_ARN`: an AWS IAM role trusted by GitHub OIDC,
+  with permission to push to the three `lodgecore-*` ECR repositories.
+- Secret `BUILD_AUTH_SECRET`: the same Auth.js build secret used by production.
+
+The EC2 instance role must be allowed to authenticate to ECR and pull images.
+The deployment runner also needs `aws`, Docker Compose, and the existing
+`lodgecore-aws` label. Do not put ECR credentials in Git or in `.env.aws`.
 
 ## On the EC2 host
 
@@ -28,12 +46,17 @@ cp deploy/nginx/conf.d/lodgecore.conf.example deploy/nginx/conf.d/lodgecore.conf
 ```
 
 Edit both files. Replace the example hostnames and enter production secrets only
-on the server. Do not put secrets into Git.
+on the server. Do not put secrets into Git. The deployment workflow supplies
+`PMS_IMAGE`, `WEBSITE_IMAGE`, and `STANZEL_IMAGE` from the immutable commit SHA.
 
-Build and start the applications:
+For a manual deployment, set the three image variables explicitly and start the
+applications:
 
 ```bash
-docker compose -f deploy/docker-compose.aws.yml build
+export PMS_IMAGE=ACCOUNT.dkr.ecr.eu-north-1.amazonaws.com/lodgecore-pms:COMMIT_SHA
+export WEBSITE_IMAGE=ACCOUNT.dkr.ecr.eu-north-1.amazonaws.com/lodgecore-website:COMMIT_SHA
+export STANZEL_IMAGE=ACCOUNT.dkr.ecr.eu-north-1.amazonaws.com/lodgecore-stanzel:COMMIT_SHA
+aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin ACCOUNT.dkr.ecr.eu-north-1.amazonaws.com
 docker compose --env-file deploy/.env.aws -f deploy/docker-compose.aws.yml up -d
 docker compose -f deploy/docker-compose.aws.yml ps
 ```

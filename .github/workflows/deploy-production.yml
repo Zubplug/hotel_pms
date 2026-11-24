@@ -1,96 +1,70 @@
 name: Deploy LodgeCore production
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: [Build and publish production images]
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Commit SHA image tag to deploy
+        required: true
+        type: string
 
 concurrency:
   group: lodgecore-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
+  ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION || 'eu-north-1' }}.amazonaws.com
+
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: [self-hosted, linux, x64, lodgecore-aws]
 
     steps:
-      - name: Check out production source
+      - name: Check out deployment manifests
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 1
 
-      - name: Detect affected services
-        id: changes
+      - name: Deploy immutable images
         shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_sha || github.sha }}
         run: |
-          set -euo pipefail
-          BEFORE="${GITHUB_EVENT_BEFORE:-}"
-          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch || -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
-            BEFORE=""
-          fi
+          set -Eeuo pipefail
+          cd "$GITHUB_WORKSPACE"
 
-          if [[ -z "$BEFORE" ]]; then
-            CHANGED="ALL"
-          else
-            CHANGED="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
-          fi
+          test -n "${AWS_ACCOUNT_ID:-${{ vars.AWS_ACCOUNT_ID }}}" || {
+            echo 'AWS_ACCOUNT_ID repository variable is required.' >&2
+            exit 1
+          }
+          test -n "$IMAGE_TAG" || {
+            echo 'An immutable image tag is required.' >&2
+            exit 1
+          }
 
-          echo "Changed files:"
-          printf '%s\n' "$CHANGED"
-
-          ALL=false
-          PMS=false
-          WEBSITE=false
-          STANZEL=false
-
-          if [[ "$CHANGED" == "ALL" ]]; then
-            ALL=true
-          elif printf '%s\n' "$CHANGED" | grep -Eq '^(packages/|pnpm-lock.yaml$|pnpm-workspace.yaml$|package.json$|deploy/|turbo.json$|\.dockerignore$)'; then
-            ALL=true
-          else
-            printf '%s\n' "$CHANGED" | grep -q '^apps/web/' && PMS=true || true
-            printf '%s\n' "$CHANGED" | grep -q '^apps/website/' && WEBSITE=true || true
-            printf '%s\n' "$CHANGED" | grep -q '^apps/hotel-stanzel/' && STANZEL=true || true
-          fi
-
-          echo "all=$ALL" >> "$GITHUB_OUTPUT"
-          echo "pms=$PMS" >> "$GITHUB_OUTPUT"
-          echo "website=$WEBSITE" >> "$GITHUB_OUTPUT"
-          echo "stanzel=$STANZEL" >> "$GITHUB_OUTPUT"
-
-          if [[ "$ALL" == true ]]; then
-            echo 'Deployment scope: all services'
-          elif [[ "$PMS" == true || "$WEBSITE" == true || "$STANZEL" == true ]]; then
-            echo "Deployment scope: PMS=$PMS website=$WEBSITE Stanzel=$STANZEL"
-          else
-            echo 'Deployment scope: no application service changes'
-          fi
-
-      - name: Sync source to production directory
-        run: |
+          # Only deployment manifests and scheduled-job definitions are copied
+          # to production. Application source code is never built there.
           sudo rsync -az --delete \
-            --exclude='.git/' \
-            --exclude='.env*' \
-            --exclude='deploy/.env.aws' \
-            --exclude='deploy/nginx/conf.d/lodgecore.conf' \
-            --exclude='.deploy/' \
-            --exclude='node_modules/' \
-            --exclude='**/node_modules/' \
-            --exclude='.next/' \
-            --exclude='**/.next/' \
-            --exclude='.pnpm-store/' \
-            --exclude='**/.pnpm-store/' \
-            ./ /opt/hotel_pms/
+            --exclude='.env.aws' \
+            --exclude='nginx/conf.d/lodgecore.conf' \
+            deploy/ /opt/hotel_pms/deploy/
 
-      - name: Install AWS scheduled jobs
-        run: |
-          set -euo pipefail
-          cd /opt/hotel_pms
           sudo install -d -m 755 /opt/hotel_pms/deploy/cron /etc/systemd/system
-          sudo chmod 755 deploy/cron/run-job.sh
-          sudo install -m 644 deploy/systemd/*.service deploy/systemd/*.timer /etc/systemd/system/
+          sudo chmod 755 /opt/hotel_pms/deploy/cron/run-job.sh
+          sudo install -m 644 /opt/hotel_pms/deploy/systemd/*.service /opt/hotel_pms/deploy/systemd/*.timer /etc/systemd/system/
           sudo systemctl daemon-reload
-          sudo systemctl disable --now lodgecore-cron.service lodgecore-cron@.service 2>/dev/null || true
           for timer in \
             lodgecore-expire-booking-holds.timer \
             lodgecore-reconcile-refunds.timer \
@@ -100,69 +74,46 @@ jobs:
             lodgecore-ota-reconciliation.timer; do
             sudo systemctl enable --now "$timer"
           done
-          systemctl list-timers 'lodgecore-*' --all --no-pager
 
-      - name: Build and restart production services
-        env:
-          BUILD_ALL: ${{ steps.changes.outputs.all }}
-          BUILD_PMS: ${{ steps.changes.outputs.pms }}
-          BUILD_WEBSITE: ${{ steps.changes.outputs.website }}
-          BUILD_STANZEL: ${{ steps.changes.outputs.stanzel }}
-        run: |
-          set -euo pipefail
           cd /opt/hotel_pms
-          COMPOSE="sudo docker compose --env-file deploy/.env.aws -f deploy/docker-compose.aws.yml"
-          SERVICES=()
+          COMPOSE=(sudo docker compose --env-file deploy/.env.aws -f deploy/docker-compose.aws.yml)
+          export PMS_IMAGE="$ECR_REGISTRY/lodgecore-pms:$IMAGE_TAG"
+          export WEBSITE_IMAGE="$ECR_REGISTRY/lodgecore-website:$IMAGE_TAG"
+          export STANZEL_IMAGE="$ECR_REGISTRY/lodgecore-stanzel:$IMAGE_TAG"
+          PREVIOUS_TAG="$(sudo cat deploy/.last-successful-image-tag 2>/dev/null || true)"
 
-          if [[ "$BUILD_ALL" == true || "$BUILD_PMS" == true ]]; then SERVICES+=(pms); fi
-          if [[ "$BUILD_ALL" == true || "$BUILD_WEBSITE" == true ]]; then SERVICES+=(website); fi
-          if [[ "$BUILD_ALL" == true || "$BUILD_STANZEL" == true ]]; then SERVICES+=(stanzel); fi
+          rollback() {
+            if [[ -z "$PREVIOUS_TAG" ]]; then
+              echo 'No previous image tag is recorded; leaving failed deployment stopped.' >&2
+              return
+            fi
+            echo "Rolling back to $PREVIOUS_TAG"
+            export PMS_IMAGE="$ECR_REGISTRY/lodgecore-pms:$PREVIOUS_TAG"
+            export WEBSITE_IMAGE="$ECR_REGISTRY/lodgecore-website:$PREVIOUS_TAG"
+            export STANZEL_IMAGE="$ECR_REGISTRY/lodgecore-stanzel:$PREVIOUS_TAG"
+            "${COMPOSE[@]} up -d --no-build --force-recreate pms website stanzel nginx || true
+          }
+          trap 'rollback' ERR
 
-          if [[ ${#SERVICES[@]} -eq 0 ]]; then
-            echo 'No application service changed; keeping running containers unchanged.'
-            exit 0
-          fi
-
-          AVAILABLE_KB="$(df -Pk / | awk 'NR == 2 {print $4}')"
-          MINIMUM_FREE_KB=$((8 * 1024 * 1024))
-          if (( AVAILABLE_KB < MINIMUM_FREE_KB )); then
-            echo 'Low disk space detected; removing unused Docker build cache.'
-            sudo docker builder prune -af
-          fi
-
-          echo "Building: ${SERVICES[*]}"
-          $COMPOSE build "${SERVICES[@]}"
-          $COMPOSE up -d --no-build --force-recreate "${SERVICES[@]}" nginx
+          aws ecr get-login-password --region "$AWS_REGION" |
+            sudo docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          "${COMPOSE[@]} pull pms website stanzel nginx
+          "${COMPOSE[@]} up -d --no-build --force-recreate pms website stanzel nginx
           sudo docker exec deploy-nginx-1 nginx -t
           sudo docker exec deploy-nginx-1 nginx -s reload
           sleep 10
-          $COMPOSE ps
-
-      - name: Verify public HTTPS endpoints
-        run: |
-          set -euo pipefail
-          TMP_DIR="$(mktemp -d)"
-          trap 'rm -rf "$TMP_DIR"' EXIT
 
           check_identity() {
             local host="$1"
             local expected="$2"
-            local response="$TMP_DIR/${host}.html"
-
-            echo "Checking https://${host}/"
             curl --fail --silent --show-error --location \
-              --resolve "${host}:443:127.0.0.1" \
-              --max-time 30 \
-              "https://${host}/" > "$response"
-
-            if ! grep -Fq "$expected" "$response"; then
-              echo "::error::${host} did not return the expected application identity: ${expected}"
-              return 1
-            fi
-
-            echo "OK: ${host} (${expected})"
+              --resolve "${host}:443:127.0.0.1" --max-time 30 \
+              "https://${host}/" | grep -Fq "$expected"
           }
-
           check_identity pms.zubplug.com.ng 'LodgeCore PMS'
           check_identity lodgecore.zubplug.com.ng 'LodgeCore'
           check_identity www.stanzelgrandresort.org 'Stanzel Grand Resort'
+
+          printf '%s\n' "$IMAGE_TAG" | sudo tee deploy/.last-successful-image-tag >/dev/null
+          trap - ERR
+          "${COMPOSE[@]} ps

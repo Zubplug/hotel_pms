@@ -1,11 +1,6 @@
 services:
   pms:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.next
-      args:
-        APP: web
-        AUTH_SECRET: ${AUTH_SECRET}
+    image: ${PMS_IMAGE:?PMS_IMAGE must be set to an immutable registry image}
     env_file:
       - .env.aws
     environment:
@@ -25,12 +20,7 @@ services:
         max-file: "5"
 
   website:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.next
-      args:
-        APP: website
-        AUTH_SECRET: ${AUTH_SECRET}
+    image: ${WEBSITE_IMAGE:?WEBSITE_IMAGE must be set to an immutable registry image}
     env_file:
       - .env.aws
     environment:
@@ -47,12 +37,7 @@ services:
     logging: *lodgecore_logging
 
   stanzel:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.next
-      args:
-        APP: hotel-stanzel
-        AUTH_SECRET: ${AUTH_SECRET}
+    image: ${STANZEL_IMAGE:?STANZEL_IMAGE must be set to an immutable registry image}
     env_file:
       - .env.aws
     environment:
