@@ -91,14 +91,14 @@ jobs:
             export PMS_IMAGE="$ECR_REGISTRY/lodgecore-pms:$PREVIOUS_TAG"
             export WEBSITE_IMAGE="$ECR_REGISTRY/lodgecore-website:$PREVIOUS_TAG"
             export STANZEL_IMAGE="$ECR_REGISTRY/lodgecore-stanzel:$PREVIOUS_TAG"
-            "${COMPOSE[@]} up -d --no-build --force-recreate pms website stanzel nginx || true
+            "${COMPOSE[@]}" up -d --no-build --force-recreate pms website stanzel nginx || true
           }
           trap 'rollback' ERR
 
           aws ecr get-login-password --region "$AWS_REGION" |
             sudo docker login --username AWS --password-stdin "$ECR_REGISTRY"
-          "${COMPOSE[@]} pull pms website stanzel nginx
-          "${COMPOSE[@]} up -d --no-build --force-recreate pms website stanzel nginx
+          "${COMPOSE[@]}" pull pms website stanzel nginx
+          "${COMPOSE[@]}" up -d --no-build --force-recreate pms website stanzel nginx
           sudo docker exec deploy-nginx-1 nginx -t
           sudo docker exec deploy-nginx-1 nginx -s reload
           sleep 10
@@ -116,4 +116,4 @@ jobs:
 
           printf '%s\n' "$IMAGE_TAG" | sudo tee deploy/.last-successful-image-tag >/dev/null
           trap - ERR
-          "${COMPOSE[@]} ps
+          "${COMPOSE[@]}" ps
