@@ -20,13 +20,19 @@ async function proxyDesktopUpdate(fileName: string, method: 'GET' | 'HEAD') {
   }
 
   const isAppInstaller = fileName.toLowerCase().endsWith('.appinstaller');
+  const contentLength = upstream.headers.get('content-length');
+  const responseHeaders = new Headers({
+    'Content-Type': isAppInstaller ? 'application/appinstaller' : 'application/msix',
+    'Content-Disposition': `attachment; filename="${fileName.replace(/"/g, '')}"`,
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+  });
+  if (contentLength) {
+    responseHeaders.set('Content-Length', contentLength);
+  }
+
   return new NextResponse(method === 'HEAD' ? null : upstream.body, {
     status: 200,
-    headers: {
-      'Content-Type': isAppInstaller ? 'application/appinstaller' : 'application/msix',
-      'Content-Disposition': `attachment; filename="${fileName.replace(/"/g, '')}"`,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-    },
+    headers: responseHeaders,
   });
 }
 

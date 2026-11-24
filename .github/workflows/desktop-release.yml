@@ -181,8 +181,11 @@ jobs:
 
         # The stable URL where this .appinstaller will be hosted (Vercel proxy)
         $appinstallerUrl = "https://pms.zubplug.com.ng/api/desktop-update/LodgeCore.appinstaller"
-        # Direct download URL for the MSIX on GitHub Releases
-        $msixUrl = "https://github.com/$repo/releases/download/$tag/$msixName"
+        # Serve packages through the production proxy so App Installer receives
+        # application/msix and a stable Content-Length instead of GitHub's
+        # application/octet-stream release response.
+        $desktopUpdateBaseUrl = "https://pms.zubplug.com.ng/api/desktop-update"
+        $msixUrl = "$desktopUpdateBaseUrl/$msixName"
 
         # Build a broadly compatible .appinstaller XML document. Keep the
         # manifest on the 2017/2 base schema so older supported Windows 10
@@ -216,7 +219,7 @@ jobs:
           foreach ($dependencyPackage in $dependencyPackages) {
             $dependencyFile = $dependencyPackage.File
             $dependencyIdentity = $dependencyPackage.Identity
-            $dependencyUrl = "https://github.com/$repo/releases/download/$tag/$($dependencyFile.Name)"
+            $dependencyUrl = "$desktopUpdateBaseUrl/$($dependencyFile.Name)"
             $writer.WriteStartElement('Package', $appInstallerNamespace)
             $writer.WriteAttributeString('Name', $dependencyIdentity.Name)
             $writer.WriteAttributeString('Publisher', $dependencyIdentity.Publisher)
