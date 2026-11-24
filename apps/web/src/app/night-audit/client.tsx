@@ -218,7 +218,9 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ propertyId }),
       });
-      const json = await res.json();
+      const raw = await res.text();
+      let json: any;
+      try { json = JSON.parse(raw); } catch { throw new Error(`Audit service returned an invalid response (HTTP ${res.status}). Please retry or contact support if it continues.`); }
       if (!res.ok) throw new Error(json.error?.message || 'Audit execution failed');
       setWizardOpen(false); setSuccessResult(json.data); await load(true);
     } catch (err: any) {
@@ -245,19 +247,22 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   if (loading || !data) return <Spinner label="Loading audit status…" />;
 
   const isAuditInProgress = data.auditState === 'IN_PROGRESS' || data.auditState === 'POSTING';
-  const isCompleted = data.auditState === 'COMPLETED';
+  const isCompleted = data.auditState === 'COMPLETED' || data.auditState === 'COMPLETED_WITH_EXCEPTIONS';
 
   return (
     <div className="min-h-full pb-16 pt-4 px-3 sm:px-4 md:px-5" style={{ background: BG }}>
       <div className="mx-auto max-w-[1600px] space-y-4">
 
         {/* ── Alerts ──────────────────────────────────────────────────────── */}
-        {(data.auditState === 'FAILED' || error || message) && (
+        {(data.auditState === 'FAILED' || data.auditState === 'COMPLETED_WITH_EXCEPTIONS' || error || message) && (
           <div className="space-y-2">
             {data.auditState === 'FAILED' && (
               <AlertStrip variant="error" icon={AlertTriangle} message="Last audit failed — review the audit log and retry."
                 action={<button onClick={() => load(true)} className="shrink-0 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-400/18">Retry</button>}
               />
+            )}
+            {data.auditState === 'COMPLETED_WITH_EXCEPTIONS' && !error && (
+              <AlertStrip variant="warning" icon={AlertTriangle} message="Audit closed with exceptions — review the reconciliation before handover." />
             )}
             {error && <AlertStrip variant="error" icon={XCircle} message={error} />}
             {message && <AlertStrip variant="success" icon={CheckCircle2} message={message} />}

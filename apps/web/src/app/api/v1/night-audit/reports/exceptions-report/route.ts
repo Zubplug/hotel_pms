@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Refunds
     const refundsData = await prisma.refund.findMany({
-      where: { propertyId, businessDate, status: 'COMPLETED' },
+      where: { propertyId, businessDate, status: { in: ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'] } },
       include: { folio: { include: { guest: true, reservation: { include: { reservationRooms: { include: { room: true } } } } } } }
     });
 

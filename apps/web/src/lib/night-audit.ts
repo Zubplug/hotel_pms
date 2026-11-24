@@ -27,8 +27,8 @@ export async function getNightAuditPreview(ctx: any, propertyId: string) {
   let blockers = 0;
   let warnings = 0;
 
-  if (operational.arrivals.length > 0) warnings++;
-  if (operational.departures.length > 0) warnings++;
+  if (operational.arrivals.length > 0) blockers++;
+  if (operational.departures.length > 0) blockers++;
   if (operational.roomReconciliation.some((r: any) => r.issue)) warnings++;
 
   if (system.openPosSessions.length > 0) blockers++;
@@ -63,9 +63,7 @@ export async function executeNightAudit(
 
   const propertyBusinessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
   const professionalOperationsEnabled = await hasEntitlement(property.organizationId, 'MODULE_OPERATIONS', propertyId);
-  if (propertyBusinessDate.getTime() > getPropertyBusinessDate(property.timezone, new Date()).getTime()) {
-    throw new Error('BLOCKER:Cannot execute audit. The business date is in the future. Today\'s audit has already been completed.');
-  }
+  const currentCalendarDate = getPropertyBusinessDate(property.timezone, new Date());
 
   const failedAudit = await prisma.nightAudit.findFirst({
     // A failed run normally remains on the current business date. The
@@ -76,6 +74,14 @@ export async function executeNightAudit(
   });
   const isRecovery = Boolean(failedAudit);
   const businessDate = failedAudit?.businessDate || propertyBusinessDate;
+  // Night Audit closes the previous hotel business date after midnight. Once
+  // that run rolls the property forward to today, today must remain open for
+  // operations; otherwise a second audit can be started on the same calendar
+  // day and close today's business date prematurely. Failed prior runs are
+  // explicitly allowed through the recovery path above.
+  if (businessDate.getTime() >= currentCalendarDate.getTime()) {
+    throw new Error(`BLOCKER:Cannot execute audit for ${businessDate.toISOString().slice(0, 10)}. Night Audit is available after the business date has ended.`);
+  }
   const nextBusinessDate = getNextBusinessDate(businessDate);
   const legacyRolloverDetected = Boolean(
     failedAudit &&
@@ -89,6 +95,7 @@ export async function executeNightAudit(
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
     const { openPosSessions, openFrontdeskSessions, financialSyncConflicts, openPosOrders } = await getSystemIntegrity(ctx, propertyId);
+    const operationalReview = await getOperationalReview(ctx, propertyId);
     const { unverifiedComplimentary, pendingCheckInBypasses } = await getFinancialAudit(ctx, propertyId);
     const { unverifiedTransactions } = await getCashReconciliation(ctx, propertyId);
     const { exceptions: { openOrders: additionalFnbOpenOrders, openSessions: additionalFnbOpenSessions } } = await getFnbControl(ctx, propertyId);
@@ -100,6 +107,13 @@ export async function executeNightAudit(
     if (openPosSessions.length > 0 || additionalFnbOpenSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
     if (openFrontdeskSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
     if (openPosOrders.length > 0 || additionalFnbOpenOrders.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS orders.');
+
+    if (operationalReview.arrivals.length > 0) {
+      throw new Error(`BLOCKER:Cannot execute audit. ${operationalReview.arrivals.length} pending check-in(s) must be processed first.`);
+    }
+    if (operationalReview.departures.length > 0) {
+      throw new Error(`BLOCKER:Cannot execute audit. ${operationalReview.departures.length} pending check-out(s) must be processed first.`);
+    }
     
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');
     // Auto-close RECONCILIATION_REQUIRED POS sessions with zero expected cash.
@@ -148,7 +162,7 @@ export async function executeNightAudit(
     const existing = await tx.nightAudit.findUnique({
       where: { propertyId_businessDate: { propertyId, businessDate } }
     });
-    if (existing?.status === 'COMPLETED') {
+    if (['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(existing?.status || '')) {
       throw new Error(`CONFLICT:Night Audit for ${businessDate.toISOString().split('T')[0]} has already been completed.`);
     }
     if (existing?.status === 'IN_PROGRESS' || existing?.status === 'POSTING') {
@@ -1534,7 +1548,7 @@ export async function executeNightAudit(
     const runUpdate = await tx.nightAudit.update({
       where: { id: auditRun.id },
       data: {
-        status: 'COMPLETED',
+        status: txErrors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED',
         completedAt: new Date(),
         tasksCreated: { increment: totalTasksCreated },
         tasksSkipped: { increment: totalTasksSkipped },

@@ -43,6 +43,8 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
   const additionalFnbOpenOrders = (data.fnb?.exceptions?.openOrders || []).filter((order: any) => !systemOrderIds.has(order.id));
   const additionalFnbOpenSessions = (data.fnb?.exceptions?.openSessions || []).filter((session: any) => !systemSessionIds.has(session.id));
   const blockerLabels = [
+    data.operational.arrivals?.length ? `Pending check-ins (${data.operational.arrivals.length})` : null,
+    data.operational.departures?.length ? `Pending check-outs (${data.operational.departures.length})` : null,
     data.system.openPosSessions?.length ? `Open POS sessions (${data.system.openPosSessions.length})` : null,
     data.system.openFrontdeskSessions?.length ? `Open Front Desk shifts (${data.system.openFrontdeskSessions.length})` : null,
     data.system.financialSyncConflicts?.length ? `Financial sync conflicts (${data.system.financialSyncConflicts.length})` : null,

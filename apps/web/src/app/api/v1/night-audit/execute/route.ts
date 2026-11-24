@@ -92,7 +92,10 @@ export async function POST(req: NextRequest) {
     );
 
     return successResponse({
-      message: 'Night Audit successfully executed.',
+      message: result.errors > 0
+        ? 'Night Audit completed with exceptions. Review the close package before handover.'
+        : 'Night Audit successfully executed.',
+      completedWithExceptions: result.errors > 0,
       ...result
     });
 

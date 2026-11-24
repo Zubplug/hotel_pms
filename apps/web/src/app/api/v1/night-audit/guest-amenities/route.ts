@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     if (!businessDate) {
       const latestAudit = await prisma.nightAudit.findFirst({
-        where: { propertyId, status: 'COMPLETED' },
+        where: { propertyId, status: { in: ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'] } },
         orderBy: [{ businessDate: 'desc' }, { completedAt: 'desc' }],
         select: { businessDate: true },
       });

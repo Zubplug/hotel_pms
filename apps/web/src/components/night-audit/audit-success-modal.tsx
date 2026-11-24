@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { CheckCircle, Sparkles, FileText, Check, Activity, ArrowRight, Home } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Sparkles, FileText, Check, Activity, ArrowRight, Home } from 'lucide-react';
 import { format } from 'date-fns';
 
 export interface AuditSuccessModalProps {
@@ -12,6 +12,7 @@ export interface AuditSuccessModalProps {
 
 export function AuditSuccessModal({ open, onOpenChange, result, businessDate }: AuditSuccessModalProps) {
   if (!result) return null;
+  const hasExceptions = Number(result.errors || 0) > 0 || result.completedWithExceptions;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -25,14 +26,14 @@ export function AuditSuccessModal({ open, onOpenChange, result, businessDate }: 
             {/* Success Icon */}
             <div className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[24px] border border-emerald-400/30 bg-emerald-400/10 shadow-[0_0_40px_rgba(52,211,153,0.2)]">
               <Sparkles className="absolute right-2 top-2 h-4 w-4 text-emerald-300 opacity-60" />
-              <CheckCircle className="h-10 w-10 text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+              {hasExceptions ? <AlertTriangle className="h-10 w-10 text-amber-400" /> : <CheckCircle className="h-10 w-10 text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]" />}
             </div>
 
             <DialogTitle className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Audit Successful
+              {hasExceptions ? 'Audit Closed with Exceptions' : 'Audit Successful'}
             </DialogTitle>
             <DialogDescription className="mt-3 text-sm text-slate-400">
-              The Night Audit has been completed successfully. The business date has been rolled over and reports have been generated.
+              {hasExceptions ? 'The business date was rolled over, but the close package contains exceptions that require management review.' : 'The Night Audit has been completed successfully. The business date has been rolled over and reports have been generated.'}
             </DialogDescription>
 
             {/* Metrics Grid */}

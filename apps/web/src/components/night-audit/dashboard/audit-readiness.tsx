@@ -7,6 +7,7 @@ import { Panel, PanelHeader, EmptyState, cx, TONE_HEX } from './ui';
 export function AuditReadiness({ data }: { data: NightAuditData }) {
   const isAuditInProgress = data.auditState === 'IN_PROGRESS' || data.auditState === 'POSTING';
   const isCompleted = data.auditState === 'COMPLETED';
+  const isCompletedWithExceptions = data.auditState === 'COMPLETED_WITH_EXCEPTIONS';
 
   const operationalCount = (data.operational.arrivals?.length || 0) + (data.operational.departures?.length || 0) + (data.operational.roomReconciliation?.filter((r: any) => r.issue).length || 0);
   const systemCount = (data.system.openPosSessions?.length || 0) + (data.system.openFrontdeskSessions?.length || 0) + (data.system.financialSyncConflicts?.length || 0) + (data.system.openPosOrders?.length || 0);
@@ -28,12 +29,12 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
     },
     {
       key: 'operational', title: 'Operations', icon: Building2, count: operationalCount,
-      blocker: false,
+      blocker: (data.operational.arrivals?.length || 0) > 0 || (data.operational.departures?.length || 0) > 0,
     },
   ];
 
   const clearCount = sections.filter((s) => s.count === 0).length;
-  const readyTone = isCompleted ? 'text-emerald-300' : data.summary.blockers > 0 ? 'text-rose-300' : clearCount === sections.length ? 'text-emerald-300' : 'text-amber-300';
+  const readyTone = isCompleted ? 'text-emerald-300' : isCompletedWithExceptions ? 'text-amber-300' : data.summary.blockers > 0 ? 'text-rose-300' : clearCount === sections.length ? 'text-emerald-300' : 'text-amber-300';
 
   return (
     <Panel className="h-full">
@@ -41,10 +42,10 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
         icon={ShieldCheck}
         title="Audit Readiness"
         subtitle={`${clearCount} of ${sections.length} areas clear`}
-        tone={data.summary.blockers > 0 ? 'rose' : 'emerald'}
+        tone={isCompletedWithExceptions ? 'amber' : data.summary.blockers > 0 ? 'rose' : 'emerald'}
         actions={
           <span className={cx('text-[11px] font-semibold', readyTone)}>
-            {isCompleted ? '✓ Closed' : data.summary.blockers > 0 ? `${data.summary.blockers} blockers` : clearCount === sections.length ? '✓ Ready' : 'Review needed'}
+            {isCompleted ? '✓ Closed' : isCompletedWithExceptions ? 'Closed with exceptions' : data.summary.blockers > 0 ? `${data.summary.blockers} blockers` : clearCount === sections.length ? '✓ Ready' : 'Review needed'}
           </span>
         }
       />

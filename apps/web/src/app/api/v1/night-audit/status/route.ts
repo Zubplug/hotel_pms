@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
         orderBy: { startedAt: 'desc' }
       }),
       prisma.nightAudit.findFirst({
-        where: { propertyId, status: 'COMPLETED' },
+        where: { propertyId, status: { in: ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'] } },
         orderBy: [{ businessDate: 'desc' }, { completedAt: 'desc' }],
         include: { financialSnapshot: true },
       }),
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
       prisma.folioItem.count({ where: { folio: { propertyId }, businessDate, isLatePosting: true, voidedAt: null } }),
       prisma.posSession.aggregate({ where: { propertyId, businessDate }, _sum: { variance: true } }),
       prisma.nightAudit.findMany({ 
-        where: { propertyId, status: 'COMPLETED', businessDate: { gte: trendStart, lte: businessDate } }, 
+        where: { propertyId, status: { in: ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'] }, businessDate: { gte: trendStart, lte: businessDate } },
         orderBy: { businessDate: 'asc' }, 
         take: 7, 
         select: { 
@@ -279,8 +279,8 @@ export async function GET(req: NextRequest) {
     let warnings = 0;
 
     // Operational blockers/warnings
-    if (operational.arrivals.length > 0) warnings++;
-    if (operational.departures.length > 0) warnings++;
+    if (operational.arrivals.length > 0) blockers++;
+    if (operational.departures.length > 0) blockers++;
     if (operational.roomReconciliation.some(r => r.issue)) warnings++;
 
     // System blockers/warnings
@@ -328,7 +328,7 @@ export async function GET(req: NextRequest) {
       ? 'IN_PROGRESS'
       : currentAudit?.status === 'FAILED'
         ? 'FAILED'
-        : currentAudit?.status === 'COMPLETED'
+        : ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(currentAudit?.status || '')
           ? (blockers > 0 || missingLinkedJournal ? 'CANNOT_CLOSE' : balanceProofHasVariance ? 'HAS_VARIANCE' : transactionExceptions > 0 || balanceProofIncomplete ? 'HAS_UNRESOLVED_EXCEPTIONS' : 'COMPLETED')
         : blockers > 0
             ? 'CANNOT_CLOSE'
@@ -345,13 +345,15 @@ export async function GET(req: NextRequest) {
     ].filter(Boolean);
     
     // Single canonical state field — the UI should branch exclusively on this.
-    type AuditState = 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'FAILED' | 'OVERDUE' | 'PENDING';
+    type AuditState = 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED' | 'OVERDUE' | 'PENDING';
     const auditState: AuditState =
       activeAudit?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' :
       activeAudit?.status === 'POSTING'     ? 'POSTING' :
+      property.auditStatus === 'COMPLETED_WITH_EXCEPTIONS' && businessDate.getTime() > localToday.getTime() ? 'COMPLETED_WITH_EXCEPTIONS' :
+      currentAudit?.status === 'COMPLETED_WITH_EXCEPTIONS' ? 'COMPLETED_WITH_EXCEPTIONS' :
       currentAudit?.status === 'COMPLETED'  ? 'COMPLETED' :
       currentAudit?.status === 'FAILED'     ? 'FAILED' :
-      businessDate.getTime() > localToday.getTime() ? 'COMPLETED' :
+      businessDate.getTime() > localToday.getTime() ? 'PENDING' :
       businessDate.getTime() < localToday.getTime() ? 'OVERDUE' :
                                               'PENDING';
 
@@ -367,7 +369,7 @@ export async function GET(req: NextRequest) {
       auditPhase: activeAudit?.status || (currentAudit?.status ?? 'PENDING'),
       auditInProgress: Boolean(activeAudit),
       auditDue: !activeAudit && (property.auditStatus === 'FAILED' || businessDate < localToday),
-      isBusinessDayAudited: !activeAudit && property.auditStatus !== 'FAILED' && businessDate >= localToday,
+      isBusinessDayAudited: !activeAudit && ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(currentAudit?.status || ''),
       analytics: {
         // Folio charges do not include paid POS orders that have not yet been
         // mirrored into a folio item. Add only those unrepresented orders so

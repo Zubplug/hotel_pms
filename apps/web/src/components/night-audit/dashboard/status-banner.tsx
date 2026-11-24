@@ -26,7 +26,7 @@ const AUDIT_STEPS = [
 ];
 
 function getActiveStep(auditState: string): number {
-  if (auditState === 'COMPLETED') return 5;
+  if (auditState === 'COMPLETED' || auditState === 'COMPLETED_WITH_EXCEPTIONS') return 5;
   if (auditState === 'IN_PROGRESS' || auditState === 'POSTING') return 2;
   return 1;
 }
@@ -43,7 +43,7 @@ const TONE: Record<Tone, { pill: string; dot: string; accent: string; btn: strin
 
 function AuditStepper({ auditState, tone }: { auditState: string; tone: Tone }) {
   const activeStep = getActiveStep(auditState);
-  const isCompleted = auditState === 'COMPLETED';
+  const isCompleted = auditState === 'COMPLETED' || auditState === 'COMPLETED_WITH_EXCEPTIONS';
   const running = auditState === 'IN_PROGRESS' || auditState === 'POSTING';
   const accent = TONE[tone].accent;
 
@@ -123,16 +123,16 @@ export function StatusBanner({
 }: StatusBannerProps) {
   const { data: session } = useSession();
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
-  const isReady = data.summary.blockers === 0 && !isAuditInProgress && data.auditState !== 'COMPLETED';
+  const isReady = data.summary.blockers === 0 && !isAuditInProgress && !['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.auditState);
   const auditRecord = data.activeAudit || data.currentAudit;
-  const lastCompleted = data.lastCompletedAudit || (data.currentAudit?.status === 'COMPLETED' ? data.currentAudit : null);
+  const lastCompleted = data.lastCompletedAudit || (['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.currentAudit?.status || '') ? data.currentAudit : null);
   const owner = auditRecord?.runByStaff;
   const currentUserName = session?.user?.name || session?.user?.email || '';
   const ownerName = owner
     ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim()
     : auditRecord?.runBy
       ? currentUserName || 'Assigned auditor'
-      : auditRecord?.status === 'COMPLETED'
+      : ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(auditRecord?.status || '')
         ? 'System'
         : currentUserName || 'Current auditor';
 
@@ -144,6 +144,8 @@ export function StatusBanner({
 
   if (data.auditState === 'COMPLETED') {
     tone = 'emerald'; statusText = 'Closed'; statusSub = 'Business day closed'; StatusIcon = CheckCircle2;
+  } else if (data.auditState === 'COMPLETED_WITH_EXCEPTIONS') {
+    tone = 'amber'; statusText = 'Closed with exceptions'; statusSub = 'Review reconciliation before handover'; StatusIcon = ShieldAlert;
   } else if (isAuditInProgress) {
     tone = 'sky'; statusText = 'In progress'; statusSub = 'Posting charges'; StatusIcon = Loader2; pulse = true;
   } else if (data.auditState === 'OVERDUE') {
@@ -154,7 +156,7 @@ export function StatusBanner({
 
   const ctaLabel =
     isAuditInProgress ? 'Resume audit' :
-    data.auditState === 'COMPLETED' ? 'View report' :
+    ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.auditState) ? 'View report' :
     data.auditState === 'OVERDUE' ? 'Run audit now' :
     'Begin audit';
 

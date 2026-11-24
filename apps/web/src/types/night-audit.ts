@@ -1,4 +1,4 @@
-export type AuditState = 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'FAILED' | 'OVERDUE' | 'PENDING';
+export type AuditState = 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED' | 'OVERDUE' | 'PENDING';
 
 export interface PropertyData {
   id: string;
