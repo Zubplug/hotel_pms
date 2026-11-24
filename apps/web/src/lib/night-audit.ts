@@ -1249,7 +1249,7 @@ export async function executeNightAudit(
     );
   }
 
-  const [completedAudit, finalErrors] = await prisma.$transaction(async (tx) => {
+  const [completedAudit, finalErrors, finalHasExceptions] = await prisma.$transaction(async (tx) => {
     let txErrors = errors;
     const uniqueRoomChargeCount = await tx.folioItem.count({
       where: {
@@ -1340,7 +1340,15 @@ export async function executeNightAudit(
     ]);
     const paymentTotals = paymentMethodTotals.map((row) => ({ method: row.method, amount: Number(row._sum.amount || 0), count: row._count.id }));
     const snapshotReconciliationStatus = balanceProofStatus === 'PROVEN' && journalPosting.status === 'POSTED' && unresolvedExceptionCount === 0 && !hasDepartmentVariance ? 'RECONCILED' : 'HAS_EXCEPTIONS';
-    if (hasDepartmentVariance || balanceProofStatus !== 'PROVEN') txErrors++;
+    // Balance-proof and department variances are retained in the close
+    // package as reconciliation exceptions. They must not change the audit
+    // lifecycle state: the financial posting is complete when the journal is
+    // posted, while the reconciliation controls remain open for review.
+    const closeHasExceptions = postingExceptions.length > 0
+      || hasDepartmentVariance
+      || balanceProofStatus !== 'PROVEN'
+      || unresolvedExceptionCount > 0
+      || (grossRevenueVal > 0 && postedJournals.length === 0);
     
     const closeSourceTotals = {
       roomRevenue: roomRevenueVal,
@@ -1548,7 +1556,7 @@ export async function executeNightAudit(
     const runUpdate = await tx.nightAudit.update({
       where: { id: auditRun.id },
       data: {
-        status: txErrors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED',
+        status: 'COMPLETED',
         completedAt: new Date(),
         tasksCreated: { increment: totalTasksCreated },
         tasksSkipped: { increment: totalTasksSkipped },
@@ -1615,7 +1623,7 @@ export async function executeNightAudit(
         nightAuditId: auditRun.id,
         propertyId,
         businessDate,
-        status: txErrors > 0 || (grossRevenueVal > 0 && postedJournals.length === 0)
+        status: closeHasExceptions
           ? 'COMPLETED_WITH_EXCEPTIONS'
           : 'COMPLETED',
         sourceTotals: closeSourceTotals,
@@ -1636,7 +1644,7 @@ export async function executeNightAudit(
         businessDate: nextBusinessDate,
         breakfastEligibilitySnapshotDate: nextBusinessDate,
         lastAuditAt: new Date(),
-        auditStatus: txErrors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED'
+        auditStatus: 'COMPLETED'
       }
     });
 
@@ -1724,16 +1732,17 @@ export async function executeNightAudit(
       }
     });
 
-    return [runUpdate, txErrors];
+    return [runUpdate, txErrors, closeHasExceptions];
   }, { maxWait: 15000, timeout: 60000 });
   
   errors = finalErrors;
+  const completedWithExceptions = Boolean(finalHasExceptions);
 
   try {
     const prop = await prisma.property.findUnique({ where: { id: propertyId } });
     if (prop) {
       await NotificationEngine.emit({
-        type: errors > 0 ? 'NIGHT_AUDIT_DISCREPANCY' : 'NIGHT_AUDIT_COMPLETED',
+        type: completedWithExceptions ? 'NIGHT_AUDIT_DISCREPANCY' : 'NIGHT_AUDIT_COMPLETED',
         organizationId: prop.organizationId,
         propertyId: prop.id,
         entityType: 'night_audit',
@@ -1741,7 +1750,8 @@ export async function executeNightAudit(
         idempotencyKey: `night_audit_completed_${completedAudit.id}`,
         metadata: {
           tasksCreated: totalTasksCreated,
-          errors: errors
+          errors,
+          completedWithExceptions,
         }
       });
     }
@@ -1755,7 +1765,8 @@ export async function executeNightAudit(
     tasksSkipped: totalTasksSkipped,
     roomChargesPosted: totalRoomChargesPosted,
     leaseInvoicesGenerated: leaseBilling.processedCount,
-    errors
+    errors,
+    completedWithExceptions,
   };
   } catch (error) {
     await prisma.nightAudit.update({
