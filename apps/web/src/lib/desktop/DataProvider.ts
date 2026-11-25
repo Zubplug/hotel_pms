@@ -101,6 +101,7 @@ export interface LodgeCoreDataProvider {
     addCharge(folioId: string, charge: any): Promise<any>;
     addPayment(folioId: string, payment: any): Promise<any>;
     addDeposit(folioId: string, deposit: any): Promise<any>;
+    requestPaymentCorrection?(paymentId: string, correction: { correctedMethod: string; correctedAmount: number; reason: string; supportingReference?: string; idempotencyKey: string }): Promise<any>;
   };
   eventInvoices: {
     list(propertyId: string, search?: string): Promise<any>;

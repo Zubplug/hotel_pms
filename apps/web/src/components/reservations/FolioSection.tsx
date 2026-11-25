@@ -15,7 +15,7 @@ import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { formatRoomNumber } from '@/lib/format-room';
 import { getFolioBalance } from '@/lib/finance/folio-balance';
 
-export function FolioSection({ reservation, readOnly = false, darkMode = false }: { reservation: any; readOnly?: boolean; darkMode?: boolean }) {
+export function FolioSection({ reservation, readOnly = false, darkMode = false, onCorrectPayment }: { reservation: any; readOnly?: boolean; darkMode?: boolean; onCorrectPayment?: (payment: any) => void }) {
   const pathname = usePathname();
   const isFrontDesk = pathname.startsWith('/frontdesk');
   const isDarkReservation = darkMode || pathname.startsWith('/reservations');
@@ -205,6 +205,16 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
             }}
           >
             <Printer className="mr-1 h-3 w-3" /> Reprint receipt
+          </Button>
+        )}
+        {onCorrectPayment && linkedPayment.status === 'COMPLETED' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+            onClick={() => onCorrectPayment(linkedPayment)}
+          >
+            Correct method
           </Button>
         )}
       </div>

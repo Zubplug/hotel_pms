@@ -529,6 +529,7 @@ export async function POST(req: NextRequest) {
           "ROOM_CHARGE",
           "POST_CHARGE",
           "POST_PAYMENT",
+          "PAYMENT_CORRECTION_REQUESTED",
           "ADVANCE_DEPOSIT",
           "ADVANCE_DEPOSIT_REQUEST",
           "CREDIT_ADJUSTMENT_REQUEST",
@@ -3202,6 +3203,62 @@ export async function POST(req: NextRequest) {
                   data: { balance: reconciledBalance, version: { increment: 1 } },
                 });
               }
+            }
+          } else if (aggregateType === "FOLIO" && eventType === "PAYMENT_CORRECTION_REQUESTED") {
+            const correctedMethodInput = String(payload.correctedMethod || "").toUpperCase();
+            const validMethods = ["CASH", "POS", "BANK_TRANSFER", "CARD"];
+            if (correctedMethodInput && !validMethods.includes(correctedMethodInput)) throw new Error("Invalid corrected payment method");
+            if (!payload.reason || String(payload.reason).trim().length < 10) throw new Error("A correction reason of at least 10 characters is required");
+
+            const originalPayment = await tx.payment.findFirst({
+              where: {
+                propertyId,
+                OR: [
+                  ...(payload.paymentId ? [{ id: String(payload.paymentId) }] : []),
+                  ...(payload.paymentIdempotencyKey ? [{ idempotencyKey: `pay_${String(payload.paymentIdempotencyKey)}` }] : []),
+                ],
+              },
+              include: { folio: true },
+            });
+            if (!originalPayment || originalPayment.folioId !== aggregateId) throw new Error("Payment not found or unauthorized");
+            if (originalPayment.status !== "COMPLETED") throw new Error("Only completed payments can be corrected");
+            const correctedMethod = correctedMethodInput || String(originalPayment.method).toUpperCase();
+            const correctedAmount = Number(payload.correctedAmount ?? originalPayment.amount);
+            if (!Number.isFinite(correctedAmount) || correctedAmount <= 0) throw new Error("Invalid corrected payment amount");
+            if (String(originalPayment.method).toUpperCase() === correctedMethod && Math.abs(Number(originalPayment.amount) - correctedAmount) < 0.005) throw new Error("The payment method and amount are unchanged");
+            if (originalPayment.folio.status === "CLOSED") throw new Error("This folio is closed");
+
+            const existingCorrection = await tx.paymentCorrection.findUnique({ where: { idempotencyKey } });
+            if (!existingCorrection) {
+              await tx.paymentCorrection.create({
+                data: {
+                  propertyId,
+                  originalPaymentId: originalPayment.id,
+                  originalMethod: String(originalPayment.method),
+                  correctedMethod,
+                  amount: originalPayment.amount,
+                  correctedAmount,
+                  currency: originalPayment.currency,
+                  reason: String(payload.reason).trim(),
+                  supportingReference: payload.supportingReference || null,
+                  requestedById: actorId,
+                  idempotencyKey,
+                },
+              });
+              await tx.auditLog.create({
+                data: {
+                  organizationId: property.organizationId,
+                  propertyId,
+                  userId: actorId,
+                  userEmail: null,
+                  userRole: "FRONT_DESK",
+                  action: "PAYMENT_CORRECTION_REQUESTED",
+                  resource: "Payment",
+                  resourceId: originalPayment.id,
+                  newValue: { correctionIdempotencyKey: idempotencyKey, from: originalPayment.method, to: correctedMethod, originalAmount: originalPayment.amount, correctedAmount, reason: String(payload.reason).trim(), source: "DESKTOP" },
+                  requestId,
+                },
+              });
             }
           } else if (aggregateType === "FOLIO" && eventType === "POST_PAYMENT") {
             // Folio-level payment — idempotent via posTransactionId uniqueness

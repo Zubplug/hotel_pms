@@ -907,6 +907,26 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> RequestPaymentCorrectionAsync(string paymentId, string correctionJson)
+    {
+        try
+        {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            using var document = JsonDocument.Parse(correctionJson ?? "{}");
+            var correctedMethod = document.RootElement.TryGetProperty("correctedMethod", out var method) ? method.GetString() ?? string.Empty : string.Empty;
+            var correctedAmount = document.RootElement.TryGetProperty("correctedAmount", out var amountValue) && amountValue.TryGetDecimal(out var parsedAmount) ? parsedAmount : 0m;
+            var reason = document.RootElement.TryGetProperty("reason", out var reasonValue) ? reasonValue.GetString() ?? string.Empty : string.Empty;
+            var reference = document.RootElement.TryGetProperty("supportingReference", out var referenceValue) ? referenceValue.GetString() : null;
+            var idempotencyKey = document.RootElement.TryGetProperty("idempotencyKey", out var key) ? key.GetString() : null;
+            var success = await _repo.RequestPaymentCorrectionAsync(paymentId, correctedMethod, correctedAmount, reason, reference, ctx.UserId, ctx.DeviceId, idempotencyKey ?? $"PAYMENT_CORRECTION_REQUEST:{paymentId}");
+            return JsonSerializer.Serialize(new { success, data = new { status = "REQUESTED", offline = true } }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetFrontdeskSessionAsync(string propertyId)
     {
         try

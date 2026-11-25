@@ -1714,6 +1714,40 @@ model RefundRequest {
   @@index([currentApproverId, status])
 }
 
+/// Immutable correction workflow for a completed Front Desk payment.
+/// The original Payment row is never edited in place; approval reverses its
+/// accounting and creates a replacement payment with the corrected method.
+model PaymentCorrection {
+  id                    String   @id @default(uuid()) @db.Uuid
+  propertyId            String   @db.Uuid
+  originalPaymentId     String   @db.Uuid
+  replacementPaymentId  String?  @db.Uuid
+  originalMethod        String
+  correctedMethod       String
+  amount                Decimal  @db.Decimal(18, 4)
+  correctedAmount       Decimal  @db.Decimal(18, 4)
+  currency              String
+  reason                String
+  supportingReference   String?
+  status                String   @default("REQUESTED") // REQUESTED | APPROVED | POSTED | REJECTED | CANCELLED
+  requestedById         String   @db.Uuid
+  approvedById          String?  @db.Uuid
+  rejectedById          String?  @db.Uuid
+  rejectionReason       String?
+  originalJournalId     String?  @db.Uuid
+  reversalJournalId     String?  @db.Uuid
+  replacementJournalId  String?  @db.Uuid
+  idempotencyKey        String   @unique
+  createdAt             DateTime @default(now()) @db.Timestamptz
+  approvedAt            DateTime? @db.Timestamptz
+  postedAt              DateTime? @db.Timestamptz
+  updatedAt             DateTime @updatedAt @db.Timestamptz
+
+  @@unique([originalPaymentId])
+  @@index([propertyId, status, createdAt])
+  @@index([replacementPaymentId])
+}
+
 model RefundApproval {
   id              String   @id @default(uuid()) @db.Uuid
   refundRequestId String   @db.Uuid

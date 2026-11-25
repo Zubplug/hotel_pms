@@ -295,7 +295,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ ...payment, folioId })
       });
     },
-    addDeposit: async () => ({ success: false, error: 'Advance deposits are available on the desktop front desk.' })
+    addDeposit: async () => ({ success: false, error: 'Advance deposits are available on the desktop front desk.' }),
+    requestPaymentCorrection: async (paymentId, correction) => apiFetch(`/api/v1/frontdesk/payments/${paymentId}/correction`, {
+      method: 'POST',
+      body: JSON.stringify(correction),
+    })
   },
   eventInvoices: {
     async list(propertyId: string, search = '') {

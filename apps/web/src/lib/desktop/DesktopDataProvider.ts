@@ -377,7 +377,10 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     addDeposit: async (folioId: string, deposit: any) => {
       return invokeDesktop('folios.addDeposit', { folioId, deposit });
-    }
+    },
+    requestPaymentCorrection: async (paymentId: string, correction: any) => {
+      return invokeDesktop('folios.requestPaymentCorrection', { paymentId, correction });
+    },
   },
   eventInvoices: {
     list: async (propertyId: string, search = '') => invokeDesktop('eventInvoices.list', { propertyId, search }),

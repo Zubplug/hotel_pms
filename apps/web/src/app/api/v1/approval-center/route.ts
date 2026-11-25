@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!user.isSuperAdmin && !ACCESS_ROLES.has(user.role)) return NextResponse.json({ error: 'Approval center access required' }, { status: 403 });
 
   const propertyFilter = { propertyId: { in: user.allowedProperties } };
-  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders, corporateApprovals, accountDeletionRequests] = await Promise.all([
+  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders, corporateApprovals, accountDeletionRequests, paymentCorrectionsRaw] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: { not: 'CANCELLED' } },
       orderBy: { createdAt: 'desc' }, take: 200,
@@ -79,7 +79,37 @@ export async function GET(req: NextRequest) {
       where: { ...propertyFilter, type: 'ACCOUNT_DELETION', status: { in: ['PENDING', 'APPROVED'] } },
       orderBy: { createdAt: 'desc' }, take: 100,
     }),
+    prisma.paymentCorrection.findMany({
+      where: { ...propertyFilter, status: 'REQUESTED' },
+      orderBy: { createdAt: 'desc' }, take: 200,
+    }),
   ]);
+
+  const correctionPaymentIds = paymentCorrectionsRaw.map((correction) => correction.originalPaymentId);
+  const correctionPayments = correctionPaymentIds.length
+    ? await prisma.payment.findMany({
+        where: { id: { in: correctionPaymentIds } },
+        select: {
+          id: true, amount: true, currency: true, method: true, status: true, reference: true,
+          createdAt: true, reservationId: true, folioId: true,
+          reservation: {
+            select: {
+              confirmationNumber: true,
+              primaryGuest: { select: { firstName: true, lastName: true } },
+              reservationRooms: { where: { status: { not: 'CANCELLED' } }, select: { room: { select: { number: true } } } },
+            },
+          },
+          folio: { select: { id: true, status: true } },
+        },
+      })
+    : [];
+  const correctionPaymentById = new Map(correctionPayments.map((payment) => [payment.id, payment]));
+  const paymentCorrections = paymentCorrectionsRaw.map((correction) => ({
+    ...correction,
+    amount: Number(correction.amount),
+    correctedAmount: Number(correction.correctedAmount),
+    originalPayment: correctionPaymentById.get(correction.originalPaymentId) || null,
+  }));
 
   const isAccountant = ['ACCOUNTANT', 'FINANCE_MANAGER'].includes(user.role) || user.isSuperAdmin;
   const isCashier = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'].includes(user.role);
@@ -151,6 +181,7 @@ export async function GET(req: NextRequest) {
       purchaseOrders: purchaseOrdersWithStockItems,
       corporateContracts,
       accountDeletions,
+      paymentCorrections,
       role: user.role,
     },
   });

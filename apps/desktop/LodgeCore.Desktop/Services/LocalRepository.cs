@@ -2777,6 +2777,71 @@ public class LocalRepository
         return true;
     }
 
+    public async Task<bool> RequestPaymentCorrectionAsync(string paymentId, string correctedMethod, decimal correctedAmount, string reason, string? supportingReference, string userId, string deviceId, string idempotencyKey)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey)) throw new InvalidOperationException("Payment correction requires an idempotency key.");
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 10) throw new InvalidOperationException("A correction reason of at least 10 characters is required.");
+
+        var allowedMethods = new[] { "CASH", "POS", "BANK_TRANSFER", "CARD" };
+        correctedMethod = (correctedMethod ?? string.Empty).Trim().ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(correctedMethod) && !allowedMethods.Contains(correctedMethod)) throw new InvalidOperationException("Invalid corrected payment method.");
+
+        var folio = await _dbContext.Folios.FirstOrDefaultAsync(item => item.TransactionsJson.Contains(paymentId));
+        if (folio == null) throw new InvalidOperationException("Payment was not found in the local folio cache.");
+        await AssertNightAuditAllowsAsync(folio.PropertyId);
+        var session = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
+        if (session == null) throw new InvalidOperationException("Open your front desk cashier session before requesting a payment correction.");
+
+        using var document = JsonDocument.Parse(folio.TransactionsJson ?? "{}");
+        if (!document.RootElement.TryGetProperty("payments", out var payments) || payments.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("The payment is not available in the local folio ledger.");
+        var payment = payments.EnumerateArray().FirstOrDefault(item => item.TryGetProperty("id", out var id) && id.GetString() == paymentId);
+        if (payment.ValueKind == JsonValueKind.Undefined) throw new InvalidOperationException("Payment was not found in the local folio ledger.");
+        var originalMethod = payment.TryGetProperty("method", out var methodValue) ? methodValue.GetString() ?? string.Empty : string.Empty;
+        var originalAmount = payment.TryGetProperty("amount", out var amountValue) && amountValue.TryGetDecimal(out var parsedAmount) ? parsedAmount : 0m;
+        if (correctedAmount <= 0) correctedAmount = originalAmount;
+        if (string.IsNullOrWhiteSpace(correctedMethod)) correctedMethod = originalMethod;
+        var paymentStatus = payment.TryGetProperty("status", out var statusValue) ? statusValue.GetString() ?? string.Empty : string.Empty;
+        var paymentKey = payment.TryGetProperty("idempotencyKey", out var keyValue) ? keyValue.GetString() : null;
+        if (!string.Equals(paymentStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Only completed payments can be corrected.");
+        if (string.Equals(originalMethod, correctedMethod, StringComparison.OrdinalIgnoreCase) && Math.Abs(originalAmount - correctedAmount) < 0.005m) throw new InvalidOperationException("The payment method and amount are unchanged.");
+        if (await _dbContext.OutboxEvents.AnyAsync(item => item.IdempotencyKey == idempotencyKey)) return true;
+
+        folio.UpdatedAt = DateTime.UtcNow;
+        folio.IsDirty = true;
+        folio.LocalSequence++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = folio.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "FOLIO",
+            AggregateId = folio.Id,
+            AggregateVersion = folio.Version,
+            EventType = "PAYMENT_CORRECTION_REQUESTED",
+            Sequence = folio.LocalSequence,
+            IdempotencyKey = idempotencyKey,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                paymentId,
+                paymentIdempotencyKey = paymentKey,
+                correctedMethod,
+                originalMethod,
+                originalAmount,
+                correctedAmount,
+                reason = reason.Trim(),
+                supportingReference,
+                reservationId = folio.ReservationId,
+                frontdeskSessionId = session.Id,
+                businessDate = session.BusinessDate,
+                currency = folio.Currency ?? "NGN",
+            })
+        });
+        await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
+        return true;
+    }
+
     public async Task<bool> RecordAdvanceDepositAsync(string folioId, decimal amount, string method, string? reference, string? notes, string userId, string deviceId, string? idempotencyKey = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);

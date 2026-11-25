@@ -18,6 +18,7 @@ import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
 import { FrontDeskReceiptDialog } from './FrontDeskReceiptDialog';
 import { FrontDeskDiscountModal } from './FrontDeskDiscountModal';
 import { FrontDeskComplimentaryModal } from './FrontDeskComplimentaryModal';
+import { PaymentCorrectionDialog } from './PaymentCorrectionDialog';
 import { FolioSection } from '../reservations/FolioSection';
 import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSection';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
@@ -68,6 +69,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
   const [isQuickCheckoutOpen, setIsQuickCheckoutOpen] = useState(false);
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
   const [isComplimentaryOpen, setIsComplimentaryOpen] = useState(false);
+  const [correctionPayment, setCorrectionPayment] = useState<any>(null);
   const [isPrinting, setIsPrinting] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
@@ -220,6 +222,17 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
         <FrontDeskComplimentaryModal isOpen={isComplimentaryOpen} targetType="RESERVATION_ROOM" targetId={resRoom.id} targetTotal={Number(resRoom.rateAmount || 0)}
           onClose={() => setIsComplimentaryOpen(false)}
           onSuccess={() => { queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] }); setIsComplimentaryOpen(false); }} />
+      )}
+      {correctionPayment && (
+        <PaymentCorrectionDialog
+          open={Boolean(correctionPayment)}
+          onOpenChange={(open) => { if (!open) setCorrectionPayment(null); }}
+          payment={correctionPayment}
+          onSubmitted={() => {
+            setCorrectionPayment(null);
+            queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
+          }}
+        />
       )}
     </>
   );
@@ -388,7 +401,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                 {(reservation.status === 'CONFIRMED' || reservation.status === 'NO_SHOW') && (
                   <NoShowActions reservation={reservation} onUpdated={() => queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] })} />
                 )}
-                <FolioSection reservation={reservation} darkMode />
+                <FolioSection reservation={reservation} darkMode onCorrectPayment={setCorrectionPayment} />
                 <FrontDeskCardInformationSection reservation={reservation} />
               </div>
             </div>
@@ -553,7 +566,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
               {(reservation.status === 'CONFIRMED' || reservation.status === 'NO_SHOW') && (
                 <NoShowActions reservation={reservation} onUpdated={() => queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] })} />
               )}
-              <FolioSection reservation={reservation} />
+              <FolioSection reservation={reservation} onCorrectPayment={setCorrectionPayment} />
               <FrontDeskCardInformationSection reservation={reservation} />
             </div>
           </div>
