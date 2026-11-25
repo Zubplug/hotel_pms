@@ -11,6 +11,7 @@ export type PosOperatorStep =
   | 'shift'        // opening float for SERVER_BANKING or first CENTRAL cashier
   | 'shift_blocked' // prior shift is awaiting approval
   | 'audit_blocked' // Night Audit or business-date rollover blocks opening
+  | 'sync_blocked' // trusted cloud business date is required
   | 'error_central'; // central cashier model — till not open for this operator
 
 export interface UsePosOperatorAuthResult {
@@ -90,6 +91,11 @@ export function usePosOperatorAuth({
     setStep(isAuditBlock ? 'audit_blocked' : 'shift_blocked');
   };
 
+  const showCloudSyncBlocker = (message: string) => {
+    setShiftBlockStatus(message);
+    setStep('sync_blocked');
+  };
+
   const loadStaff = async () => {
     setStaffLoading(true);
     try {
@@ -153,7 +159,7 @@ export function usePosOperatorAuth({
     setPin('');
     if (step === 'pin') {
       setStep('select');
-    } else if (step === 'shift' || step === 'shift_blocked' || step === 'audit_blocked' || step === 'error_central') {
+    } else if (step === 'shift' || step === 'shift_blocked' || step === 'audit_blocked' || step === 'sync_blocked' || step === 'error_central') {
       setStep('pin');
     }
   };
@@ -323,7 +329,9 @@ export function usePosOperatorAuth({
         } else {
           const message = res?.error || 'Failed to open shift. Try again.';
           const normalized = String(message).toUpperCase();
-          if (normalized.includes('PENDING_APPROVAL')
+          if (normalized.includes('CLOUD_SYNC_REQUIRED')) {
+            showCloudSyncBlocker(String(message));
+          } else if (normalized.includes('PENDING_APPROVAL')
             || normalized.includes('AWAITING APPROVAL')
             || normalized.includes('PREVIOUS SHIFT')
             || normalized.includes('MUST BE APPROVED')
@@ -358,7 +366,9 @@ export function usePosOperatorAuth({
         } else {
           const message = data.error || 'Failed to open shift. Try again.';
           const normalized = String(message).toUpperCase();
-          if (normalized.includes('PENDING_APPROVAL')
+          if (normalized.includes('CLOUD_SYNC_REQUIRED')) {
+            showCloudSyncBlocker(String(message));
+          } else if (normalized.includes('PENDING_APPROVAL')
             || normalized.includes('AWAITING APPROVAL')
             || normalized.includes('PREVIOUS SHIFT')
             || normalized.includes('MUST BE APPROVED')
@@ -374,7 +384,9 @@ export function usePosOperatorAuth({
     } catch (e: any) {
       const message = e.message || 'Failed to open shift.';
       const normalized = message.toUpperCase();
-      if (normalized.includes('PENDING_APPROVAL')
+      if (normalized.includes('CLOUD_SYNC_REQUIRED')) {
+        showCloudSyncBlocker(message);
+      } else if (normalized.includes('PENDING_APPROVAL')
         || normalized.includes('AWAITING APPROVAL')
         || normalized.includes('PREVIOUS SHIFT')
         || normalized.includes('MUST BE APPROVED')) {

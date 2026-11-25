@@ -173,15 +173,17 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
     auth.step === 'shift'         ? 'Open POS Cash Bank' :
     auth.step === 'shift_blocked' ? 'Shift Awaiting Approval' :
     auth.step === 'audit_blocked' ? 'Night Audit Controls' :
+    auth.step === 'sync_blocked' ? 'Cloud Date Confirmation' :
     auth.step === 'error_central' ? 'Central POS Bank Not Open' :
     '';
 
   const showBack =
     auth.step === 'pin' ||
     auth.step === 'shift' ||
-    auth.step === 'shift_blocked' ||
-    auth.step === 'audit_blocked' ||
-    auth.step === 'error_central';
+  auth.step === 'shift_blocked' ||
+  auth.step === 'audit_blocked' ||
+  auth.step === 'sync_blocked' ||
+  auth.step === 'error_central';
 
   return (
     <OverlayWrapper>
@@ -257,6 +259,14 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
 
         {auth.step === 'audit_blocked' && (
           <AuditBlockedPanel
+            operator={auth.verifiedOperator}
+            message={auth.shiftBlockStatus}
+            onBack={auth.goBack}
+          />
+        )}
+
+        {auth.step === 'sync_blocked' && (
+          <CloudSyncRequiredPanel
             operator={auth.verifiedOperator}
             message={auth.shiftBlockStatus}
             onBack={auth.goBack}
@@ -674,6 +684,40 @@ function AuditBlockedPanel({
           {operator?.firstName} {operator?.lastName}, the hotel business date is under Night Audit control. Complete or wait for Night Audit before opening a new POS shift.
         </p>
         <p className="mt-3 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold leading-5 text-violet-700">
+          {message}
+        </p>
+      </div>
+      <button
+        onClick={onBack}
+        className="px-5 py-2 rounded-xl border-2 border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors touch-manipulation"
+      >
+        Back to Staff List
+      </button>
+    </div>
+  );
+}
+
+function CloudSyncRequiredPanel({
+  operator,
+  message,
+  onBack,
+}: {
+  operator: StaffProfile | null;
+  message: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center gap-4 flex-1">
+      <div className="w-14 h-14 rounded-full bg-sky-50 flex items-center justify-center">
+        <RefreshCw className="w-7 h-7 text-sky-600" />
+      </div>
+      <div>
+        <h3 className="text-base font-black text-slate-800">Cloud Synchronization Required</h3>
+        <p className="text-sm text-slate-500 mt-1 max-w-xs leading-relaxed">
+          {operator?.firstName} {operator?.lastName}, this terminal has not confirmed the current hotel business date.
+          Login is available, but a new shift requires a trusted cloud date.
+        </p>
+        <p className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-semibold leading-5 text-sky-700">
           {message}
         </p>
       </div>

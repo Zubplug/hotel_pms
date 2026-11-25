@@ -195,7 +195,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         setFlashData(null);
       }
 
-      if (json.data.auditState === 'OVERDUE' && !quiet && !managerMode) setWizardOpen(true);
+      if (json.data.auditState === 'OVERDUE' && json.data.canStartAudit && !quiet && !managerMode) setWizardOpen(true);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -270,7 +270,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         )}
 
         {/* ── 1. Status banner (header) ────────────────────────────────────── */}
-        <StatusBanner data={data} isAuditInProgress={isAuditInProgress} onOpenWizard={() => setWizardOpen(true)} refreshing={refreshing} managerMode={managerMode} />
+        <StatusBanner data={data} isAuditInProgress={isAuditInProgress} onOpenWizard={() => { if (data.canStartAudit || data.canResumeAudit) setWizardOpen(true); }} refreshing={refreshing} managerMode={managerMode} />
 
         {/* ── 2. KPI strip (OCC / ADR / RevPAR / Revenue / Payments / Variance / In-house) */}
         <KpiStrip data={data} />

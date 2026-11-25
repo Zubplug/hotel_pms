@@ -121,9 +121,12 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
   });
 
   // SERVER-banking sessions that are RECONCILIATION_REQUIRED have already been submitted
-  // by the waiter. The physical cash handover is handled separately. They should not
-  // block the System Control step, as the auditor cannot bypass them from this screen.
-  const openPosSessions = processedPosSessions.filter(s => s.status === 'OPEN');
+  // by the waiter. The physical cash handover is handled separately. Offline sessions
+  // waiting for Cloud approval are also intentionally excluded: they contain no posted
+  // financial activity and must not prevent the audit that will release them.
+  const openPosSessions = processedPosSessions.filter(s =>
+    s.status === 'OPEN' && s.controlStatus === 'OPEN'
+  );
 
   const rawFrontdeskSessions = await prisma.frontdeskSession.findMany({
     where: { propertyId, businessDate, status: { in: ['OPEN', 'CLOSING'] }, controlStatus: 'OPEN' },

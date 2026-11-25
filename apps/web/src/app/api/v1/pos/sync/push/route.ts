@@ -237,6 +237,9 @@ export async function POST(req: NextRequest) {
               where: { id: sessionId },
               select: { status: true, controlStatus: true },
             });
+            if (currentSession?.status === 'OPEN' && currentSession.controlStatus === 'PENDING_CLOUD_APPROVAL') {
+              throw new Error('RETRYABLE_CLOUD_APPROVAL: POS shift is waiting for Cloud Night Audit approval');
+            }
             if (!currentSession || currentSession.status !== 'OPEN' || currentSession.controlStatus !== 'OPEN') {
               throw new Error('SHIFT_LOCKED: POS shift is no longer open; open a new approved shift');
             }
@@ -327,18 +330,39 @@ export async function POST(req: NextRequest) {
              const existingSession = await tx.posSession.findUnique({ where: { id: event.aggregateId }});
              if (!existingSession) {
                  const sessionOpenedAt = new Date(payload.OpenedAt || event.occurredAt);
-                 const sessionBusinessDate = new Date(payload.BusinessDate || payload.businessDate || sessionOpenedAt);
+                 const requestedBusinessDate = new Date(payload.BusinessDate || payload.businessDate || sessionOpenedAt);
+                 const cloudBusinessDate = new Date(
+                   terminalProperty.businessDate || getPropertyBusinessDate(terminalProperty.timezone),
+                 );
+                 const dayKey = (value: Date) => value.toISOString().slice(0, 10);
+                 const requestedDay = dayKey(requestedBusinessDate);
+                 const cloudDay = dayKey(cloudBusinessDate);
+                 let sessionBusinessDate = requestedBusinessDate;
+                 let businessDateWasReconciled = false;
                  const sessionBankType = payload.BankType || payload.bankType || 'SERVER';
                  const sessionBankingModel = payload.BankingModel || payload.bankingModel || 'SERVER_BANKING';
                  const sessionPropertyId = payload.PropertyId || payload.propertyId || terminal.propertyId;
                  const sessionOutletId = payload.OutletId || payload.outletId || terminal.outletId;
                  const sessionPrimaryOperatorId = isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId;
-                 assertOfflineSessionOpenDate({
-                   propertyBusinessDate: terminalProperty.businessDate || getPropertyBusinessDate(terminalProperty.timezone),
-                   sessionBusinessDate,
-                   occurredAt: sessionOpenedAt,
-                   timezone: terminalProperty.timezone || 'Africa/Lagos',
-                 });
+                 const cloudAuditStatus = String(terminalProperty.auditStatus || 'OPEN').toUpperCase();
+                 const requiresCloudApproval = ['PENDING', 'FAILED', 'OVERDUE'].includes(cloudAuditStatus);
+                 if (requestedDay < cloudDay) {
+                   // The terminal opened while disconnected and is catching
+                   // up after the cloud rolled the business date forward.
+                   // Cloud owns accounting date assignment, so reconcile the
+                   // session instead of dead-lettering the local operation.
+                   sessionBusinessDate = cloudBusinessDate;
+                   businessDateWasReconciled = true;
+                 } else {
+                   // Future-dated offline sessions remain controlled by the
+                   // cloud and are returned as retryable audit/date errors.
+                   assertOfflineSessionOpenDate({
+                     propertyBusinessDate: cloudBusinessDate,
+                     sessionBusinessDate: requestedBusinessDate,
+                     occurredAt: sessionOpenedAt,
+                     timezone: terminalProperty.timezone || 'Africa/Lagos',
+                   });
+                 }
 
                  // The partial unique index protects the database, but a
                  // read-then-create sequence can still race when two offline
@@ -423,6 +447,12 @@ export async function POST(req: NextRequest) {
                          primaryOperatorId: sessionPrimaryOperatorId,
                          openedBy: isUuid(payload.UserId) ? payload.UserId : operatorId,
                          status: payload.Status || 'OPEN',
+                         controlStatus: requiresCloudApproval ? 'PENDING_CLOUD_APPROVAL' : 'OPEN',
+                         reason: businessDateWasReconciled
+                           ? `Offline business date reconciled from ${requestedDay} to cloud date ${cloudDay}`
+                           : requiresCloudApproval
+                             ? `Waiting for Cloud Night Audit approval (${cloudAuditStatus})`
+                             : (payload.Reason || payload.reason || undefined),
                          businessDate: sessionBusinessDate,
                          openingCash: payload.OpeningCash || 0,
                          expectedCash: payload.OpeningCash || 0,
@@ -1837,6 +1867,8 @@ export async function POST(req: NextRequest) {
              results.push({ id: event.id, status: 'FAILED', idempotencyKey: event.idempotencyKey, error: 'Failed to record conflict state.' });
            }
         } else if (err.message?.startsWith('RETRYABLE_')
+          || err.message?.startsWith('NIGHT_AUDIT_REQUIRED:')
+          || err.message?.startsWith('NIGHT_AUDIT_IN_PROGRESS:')
           || err.code === 'P2028'
           || /transaction (already closed|not found|expired)/i.test(String(err.message || ''))) {
            rejected.push(event.id);

@@ -1649,6 +1649,25 @@ export async function executeNightAudit(
       }
     });
 
+    // Offline terminals may have opened operational shifts while the cloud
+    // audit was pending. Their session-start events are accepted as
+    // PENDING_CLOUD_APPROVAL, while orders/payments remain retryable. Once
+    // this audit closes, move those sessions onto the newly-open business
+    // date and release them atomically so queued transactions can post.
+    await tx.posSession.updateMany({
+      where: {
+        propertyId,
+        status: 'OPEN',
+        controlStatus: 'PENDING_CLOUD_APPROVAL',
+        businessDate,
+      },
+      data: {
+        businessDate: nextBusinessDate,
+        controlStatus: 'OPEN',
+        reason: `Cloud Night Audit approved offline shift for ${nextBusinessDate.toISOString().slice(0, 10)}`,
+      },
+    });
+
     const roomStatusCounts = await tx.room.groupBy({
       by: ['status'],
       where: { propertyId },

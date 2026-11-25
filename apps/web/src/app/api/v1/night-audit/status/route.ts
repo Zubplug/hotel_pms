@@ -358,6 +358,21 @@ export async function GET(req: NextRequest) {
       businessDate.getTime() < localToday.getTime() ? 'OVERDUE' :
                                               'PENDING';
 
+    // The business date is the unit of work for Night Audit. A completed
+    // audit must never be started again, while the next audit becomes
+    // available only after the property calendar advances to a new day.
+    const currentAuditCompleted = ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(currentAudit?.status || '');
+    const canStartAudit = !activeAudit
+      && !currentAuditCompleted
+      && businessDate.getTime() < localToday.getTime();
+    const auditStartBlockedReason = activeAudit
+      ? 'Night Audit is already in progress.'
+      : currentAuditCompleted
+        ? `Night Audit for ${businessDateStr} is already completed.`
+        : businessDate.getTime() >= localToday.getTime()
+          ? `Night Audit becomes available after the property calendar advances beyond ${businessDateStr}.`
+          : null;
+
     return successResponse({
       property,
       businessDate: businessDateStr,
@@ -366,6 +381,9 @@ export async function GET(req: NextRequest) {
       lastCompletedAudit: withAuditOwner(lastCompletedAudit),
       // auditState is the single canonical status field. Use this in the UI.
       auditState,
+      canStartAudit,
+      canResumeAudit: activeAudit?.status === 'IN_PROGRESS',
+      auditStartBlockedReason,
       // Legacy fields kept for backwards compatibility:
       auditPhase: activeAudit?.status || (currentAudit?.status ?? 'PENDING'),
       auditInProgress: Boolean(activeAudit),

@@ -27,15 +27,14 @@ public class LocalRepository
 
     private async Task AssertNightAuditAllowsAsync(string propertyId, DateTime? businessDate = null)
     {
+        // The desktop is an offline operational client. AuditStatus is a
+        // cloud control-plane projection and may be stale while the terminal
+        // is offline or while a completed audit is still being pulled. It must
+        // never block local login or local work. The cloud remains authoritative
+        // when queued events are synchronized and can keep those events pending
+        // while an audit is active.
         var property = await _dbContext.Properties.FindAsync(propertyId);
         if (property == null) throw new InvalidOperationException("Property is not available offline.");
-        var status = (property.AuditStatus ?? "OPEN").Trim().ToUpperInvariant();
-        var targetDate = (businessDate ?? property.BusinessDate).Date;
-        var currentDate = property.BusinessDate.Date;
-        if ((status is "IN_PROGRESS" or "POSTING") && targetDate <= currentDate)
-            throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: This business date is temporarily locked while Night Audit is posting.");
-        if (status is "FAILED" or "PENDING" or "OVERDUE")
-            throw new InvalidOperationException($"NIGHT_AUDIT_REQUIRED: Night Audit must be completed for business date {currentDate:yyyy-MM-dd} before POS transactions can continue.");
     }
 
     private async Task AssertLocalRoomAvailableAsync(
@@ -66,39 +65,12 @@ public class LocalRepository
         var property = await _dbContext.Properties.FindAsync(propertyId);
         if (property == null) throw new InvalidOperationException("Property is not available offline.");
 
-        DateTime localToday;
-        try
-        {
-            var timezone = TimeZoneInfo.FindSystemTimeZoneById(property.Timezone);
-            localToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timezone).Date;
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            localToday = DateTime.UtcNow.Date;
-        }
-        catch (InvalidTimeZoneException)
-        {
-            localToday = DateTime.UtcNow.Date;
-        }
-        catch (ArgumentException)
-        {
-            localToday = DateTime.UtcNow.Date;
-        }
-
-        if (property.BusinessDate.Date < localToday)
-        {
-            throw new InvalidOperationException($"NIGHT_AUDIT_REQUIRED: Night Audit is still pending for business date {property.BusinessDate:yyyy-MM-dd}. Complete it before opening a new shift.");
-        }
-        if (property.BusinessDate.Date > localToday)
-            throw new InvalidOperationException("NIGHT_AUDIT_REQUIRED: The terminal business date is ahead of the local date. Refresh the terminal before opening a new shift.");
-
-        var auditStatus = (property.AuditStatus ?? "OPEN").Trim().ToUpperInvariant();
-        if (auditStatus is "FAILED" or "PENDING" or "OVERDUE")
-            throw new InvalidOperationException($"NIGHT_AUDIT_REQUIRED: Complete the last Night Audit for business date {property.BusinessDate:yyyy-MM-dd} before opening a new shift.");
-        if (auditStatus is "IN_PROGRESS" or "POSTING")
-            throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: Night Audit is posting. Open a new shift after it completes.");
-
-        await AssertNightAuditAllowsAsync(propertyId);
+        // Offline is the operational ledger, not the audit control plane. Do
+        // not compare the cached property date with the workstation clock and
+        // do not use cached AuditStatus to block a local shift. The cached
+        // date may legitimately be one business day behind while disconnected.
+        // Cloud reconciliation owns rollover correction and the next pull
+        // repairs the local projection.
     }
 
     private async Task AssertPosSessionOpenAsync(string? sessionId)
@@ -113,8 +85,9 @@ public class LocalRepository
         var property = await _dbContext.Properties.FindAsync(session.PropertyId);
         if (property == null)
             throw new InvalidOperationException("The POS property is not available offline.");
-        if (session.BusinessDate.Date != property.BusinessDate.Date)
-            throw new InvalidOperationException("This POS shift belongs to a different business date. Open the current approved shift before posting transactions.");
+        // A queued session may retain the last locally known business date.
+        // Cloud reconciliation owns rollover correction; do not block local
+        // operations because the cached property date has advanced.
         await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
     }
 

@@ -123,7 +123,7 @@ export function StatusBanner({
 }: StatusBannerProps) {
   const { data: session } = useSession();
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
-  const isReady = data.summary.blockers === 0 && !isAuditInProgress && !['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.auditState);
+  const isReady = data.summary.blockers === 0 && data.canStartAudit && !isAuditInProgress;
   const auditRecord = data.activeAudit || data.currentAudit;
   const lastCompleted = data.lastCompletedAudit || (['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.currentAudit?.status || '') ? data.currentAudit : null);
   const owner = auditRecord?.runByStaff;
@@ -159,6 +159,7 @@ export function StatusBanner({
     ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.auditState) ? 'View report' :
     data.auditState === 'OVERDUE' ? 'Run audit now' :
     'Begin audit';
+  const startDisabled = !(data.canStartAudit || data.canResumeAudit) || refreshing;
 
   const t = TONE[tone];
 
@@ -211,7 +212,8 @@ export function StatusBanner({
             <button
               id="night-audit-primary-cta"
               onClick={onOpenWizard}
-              disabled={isAuditInProgress || refreshing}
+              disabled={startDisabled}
+              title={data.auditStartBlockedReason || undefined}
               className={`group inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold shadow-sm transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:cursor-not-allowed disabled:opacity-50 ${t.btn}`}
             >
               <Play className="h-3.5 w-3.5 fill-current" />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -6,6 +6,7 @@ import {
 import {
   Building2, SlidersHorizontal, FileCheck2, Banknote, ShieldCheck,
   Check, MoonStar, AlertTriangle, ChevronLeft, ChevronRight, Zap,
+  Loader2,
 } from 'lucide-react';
 import { NightAuditData } from '@/types/night-audit';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
@@ -22,6 +23,14 @@ const STEPS = [
   { title: 'Final Sign-off',  desc: 'Confirm readiness and roll the date',   Icon: ShieldCheck,      accent: 'from-indigo-500/20 to-violet-500/10', iconColor: 'text-indigo-300', iconBorder: 'border-indigo-400/25', iconBg: 'rgba(99,102,241,0.14)' },
 ];
 
+const EXECUTION_STAGES = [
+  { title: 'Preparing the audit', detail: 'Locking the business date and verifying the final control snapshot.', icon: ShieldCheck },
+  { title: 'Posting room charges', detail: 'Applying eligible room, tax, discount, and folio postings exactly once.', icon: FileCheck2 },
+  { title: 'Reconciling operations', detail: 'Finalizing POS, Front Desk, payments, journals, and operational exceptions.', icon: SlidersHorizontal },
+  { title: 'Rolling the business date', detail: 'Advancing the property calendar after all postings are committed.', icon: MoonStar },
+  { title: 'Finalizing the close package', detail: 'Saving the audit result and preparing the completion report.', icon: Check },
+];
+
 interface AuditWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,6 +44,38 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
   const [step, setStep] = useState(0);
   const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
   const [confirmExecution, setConfirmExecution] = useState(false);
+  const [executionStage, setExecutionStage] = useState(0);
+
+  useEffect(() => {
+    if (!executing) {
+      setExecutionStage(0);
+      return;
+    }
+
+    // The API remains authoritative; this gives the operator useful progress
+    // feedback while the single server transaction completes. The final
+    // stage intentionally remains visible until the API resolves.
+    const timer = window.setInterval(() => {
+      setExecutionStage((current) => Math.min(current + 1, EXECUTION_STAGES.length - 1));
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, [executing]);
+
+  useEffect(() => {
+    if (!executing) return;
+
+    // Large properties may take longer than a normal request window. Keep
+    // refreshing the authoritative audit status while the execute request is
+    // still completing so the operator is never left with a stale screen.
+    const poller = window.setInterval(() => {
+      void Promise.resolve(onRefresh()).catch(() => {
+        // A single refresh failure must not interrupt the audit execution.
+        // The execute response remains authoritative.
+      });
+    }, 5000);
+
+    return () => window.clearInterval(poller);
+  }, [executing, onRefresh]);
 
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const blockers = data.summary?.blockers || 0;
@@ -244,9 +285,9 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!executing) onOpenChange(nextOpen); }}>
         <DialogContent
-          className="!flex !h-[calc(100vh-2rem)] !max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border-white/[0.08] p-0 shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
+          className="relative !flex !h-[calc(100vh-2rem)] !max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border-white/[0.08] p-0 shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
           style={{ background: '#060b18' }}
         >
           {/* ── Header ── */}
@@ -299,6 +340,48 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
               </span>
             </div>
           </div>
+
+          {executing && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#060b18]/95 px-5 backdrop-blur-md sm:px-10" role="dialog" aria-modal="true" aria-labelledby="night-audit-execution-title" aria-describedby="night-audit-execution-description">
+              <div className="w-full max-w-2xl rounded-3xl border border-indigo-400/20 bg-[#0b1222] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.04] sm:p-9">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-indigo-400/25 bg-indigo-500/15 text-indigo-300">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-300/70">Night Audit in progress</p>
+                    <h3 id="night-audit-execution-title" className="mt-1 text-2xl font-bold tracking-tight text-white">Night Audit is being completed</h3>
+                    <p id="night-audit-execution-description" className="mt-2 text-sm leading-relaxed text-slate-400">The audit is being processed securely. Keep this window open until the final result is returned.</p>
+                  </div>
+                </div>
+
+                <div className="mt-8 space-y-3">
+                  {EXECUTION_STAGES.map((stage, index) => {
+                    const Icon = stage.icon;
+                    const complete = index < executionStage;
+                    const active = index === executionStage;
+                    return (
+                      <div key={stage.title} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors ${active ? 'border-indigo-400/30 bg-indigo-400/[0.08]' : complete ? 'border-emerald-400/15 bg-emerald-400/[0.04]' : 'border-white/[0.06] bg-white/[0.02]'}`} aria-current={active ? 'step' : undefined} aria-live={active ? 'polite' : undefined}>
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${complete ? 'bg-emerald-400/15 text-emerald-300' : active ? 'bg-indigo-400/15 text-indigo-300' : 'bg-white/[0.04] text-slate-600'}`}>
+                          {complete ? <Check className="h-4 w-4" /> : active ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-sm font-semibold ${active ? 'text-white' : complete ? 'text-emerald-200' : 'text-slate-500'}`}>{stage.title}</p>
+                          {active && <p className="mt-0.5 text-xs text-slate-400">{stage.detail}</p>}
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600">{complete ? 'Done' : active ? 'Working' : 'Queued'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-white/[0.07]" role="progressbar" aria-label="Night Audit execution progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={((executionStage + 1) / EXECUTION_STAGES.length) * 100}>
+                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-400 transition-all duration-700" style={{ width: `${((executionStage + 1) / EXECUTION_STAGES.length) * 100}%` }} />
+                </div>
+                <p className="mt-3 text-center text-[11px] text-slate-600">Business date: {format(businessDate, 'dd MMM yyyy')} · Your audit result will appear automatically.</p>
+              </div>
+            </div>
+          )}
 
           {/* ── Main layout ── */}
           <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[280px_1fr]">

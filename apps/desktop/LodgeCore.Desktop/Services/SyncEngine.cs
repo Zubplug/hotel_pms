@@ -2745,6 +2745,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var incomingIsAuthoritativeFinal = incomingControlStatus is
                         "APPROVED" or "APPROVED_WITH_VARIANCE" or "HANDOVER_PENDING" or
                         "DEPOSIT_PENDING" or "DEPOSITED" or "HANDED_OVER" or "RECONCILED";
+                    var incomingReason = el.TryGetProperty("reason", out var incomingReasonElement)
+                        && incomingReasonElement.ValueKind != JsonValueKind.Null
+                        ? incomingReasonElement.GetString()
+                        : null;
+                    var isCloudBusinessDateReconciliation = incomingReason?.StartsWith(
+                        "Offline business date reconciled from ",
+                        StringComparison.OrdinalIgnoreCase) == true;
+                    var isCloudShiftRelease = incomingReason?.StartsWith(
+                        "Cloud Night Audit approved offline shift for ",
+                        StringComparison.OrdinalIgnoreCase) == true;
                     var hasPendingLocalEvent = posSession != null && await HasPendingPosEventAsync(id);
 
                     // Local events normally win while they are being pushed, but
@@ -2763,6 +2773,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         && posSession != null
                         && (incomingUpdatedAt > posSession.UpdatedAt || localIsBlocking);
                     if (posSession != null && !canApplyAuthoritativeFinal
+                        && !isCloudBusinessDateReconciliation
+                        && !isCloudShiftRelease
                         && (posSession.UpdatedAt >= incomingUpdatedAt || hasPendingLocalEvent)) continue;
 
                     if (posSession == null)
