@@ -113,9 +113,19 @@ jobs:
           check_identity() {
             local host="$1"
             local expected="$2"
-            curl --fail --silent --show-error --location \
+            local body
+            local status
+            body="$(mktemp)"
+            if ! curl --fail --silent --show-error --location \
               --resolve "${host}:443:127.0.0.1" --max-time 30 \
-              "https://${host}/" | grep -Fq "$expected"
+              "https://${host}/" -o "$body"; then
+              rm -f "$body"
+              return 1
+            fi
+            grep -Fq "$expected" "$body"
+            status=$?
+            rm -f "$body"
+            return "$status"
           }
           check_identity pms.zubplug.com.ng 'LodgeCore PMS'
           check_identity lodgecore.zubplug.com.ng 'LodgeCore'
