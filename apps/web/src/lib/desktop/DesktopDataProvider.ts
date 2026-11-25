@@ -69,6 +69,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     forceSync: async () => {
       return invokeDesktop('system.forceSync');
     },
+    refreshControlState: async () => {
+      return invokeDesktop('system.refreshControlState');
+    },
     getSyncHealth: async () => {
       return invokeDesktop('system.getSyncHealth');
     },

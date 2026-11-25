@@ -63,7 +63,7 @@ interface ChargeModalProps {
   currentOperatorId?: string;
 }
 
-type View = 'methods' | 'roomCharge' | 'compSelection';
+type View = 'methods' | 'roomCharge' | 'breakfast' | 'compSelection';
 
 const MANAGEMENT_ACKNOWLEDGER_ROLES = [
   'CEO', 'SUPER_ADMIN', 'ADMIN', 'DIRECTOR', 'GENERAL_MANAGER', 'HOTEL_MANAGER',
@@ -177,7 +177,7 @@ export function ChargeModal({
   }, [provider.pos]);
 
   useEffect(() => {
-    if (view !== 'roomCharge' || selectedGuest) return;
+    if ((view !== 'roomCharge' && view !== 'breakfast') || selectedGuest) return;
     if (searchRef.current) clearTimeout(searchRef.current);
     searchRef.current = setTimeout(() => searchGuests(guestQuery), 350);
     return () => { if (searchRef.current) clearTimeout(searchRef.current); };
@@ -185,7 +185,7 @@ export function ChargeModal({
 
   // Load all guests when room-charge view first opens
   useEffect(() => {
-    if (view === 'roomCharge' && guestResults.length === 0 && !selectedGuest) {
+    if ((view === 'roomCharge' || view === 'breakfast') && guestResults.length === 0 && !selectedGuest) {
       searchGuests('');
     }
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -198,9 +198,10 @@ export function ChargeModal({
     }
   }, [view, beneficiaryType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch breakfast entitlement whenever selectedGuest is set
+  // Fetch breakfast entitlement only inside the dedicated breakfast flow.
+  // A normal room charge must never look like or trigger a breakfast redemption.
   useEffect(() => {
-    if (!selectedGuest) {
+    if (view !== 'breakfast' || !selectedGuest) {
       setEntitlement(null);
       return;
     }
@@ -301,7 +302,8 @@ export function ChargeModal({
 
   // ── Header label ───────────────────────────────────────────────────
   const headerLabel =
-    view === 'compSelection' ? 'Complimentary Settlement'
+  view === 'compSelection' ? 'Complimentary Settlement'
+    : view === 'breakfast' ? (selectedGuest ? 'Redeem Breakfast Entitlement' : 'Select Guest')
     : view === 'roomCharge' ? (selectedGuest ? 'Confirm Room Charge' : 'Select Guest')
     : 'Total Amount Due';
 
@@ -352,7 +354,15 @@ export function ChargeModal({
                   label="Room Charge"
                   color="indigo"
                   disabled={isProcessing}
-                  onClick={() => { setErrorMsg(null); setView('roomCharge'); }}
+                  onClick={() => { setErrorMsg(null); setSelectedGuest(null); setView('roomCharge'); }}
+                />
+                {/* Audited breakfast redemption is deliberately separate from room charging. */}
+                <MethodButton
+                  icon={<Coffee />}
+                  label="Breakfast Entitlement"
+                  color="amber"
+                  disabled={isProcessing}
+                  onClick={() => { setErrorMsg(null); setSelectedGuest(null); setEntitlement(null); setView('breakfast'); }}
                 />
                 {/* Complimentary */}
                 <MethodButton
@@ -367,10 +377,21 @@ export function ChargeModal({
             </div>
           )}
 
-          {/* ── Room Charge: guest search ── */}
-          {view === 'roomCharge' && !selectedGuest && (
+          {/* ── Room Charge / Breakfast: guest search ── */}
+          {(view === 'roomCharge' || view === 'breakfast') && !selectedGuest && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
               <BackButton onClick={() => { setView('methods'); setGuestQuery(''); setGuestResults([]); }} />
+              <div className={`mb-4 rounded-2xl border p-4 ${view === 'breakfast' ? 'border-amber-200 bg-amber-50' : 'border-indigo-200 bg-indigo-50'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${view === 'breakfast' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                    {view === 'breakfast' ? <Coffee className="h-5 w-5" /> : <Hotel className="h-5 w-5" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-slate-800">{view === 'breakfast' ? 'Redeem audited breakfast entitlement' : 'Post a charge to a guest folio'}</p>
+                    <p className="mt-0.5 text-xs text-slate-600">{view === 'breakfast' ? 'Only the current Night Audit snapshot can be redeemed.' : 'This creates a normal room-charge folio entry.'}</p>
+                  </div>
+                </div>
+              </div>
 
               {/* Search input */}
               <div className="relative mb-4">
@@ -471,81 +492,6 @@ export function ChargeModal({
                 </div>
               </div>
 
-              {/* ── Breakfast Entitlement Card ── */}
-              <div className="mb-5 p-4 rounded-2xl bg-amber-500/[.07] border border-amber-500/25">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-700">
-                      <Coffee className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-800">Complimentary Breakfast</span>
-                  </div>
-                  {isLoadingEntitlement ? (
-                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Checking...
-                    </span>
-                  ) : entitlement?.eligible ? (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
-                      ELIGIBLE ({entitlement.remainingCovers} left)
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-full">
-                      NOT ELIGIBLE
-                    </span>
-                  )}
-                </div>
-
-                {isLoadingEntitlement ? (
-                  <p className="text-xs text-slate-400 py-1">Verifying room entitlement...</p>
-                ) : entitlement?.eligible ? (
-                  <div className="space-y-3">
-                    <p className="text-xs text-slate-600">
-                      Entitlement: <span className="font-semibold text-slate-800">{entitlement.maxCoversAllowed} cover(s)</span> allowed. Claimed today: <span className="font-semibold text-slate-800">{entitlement.coversAlreadyRedeemed}</span>.
-                    </p>
-
-                    <div className="flex items-center justify-between bg-white rounded-xl p-2.5 border border-amber-200/80">
-                      <span className="text-xs font-semibold text-slate-600">Covers to Redeem:</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCovers((c) => Math.max(1, c - 1))}
-                          disabled={selectedCovers <= 1}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 flex items-center justify-center font-bold text-slate-700 transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="w-6 text-center font-black text-sm text-slate-800">
-                          {selectedCovers}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCovers((c) => Math.min(entitlement.remainingCovers, c + 1))}
-                          disabled={selectedCovers >= entitlement.remainingCovers}
-                          className="w-7 h-7 rounded-lg bg-amber-100 hover:bg-amber-200 disabled:opacity-30 flex items-center justify-center font-bold text-amber-800 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      id="pos-breakfast-redeem-btn"
-                      onClick={handleRedeemBreakfast}
-                      disabled={isProcessing || selectedCovers <= 0}
-                      className="w-full h-11 rounded-xl font-bold text-xs uppercase tracking-wide text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center gap-2"
-                    >
-                      <Coffee className="w-4 h-4" />
-                      Redeem as Complimentary Breakfast (₦0.00)
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-amber-900/80 bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50">
-                    {entitlement?.reasonMessage || 'This stay is not entitled to complimentary breakfast.'}
-                  </p>
-                )}
-              </div>
-
               {/* Confirm button */}
               <button
                 id="pos-room-charge-confirm"
@@ -558,6 +504,51 @@ export function ChargeModal({
                   : <><Hotel className="w-5 h-5" /> Post Room Charge</>
                 }
               </button>
+            </div>
+          )}
+
+          {/* ── Breakfast Entitlement: confirmation ── */}
+          {view === 'breakfast' && selectedGuest && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+              <BackButton onClick={() => { setSelectedGuest(null); setEntitlement(null); setErrorMsg(null); }} label="Change Guest" />
+              <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-amber-700">Breakfast entitlement</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+                    <span className="text-sm font-black">{displayRoomNumber(selectedGuest.roomNumber)}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1 truncate font-black text-slate-800">
+                      {selectedGuest.guestName}
+                      {selectedGuest.isVip && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-700">VIP</span>}
+                    </p>
+                    <p className="text-sm text-slate-600">Room {displayRoomNumber(selectedGuest.roomNumber)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-5 rounded-2xl border border-amber-200/80 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">Audited entitlement status</span>
+                  {isLoadingEntitlement ? <Loader2 className="h-4 w-4 animate-spin text-amber-600" /> : entitlement?.eligible ? (
+                    <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">ELIGIBLE</span>
+                  ) : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">NOT ELIGIBLE</span>}
+                </div>
+                {isLoadingEntitlement ? <p className="py-2 text-xs text-slate-400">Verifying the current Night Audit snapshot…</p> : entitlement?.eligible ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-slate-600">Allowed: <span className="font-bold text-slate-800">{entitlement.maxCoversAllowed}</span> · Already redeemed: <span className="font-bold text-slate-800">{entitlement.coversAlreadyRedeemed}</span> · Remaining: <span className="font-bold text-emerald-700">{entitlement.remainingCovers}</span></p>
+                    <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-2.5">
+                      <span className="text-xs font-semibold text-slate-600">Covers to redeem</span>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => setSelectedCovers((c) => Math.max(1, c - 1))} disabled={selectedCovers <= 1} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm disabled:opacity-30"><Minus className="h-3.5 w-3.5" /></button>
+                        <span className="w-6 text-center text-sm font-black text-slate-800">{selectedCovers}</span>
+                        <button type="button" onClick={() => setSelectedCovers((c) => Math.min(entitlement.remainingCovers, c + 1))} disabled={selectedCovers >= entitlement.remainingCovers} className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-800 disabled:opacity-30"><Plus className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </div>
+                    <button type="button" id="pos-breakfast-redeem-btn" onClick={handleRedeemBreakfast} disabled={isProcessing || selectedCovers <= 0} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 text-xs font-black uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-amber-700 disabled:opacity-50"><Coffee className="h-4 w-4" /> Redeem Breakfast — ₦0.00</button>
+                  </div>
+                ) : <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">{entitlement?.reasonMessage || 'This stay is not entitled to complimentary breakfast.'}</p>}
+              </div>
             </div>
           )}
 
@@ -634,6 +625,7 @@ const colorMap: Record<string, { bg: string; border: string; text: string; iconB
   blue:    { bg: 'hover:bg-blue-50',    border: 'hover:border-blue-200',    text: 'hover:text-blue-700',    iconBg: 'group-hover:bg-blue-100' },
   purple:  { bg: 'hover:bg-purple-50',  border: 'hover:border-purple-200',  text: 'hover:text-purple-700',  iconBg: 'group-hover:bg-purple-100' },
   indigo:  { bg: 'hover:bg-indigo-50',  border: 'hover:border-indigo-200',  text: 'hover:text-indigo-700',  iconBg: 'group-hover:bg-indigo-100' },
+  amber:   { bg: 'hover:bg-amber-50',   border: 'hover:border-amber-200',   text: 'hover:text-amber-700',   iconBg: 'group-hover:bg-amber-100' },
   pink:    { bg: 'hover:bg-pink-50',    border: 'hover:border-pink-200',    text: 'hover:text-pink-700',    iconBg: 'group-hover:bg-pink-100' },
 };
 

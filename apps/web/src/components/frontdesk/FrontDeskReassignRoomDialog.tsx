@@ -52,8 +52,11 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
   const [error, setError] = useState('');
   const [upgradePayment, setUpgradePayment] = useState<{ folio: any; amount: number; roomId: string } | null>(null);
 
-  const { provider, isOnline } = useLodgeCoreProvider();
-  const requiresDesktop = isOnline && reservation.status === 'CHECKED_IN';
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
+  // A checked-in guest's room change must use the desktop terminal because
+  // the new physical keycard is encoded locally. Network connectivity does
+  // not change whether this is a desktop capability.
+  const requiresDesktop = !isDesktopMode && reservation.status === 'CHECKED_IN';
 
   const { data: availableRooms, isLoading: isLoadingRooms } = useQuery({
     queryKey: ['available-rooms', reservation.propertyId, checkIn, checkOut],
@@ -120,7 +123,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
           amount: result.paymentDue,
           roomId: result.roomId,
         });
-      } else if (reservation.status === 'CHECKED_IN' && !isOnline) {
+      } else if (reservation.status === 'CHECKED_IN' && isDesktopMode) {
         void encodeNewRoomCard(result.roomId);
       }
     },

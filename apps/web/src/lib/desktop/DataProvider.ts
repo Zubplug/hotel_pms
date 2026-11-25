@@ -14,6 +14,7 @@ export interface LodgeCoreDataProvider {
     setCustomerDisplayEnabled?: (enabled: boolean) => Promise<any>;
     provisionTerminal?: (data: any) => Promise<any>;
     forceSync?: () => Promise<any>;
+    refreshControlState?: () => Promise<any>;
     getSyncHealth?: () => Promise<any>;
     getOutboxEvents?: () => Promise<any>;
     getSyncEvents?: () => Promise<any>;

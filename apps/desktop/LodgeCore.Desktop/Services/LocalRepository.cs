@@ -1418,6 +1418,7 @@ public class LocalRepository
                 throw new InvalidOperationException("The room is not available for the extended period.");
         }
 
+        var previousCheckOut = res.CheckOutDate;
         res.CheckOutDate = newCheckOut;
         var reservationRoom = res.Rooms.FirstOrDefault();
         if (reservationRoom != null) reservationRoom.CheckOutDate = newCheckOut;
@@ -1439,7 +1440,7 @@ public class LocalRepository
             Sequence = res.LocalSequence,
             PayloadJson = JsonSerializer.Serialize(new
             {
-                previousCheckOutDate = res.CheckOutDate.ToString("o"),
+                previousCheckOutDate = previousCheckOut.ToString("o"),
                 newCheckOutDate = newCheckOut.ToString("o"),
                 roomId = res.RoomId,
                 additionalNights,
@@ -7114,12 +7115,33 @@ public class LocalRepository
                 }
 
                 var busDate = order.BusinessDate.Date;
+                var localProperty = await _dbContext.Properties
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.Id == order.PropertyId);
+                var auditedBreakfast = localProperty?.BreakfastEligibilitySnapshotDate?.Date == busDate
+                    ? await _dbContext.BreakfastEligibilitySnapshots
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.PropertyId == order.PropertyId
+                            && s.ReservationId == reservationId
+                            && s.RedeemableBusinessDate.Date == busDate
+                            && s.Status == "ELIGIBLE")
+                    : null;
+
+                if (auditedBreakfast == null)
+                {
+                    throw new InvalidOperationException(
+                        "Cannot redeem complimentary breakfast until Night Audit publishes the entitlement list for this business date.");
+                }
+
                 var todayRedemptions = await _dbContext.BreakfastRedemptions
                     .Where(r => r.ReservationId == reservationId && r.BusinessDate.Date == busDate)
                     .ToListAsync();
 
                 int alreadyClaimed = todayRedemptions.Sum(r => r.CoversRedeemed);
-                int maxDailyCovers = Math.Max(1, reservation.Adults);
+                // Night Audit is authoritative. Do not recalculate eligibility
+                // from mutable reservation adults/discount/rate data after the
+                // snapshot has been published.
+                int maxDailyCovers = Math.Max(1, auditedBreakfast.MaxCoversAllowed);
                 int remaining = Math.Max(0, maxDailyCovers - alreadyClaimed);
 
                 if (covers > remaining)

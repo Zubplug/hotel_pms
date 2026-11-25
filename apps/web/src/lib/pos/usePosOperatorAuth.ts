@@ -175,8 +175,24 @@ export function usePosOperatorAuth({
     setError(null);
 
     try {
-      // First-run setup has already completed the authoritative bootstrap.
-      // Operator authentication is local and must not start another full sync.
+      // The shift guard is evaluated against the desktop's local SQLite
+      // property snapshot. When the terminal has connectivity, refresh that
+      // snapshot before authenticating so a completed cloud Night Audit (and
+      // the new business date) is available before the operator can open a
+      // shift. If the terminal is genuinely offline, the native bridge returns
+      // false and the existing offline safety checks remain authoritative.
+      if (isDesktopMode && provider.system?.refreshControlState) {
+        try {
+          await provider.system.refreshControlState();
+        } catch {
+          // Do not turn a temporary network failure into a login failure. The
+          // local repository will still enforce its cached audit/shift rules.
+        }
+      }
+
+      // First-run setup has already completed the authoritative bootstrap;
+      // this pre-auth refresh is only the lightweight operational safeguard
+      // that keeps the local audit/business-date gate current.
       const existingSessionId =
         localStorage.getItem('lodgecore_pos_session_id') ||
         (session as any)?.sessionId ||

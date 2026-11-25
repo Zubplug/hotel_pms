@@ -26,6 +26,8 @@ export interface CheckEntitlementParams {
   roomNumber?: string;
   reservationId?: string;
   businessDate?: Date | string;
+  /** Redemption must use the immutable Night Audit snapshot, never live policy data. */
+  requireAuditSnapshot?: boolean;
 }
 
 export interface RecordRedemptionParams {
@@ -158,6 +160,20 @@ export class BreakfastEntitlementService {
       ? this.normalizeDate(property.breakfastEligibilitySnapshotDate)
       : null;
     const snapshotIsAuthoritative = snapshotDate?.getTime() === targetDate.getTime();
+    if (params.requireAuditSnapshot && !snapshotIsAuthoritative) {
+      return {
+        eligible: false,
+        reason: 'INVALID_DATE',
+        reasonMessage: 'Complimentary breakfast is unavailable until Night Audit publishes the entitlement list for this business date.',
+        roomNumber: resolvedRoomNumber,
+        guestName,
+        reservationId: reservation.id,
+        businessDate: dateStr,
+        maxCoversAllowed: 0,
+        coversAlreadyRedeemed: 0,
+        remainingCovers: 0,
+      };
+    }
     if (snapshotIsAuthoritative) {
       const auditedGuest = auditedRows.find((row: any) =>
         row.reservationId === reservation.id
@@ -329,6 +345,7 @@ export class BreakfastEntitlementService {
           propertyId: params.propertyId,
           reservationId: params.reservationId,
           businessDate: targetDate,
+          requireAuditSnapshot: true,
         },
         tx,
       );

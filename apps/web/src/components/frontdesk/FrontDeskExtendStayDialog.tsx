@@ -45,7 +45,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     }
   }, [open]);
 
-  const { provider, isOnline } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
 
   const handlePreview = async () => {
     if (!newCheckoutDate) return;
@@ -63,7 +63,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
   };
 
   const handleEncodeCard = async () => {
-    if (isOnline) {
+    if (!isDesktopMode) {
       setPhase('CARD_UPDATE_REQUIRED');
       return;
     }
@@ -96,8 +96,8 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
       const res = await provider.reservations.extendStay(reservation.id, newCheckoutDate.toISOString());
       if (!res.success) { setPhase('FAILED'); setErrorMsg(res.error?.message || res.error || 'Extension failed'); return; }
       setExtensionApplied(true);
-      setPhase(isOnline ? 'CARD_UPDATE_REQUIRED' : 'PROMPT_ENCODE');
-      if (isOnline) router.refresh();
+      setPhase(isDesktopMode ? 'PROMPT_ENCODE' : 'CARD_UPDATE_REQUIRED');
+      if (!isDesktopMode) router.refresh();
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error');
@@ -210,7 +210,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
             </div>
           )}
 
-          {!isOnline && phase === 'PROMPT_ENCODE' && (
+          {isDesktopMode && phase === 'PROMPT_ENCODE' && (
             <div className="flex flex-col items-center py-10 space-y-4 text-center">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center shadow-inner">
                 <CreditCard className="w-8 h-8 text-blue-600" />
@@ -289,7 +289,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 </Button>
               </>
             )}
-            {!isOnline && phase === 'PROMPT_ENCODE' && (
+            {isDesktopMode && phase === 'PROMPT_ENCODE' && (
               <>
                 <DialogClose render={
                   <Button variant="outline" className="rounded-xl h-12 px-6 font-semibold border-slate-200">Skip / Do Later</Button>
@@ -309,7 +309,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 </Button>
               </>
             )}
-            {!isOnline && phase === 'SUCCESS' && (
+            {isDesktopMode && phase === 'SUCCESS' && (
               <DialogClose render={
                 <Button className="w-full rounded-xl h-12 font-semibold bg-slate-900 hover:bg-slate-800 text-lg">
                   Done

@@ -202,6 +202,56 @@ public class SyncEngine : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Refreshes only the property business-date and Night Audit control state.
+    /// This is used before POS authentication so login does not wait for the
+    /// full guest/folio/POS synchronization cycle.
+    /// </summary>
+    public async Task<bool> RefreshControlStateAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_isOnline) return false;
+
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        var identity = await GetSyncIdentityAsync(cancellationToken);
+        if (identity == null) return false;
+
+        var token = await GetActiveTokenAsync();
+        if (string.IsNullOrWhiteSpace(token)) return false;
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"sync/control-state?propertyId={Uri.EscapeDataString(identity.PropertyId)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Control-state refresh returned HTTP {StatusCode}", response.StatusCode);
+            return false;
+        }
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        if (!document.RootElement.TryGetProperty("property", out var propertyElement)
+            || propertyElement.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var property = await dbContext.Properties.FindAsync(new object[] { identity.PropertyId }, cancellationToken);
+        if (property == null) return false;
+
+        if (propertyElement.TryGetProperty("businessDate", out var businessDate)
+            && businessDate.ValueKind != JsonValueKind.Null
+            && DateTime.TryParse(businessDate.GetString(), out var parsedBusinessDate))
+            property.BusinessDate = parsedBusinessDate;
+
+        if (propertyElement.TryGetProperty("auditStatus", out var auditStatus)
+            && auditStatus.ValueKind != JsonValueKind.Null)
+            property.AuditStatus = auditStatus.GetString() ?? property.AuditStatus;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private void CompleteManualSyncWaiters(bool succeeded)
     {
         List<TaskCompletionSource<bool>> waiters;
@@ -1229,6 +1279,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     dbContext.Properties.Add(localProp);
                 }
             }
+
+            // Persist the property control state as soon as it is applied.
+            // A later, unrelated pull section must not be able to discard a
+            // completed Night Audit/business-date update and leave POS login
+            // blocked on an old SQLite snapshot.
+            if (root.TryGetProperty("property", out _))
+                await dbContext.SaveChangesAsync(stoppingToken);
 
             if (root.TryGetProperty("poolSnapshot", out var poolSnapshot) && poolSnapshot.ValueKind == JsonValueKind.Object)
             {
