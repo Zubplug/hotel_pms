@@ -918,7 +918,7 @@ public class OfflinePMSInterop
             var reason = document.RootElement.TryGetProperty("reason", out var reasonValue) ? reasonValue.GetString() ?? string.Empty : string.Empty;
             var reference = document.RootElement.TryGetProperty("supportingReference", out var referenceValue) ? referenceValue.GetString() : null;
             var idempotencyKey = document.RootElement.TryGetProperty("idempotencyKey", out var key) ? key.GetString() : null;
-            var success = await _repo.RequestPaymentCorrectionAsync(paymentId, correctedMethod, correctedAmount, reason, reference, ctx.UserId, ctx.DeviceId, idempotencyKey ?? $"PAYMENT_CORRECTION_REQUEST:{paymentId}");
+            var success = await _repo.RequestPaymentCorrectionAsync(paymentId, correctedMethod, correctedAmount, reason, reference, ctx.StaffId, ctx.DeviceId, idempotencyKey ?? $"PAYMENT_CORRECTION_REQUEST:{paymentId}");
             return JsonSerializer.Serialize(new { success, data = new { status = "REQUESTED", offline = true } }, _jsonOptions);
         }
         catch (Exception ex)
