@@ -12,6 +12,7 @@ import type {
 interface Props {
   store: CommerceStore | null;
   menus: CommerceMenu[];
+  experience?: 'restaurant' | 'outdoor';
 }
 
 function fmt(amount: number, currency = 'NGN') {
@@ -129,7 +130,7 @@ function CartPill({ currency }: { currency: string }) {
 }
 
 // ─── Main dining client ───────────────────────────────────────────────────────
-export function DiningClient({ store, menus }: Props) {
+export function DiningClient({ store, menus, experience = 'restaurant' }: Props) {
   const { addItem } = useCart();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<CommerceProduct | null>(null);
@@ -152,24 +153,25 @@ export function DiningClient({ store, menus }: Props) {
   }
 
   const currency = store?.currency ?? 'NGN';
+  const isOutdoor = experience === 'outdoor';
 
   return (
-    <div className="dining-page">
+    <div className={`dining-page${isOutdoor ? ' outdoor-service-page' : ''}`}>
       {/* ── Hero ── */}
       <section className="dining-hero">
         <div className="dining-hero__overlay" />
         <Image
-          src="/images/restaurant.jpg"
-          alt="Stanzel Grand Resort restaurant"
+          src={isOutdoor ? '/images/pool-evening.jpg' : '/images/restaurant.jpg'}
+          alt={isOutdoor ? 'Stanzel Grand Resort poolside at evening' : 'Stanzel Grand Resort restaurant'}
           fill priority
           style={{ objectFit: 'cover', objectPosition: 'center 40%' }}
           sizes="100vw"
         />
         <div className="container dining-hero__content">
-          <p className="eyebrow" style={{ color: 'var(--color-gold)' }}>Culinary Experience</p>
-          <h1 style={{ color: 'var(--color-ivory)' }}>Restaurant &amp; Bar</h1>
+          <p className="eyebrow" style={{ color: 'var(--color-gold)' }}>{isOutdoor ? 'Poolside & Outdoor Service' : 'Culinary Experience'}</p>
+          <h1 style={{ color: 'var(--color-ivory)' }}>{isOutdoor ? 'Dine Under the Open Sky' : 'Restaurant & Bar'}</h1>
           <p className="dining-hero__sub">
-            Nigerian warmth, international precision — order online for pickup or delivery.
+            {isOutdoor ? 'Fresh food, chilled drinks and effortless service delivered to your poolside table or outdoor space.' : 'Nigerian warmth, international precision — order online for pickup or delivery.'}
           </p>
           {store?.status === 'ACTIVE' ? (
             <span className="store-badge open">● Open Now</span>
@@ -192,7 +194,7 @@ export function DiningClient({ store, menus }: Props) {
         <div className="dining-layout">
           {/* ── Category sidebar ── */}
           <nav className="cat-sidebar" aria-label="Menu categories">
-            <p className="cat-sidebar__title">Menu</p>
+            <p className="cat-sidebar__title">{isOutdoor ? 'Outdoor Menu' : 'Menu'}</p>
             {allCategories.map(cat => (
               <button
                 key={cat.id}
@@ -271,6 +273,9 @@ export function DiningClient({ store, menus }: Props) {
       <style>{`
         /* ── Layout ── */
         .dining-page { background: var(--bg); min-height: 100vh; }
+        .outdoor-service-page { background: #f6f2e9; }
+        .outdoor-service-page .dining-hero__overlay { background: linear-gradient(to top, rgba(8,35,31,0.94) 0%, rgba(8,35,31,0.12) 65%); }
+        .outdoor-service-page .product-feed { background: rgba(255,255,255,0.42); border-radius: var(--radius-2xl); padding: var(--space-8); }
 
         .dining-hero {
           position: relative; height: 540px;

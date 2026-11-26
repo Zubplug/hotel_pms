@@ -217,6 +217,57 @@ export async function validateCheckoutSelection(
     const missingRequired = plan.items.filter((item) => item.required && !item.product.code.toUpperCase().startsWith("MODULE_") && !selectedProductIds.has(item.productId));
     if (missingRequired.length) throw new Error('Selected prices do not include every required plan product');
   }
+  const propertyIds = subscriptionScope(input.propertyIds ?? []);
+  const requiredPlanCodes = prices.flatMap((price) => {
+    const metadata = price.product.metadata;
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+    const values = metadata as Record<string, unknown>;
+    return Array.isArray(values.requiredPlanCodes)
+      ? values.requiredPlanCodes.filter((code): code is string => typeof code === 'string' && code.length > 0)
+      : [];
+  });
+  for (const planCode of new Set(requiredPlanCodes)) {
+    const requiredPlan = await db.subscription.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        status: { in: [...ADDON_ELIGIBLE_SUBSCRIPTION_STATUSES] },
+        plan: { code: planCode },
+      },
+      select: { id: true },
+    });
+    if (!requiredPlan) {
+      throw new Error(`An active ${planCode} plan is required before purchasing this add-on`);
+    }
+  }
+
+  const requiredAnyProducts = prices.flatMap((price) => {
+    const metadata = price.product.metadata;
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+    const values = metadata as Record<string, unknown>;
+    return Array.isArray(values.requiredAnyProducts)
+      ? [values.requiredAnyProducts.filter((code): code is string => typeof code === 'string' && code.length > 0)]
+      : [];
+  });
+  for (const productCodes of requiredAnyProducts) {
+    const scopes = propertyIds.length ? propertyIds : [null];
+    const qualifyingEntitlement = await db.entitlement.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        productCode: { in: productCodes },
+        status: 'ACTIVE',
+        startsAt: { lte: new Date() },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        ...(propertyIds.length
+          ? { AND: [{ OR: scopes.map((propertyId) => ({ OR: [{ propertyId }, { propertyId: null }] })) }] }
+          : {}),
+      },
+      select: { id: true },
+    });
+    if (!qualifyingEntitlement) {
+      throw new Error('A PMS-connected or Standalone API Website Development add-on is required before purchasing Food Commerce');
+    }
+  }
+
   const isAddOnOnlyCheckout = !plan && prices.every((price) => price.product.type === 'ADDON');
   if (isAddOnOnlyCheckout) {
     const activeBaseSubscription = await db.subscription.findFirst({
@@ -236,7 +287,6 @@ export async function validateCheckoutSelection(
       throw new Error('An active base-plan subscription is required before purchasing an add-on');
     }
   }
-  const propertyIds = subscriptionScope(input.propertyIds ?? []);
   if (propertyIds.length) {
     const validProperties = await db.property.count({ where: { organizationId: input.organizationId, id: { in: propertyIds }, isActive: true } });
     if (validProperties !== propertyIds.length) throw new Error('One or more selected properties are invalid');

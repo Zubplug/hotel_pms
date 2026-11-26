@@ -748,6 +748,7 @@ function AddOnCard({
   onSpecialAddon,
   onDetails,
   canSubscribe,
+  prerequisiteReady = true,
   scopeReady,
   isActive,
   discount,
@@ -759,6 +760,7 @@ function AddOnCard({
   onSpecialAddon?: () => void;
   onDetails: () => void;
   canSubscribe: boolean;
+  prerequisiteReady?: boolean;
   scopeReady: boolean;
   isActive: boolean;
   discount?: BillingDiscount;
@@ -823,10 +825,10 @@ function AddOnCard({
         <button
           className="btn btn-outline btn-sm sub-addon-cta"
           style={{ flex: 1 }}
-          disabled={busy !== null || !price || (!canSubscribe && !canPurchaseWithoutBasePlan) || !scopeReady || isActive}
+          disabled={busy !== null || !price || (!canSubscribe && !canPurchaseWithoutBasePlan) || !prerequisiteReady || !scopeReady || isActive}
           onClick={() => price && (onSpecialAddon ? onSpecialAddon() : onCheckout(key, [price.id]))}
         >
-          {busy === key ? "Opening…" : isActive ? "Active add-on" : isReach ? "Configure Reach →" : isExtraTerminal ? "Choose terminals →" : (!canSubscribe && !canPurchaseWithoutBasePlan) ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : isReach ? "Configure Reach →" : isExtraTerminal ? "Choose terminals →" : !prerequisiteReady ? "Professional plan + website required" : (!canSubscribe && !canPurchaseWithoutBasePlan) ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -867,6 +869,8 @@ export default function SubscriptionCatalogue({
   const [domainModalOpen, setDomainModalOpen] = useState(false);
   const [reachModalOpen, setReachModalOpen] = useState(false);
   const [terminalModalOpen, setTerminalModalOpen] = useState(false);
+  const hasCommerceWebsitePrerequisite = activeAddonCodes.includes("ADDON_CUSTOM_WEBSITE_API") || activeAddonCodes.includes("ADDON_CUSTOM_WEBSITE_PMS");
+  const foodCommercePrerequisiteReady = currentPlanCode === "PROFESSIONAL" && hasCommerceWebsitePrerequisite;
 
   async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1), quantity = 1) {
     if (!priceIds.length) return setError("This option does not have a published price for the selected billing interval yet.");
@@ -1023,6 +1027,7 @@ export default function SubscriptionCatalogue({
                 onCheckout={(key, priceIds, quantity) => startAddonCheckout(product, key, priceIds, quantity)}
                 onSpecialAddon={["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : product.code === "ADDON_REACH" ? () => setReachModalOpen(true) : product.code === "ADDON_EXTRA_TERMINAL" ? () => setTerminalModalOpen(true) : undefined}
                 canSubscribe={hasActiveBaseSubscription}
+                prerequisiteReady={product.code !== 'ADDON_FOOD_COMMERCE' || foodCommercePrerequisiteReady}
                 scopeReady={!isPropertyScoped(product) || properties.length > 0}
                 isActive={product.code === "ADDON_EXTRA_TERMINAL" ? false : isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
                 discount={discounts.find(discount => discount.productId === product.id)}

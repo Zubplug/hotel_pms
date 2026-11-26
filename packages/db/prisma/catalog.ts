@@ -58,9 +58,11 @@ export const catalogProducts: CatalogProduct[] = [
       sellable: true,
       offlineCapable: true,       // POS bridge operates offline-first
       requiresApproval: false,    // Self-serve activation
-      standaloneEligible: true,   // No MODULE_PMS required
+      standaloneEligible: true,
+      requiredPlanCodes: ['PROFESSIONAL'],
+      requiredAnyProducts: ['ADDON_CUSTOM_WEBSITE_PMS', 'ADDON_CUSTOM_WEBSITE_API'],
       includedCapabilities: ['DELIVERY', 'ANALYTICS', 'MEAL_PASS'],
-      billingDescription: 'A complete digital ordering channel for hospitality businesses, connected to LodgeCore operations and POS.',
+      billingDescription: 'A complete digital ordering channel for Professional properties with a LodgeCore-connected or standalone API website.',
       version: CATALOG_VERSION,
     },
   },
@@ -74,7 +76,7 @@ export const catalogProducts: CatalogProduct[] = [
       unit: 'STORE',
       sellable: true,
       offlineCapable: true,
-      standaloneOnly: true,       // For businesses with no LodgeCore base module
+      standaloneOnly: true,
       requiresApproval: false,
       standaloneEligible: true,
       includedCapabilities: ['DELIVERY', 'ANALYTICS', 'MEAL_PASS'],

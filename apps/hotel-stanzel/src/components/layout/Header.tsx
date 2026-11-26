@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 const NAV_LINKS = [
   { label: 'Rooms & Suites', href: '/rooms' },
   { label: 'Dining', href: '/dining' },
+  { label: 'Outdoor Service', href: '/outdoor-service' },
   { label: 'Facilities', href: '/facilities' },
   { label: 'Gallery', href: '/gallery' },
   { label: 'About', href: '/about' },
