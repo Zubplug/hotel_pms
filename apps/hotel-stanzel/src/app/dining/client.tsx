@@ -130,6 +130,139 @@ function CartPill({ currency }: { currency: string }) {
   );
 }
 
+function OutdoorCommerceExperience({
+  store,
+  categories,
+  currency,
+}: {
+  store: CommerceStore | null;
+  categories: (CommerceCategory & { menuName: string })[];
+  currency: string;
+}) {
+  const { addItem, setServiceMode, setOrderType } = useCart();
+  const [selectedProduct, setSelectedProduct] = useState<CommerceProduct | null>(null);
+  const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? '');
+  const featured = categories
+    .flatMap(category => category.products.filter(product => product.isAvailable).map(product => ({ product, category: category.name })))
+    .slice(0, 4);
+
+  useEffect(() => {
+    setServiceMode('OUTDOOR');
+    setOrderType('DELIVERY');
+  }, []);
+
+  function goToCategory(id: string) {
+    setActiveCategory(id);
+    document.getElementById(`outdoor-category-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  return (
+    <div className="outdoor-commerce">
+      <section className="outdoor-commerce__hero">
+        <Image src="/images/pool-evening.jpg" alt="Stanzel Grand Resort poolside at evening" fill priority style={{ objectFit: 'cover', objectPosition: 'center' }} sizes="100vw" />
+        <div className="outdoor-commerce__hero-wash" />
+        <div className="outdoor-commerce__hero-content">
+          <p className="outdoor-commerce__overline">Stanzel Grand Resort · Outdoor Dining</p>
+          <h1>Good food.<br /><em>Open air.</em></h1>
+          <p className="outdoor-commerce__hero-copy">Freshly prepared favourites and chilled drinks, delivered to your poolside table, cabana or outdoor space.</p>
+          <div className="outdoor-commerce__hero-actions">
+            <button className="outdoor-commerce__primary" onClick={() => document.getElementById('outdoor-menu')?.scrollIntoView({ behavior: 'smooth' })}>Explore the menu <span>↓</span></button>
+            <span className="outdoor-commerce__status"><i /> {store?.status === 'ACTIVE' ? 'Taking orders now' : 'Currently unavailable'}</span>
+          </div>
+        </div>
+        <div className="outdoor-commerce__hero-note">Made for slow afternoons<br />and golden evenings.</div>
+      </section>
+
+      <section className="outdoor-commerce__promo" aria-label="Outdoor service announcement">
+        <span className="outdoor-commerce__promo-mark">✦</span>
+        <strong>{store?.announcementBanner || 'Your table is wherever you are.'}</strong>
+        <span>Manual service location at checkout · No app required</span>
+      </section>
+
+      <main id="outdoor-menu" className="outdoor-commerce__content">
+        <section className="outdoor-commerce__intro">
+          <div>
+            <p className="outdoor-commerce__eyebrow">The outdoor menu</p>
+            <h2>Choose your moment.</h2>
+          </div>
+          <p>From easy poolside bites to a proper meal under the sky, find something made for the way you want to spend the day.</p>
+        </section>
+
+        <nav className="outdoor-commerce__categories" aria-label="Outdoor menu categories">
+          {categories.map((category, index) => (
+            <button key={category.id} className={activeCategory === category.id ? 'active' : ''} onClick={() => goToCategory(category.id)}>
+              <span>{String(index + 1).padStart(2, '0')}</span>{category.name}
+            </button>
+          ))}
+        </nav>
+
+        {featured.length > 0 && (
+          <section className="outdoor-commerce__featured" aria-labelledby="outdoor-featured-title">
+            <div className="outdoor-commerce__section-heading"><div><p className="outdoor-commerce__eyebrow">A little something special</p><h2 id="outdoor-featured-title">Made for the moment</h2></div><span>Guest favourites</span></div>
+            <div className="outdoor-commerce__featured-grid">
+              {featured.map(({ product, category }) => (
+                <button key={product.id} className="outdoor-commerce__featured-card" onClick={() => setSelectedProduct(product)}>
+                  <div className="outdoor-commerce__food-image">{product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="300px" style={{ objectFit: 'cover' }} /> : <span>{category.slice(0, 1)}</span>}</div>
+                  <div className="outdoor-commerce__food-copy"><small>{category}</small><strong>{product.name}</strong><span>{fmt(product.price, currency)}</span></div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="outdoor-commerce__menu-list" aria-label="Full outdoor menu">
+          {categories.map(category => (
+            <section key={category.id} id={`outdoor-category-${category.id}`} className="outdoor-commerce__category">
+              <div className="outdoor-commerce__category-heading"><div><p className="outdoor-commerce__eyebrow">{category.menuName}</p><h2>{category.name}</h2></div><span>{category.products.length} items</span></div>
+              <div className="outdoor-commerce__product-grid">
+                {category.products.map(product => (
+                  <button key={product.id} className={`outdoor-commerce__product${!product.isAvailable ? ' is-sold-out' : ''}`} disabled={!product.isAvailable} onClick={() => setSelectedProduct(product)}>
+                    <div className="outdoor-commerce__product-image">{product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="260px" style={{ objectFit: 'cover' }} /> : <span>{category.name.slice(0, 1)}</span>}{!product.isAvailable && <b>Sold out</b>}</div>
+                    <div className="outdoor-commerce__product-copy"><strong>{product.name}</strong>{product.description && <p>{product.description}</p>}<div><span>{fmt(product.price, currency)}</span>{product.isAvailable && <i>+</i>}</div></div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </section>
+      </main>
+
+      {selectedProduct && <ProductDrawer product={selectedProduct} currency={currency} onClose={() => setSelectedProduct(null)} onAdd={(product, qty, modifiers, notes) => addItem(product, qty, modifiers, notes)} />}
+      <CartPill currency={currency} />
+
+      <style>{`
+        .outdoor-commerce { --oc-green: #153d35; --oc-deep: #0c2924; --oc-gold: #c8a76b; --oc-cream: #f8f5ee; --oc-ink: #17211e; background: var(--oc-cream); color: var(--oc-ink); min-height: 100vh; }
+        .outdoor-commerce__hero { min-height: 620px; position: relative; display: flex; align-items: center; overflow: hidden; color: white; }
+        .outdoor-commerce__hero-wash { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,34,29,.94) 0%, rgba(8,34,29,.62) 44%, rgba(8,34,29,.08) 100%), linear-gradient(0deg, rgba(8,34,29,.58), transparent 50%); }
+        .outdoor-commerce__hero-content { position: relative; z-index: 1; width: min(1200px, calc(100% - 48px)); margin: 70px auto 0; }
+        .outdoor-commerce__overline, .outdoor-commerce__eyebrow { color: var(--oc-gold); font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+        .outdoor-commerce__hero h1 { max-width: 650px; margin: 18px 0; font-family: var(--font-serif); font-size: clamp(4rem, 9vw, 8.5rem); font-weight: 400; line-height: .86; letter-spacing: -.055em; }
+        .outdoor-commerce__hero h1 em { color: var(--oc-gold); font-style: italic; }
+        .outdoor-commerce__hero-copy { max-width: 440px; color: rgba(255,255,255,.78); font-size: 17px; line-height: 1.65; }
+        .outdoor-commerce__hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; margin-top: 30px; }
+        .outdoor-commerce__primary { border: 0; border-radius: 99px; padding: 14px 21px; background: var(--oc-gold); color: var(--oc-deep); font-weight: 800; cursor: pointer; }.outdoor-commerce__primary span { margin-left: 16px; font-size: 18px; }
+        .outdoor-commerce__status { color: rgba(255,255,255,.8); font-size: 12px; }.outdoor-commerce__status i { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: #61d19b; }
+        .outdoor-commerce__hero-note { position: absolute; z-index: 1; right: 6%; bottom: 42px; color: rgba(255,255,255,.74); font-family: var(--font-serif); font-size: 18px; line-height: 1.2; text-align: right; }
+        .outdoor-commerce__promo { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px 22px; padding: 17px 24px; background: var(--oc-green); color: white; text-align: center; }.outdoor-commerce__promo-mark { color: var(--oc-gold); font-size: 20px; }.outdoor-commerce__promo strong { font-family: var(--font-serif); font-size: 18px; font-weight: 500; }.outdoor-commerce__promo span:last-child { color: rgba(255,255,255,.64); font-size: 12px; }
+        .outdoor-commerce__content { width: min(1200px, calc(100% - 48px)); margin: auto; padding: 72px 0 150px; }.outdoor-commerce__intro, .outdoor-commerce__section-heading, .outdoor-commerce__category-heading { display: flex; align-items: end; justify-content: space-between; gap: 30px; }.outdoor-commerce__intro { margin-bottom: 32px; }.outdoor-commerce h2 { margin: 8px 0 0; color: var(--oc-green); font-family: var(--font-serif); font-size: clamp(2rem, 4vw, 3.4rem); font-weight: 400; letter-spacing: -.03em; }.outdoor-commerce__intro > p { max-width: 370px; color: #6f7974; font-size: 14px; line-height: 1.7; }
+        .outdoor-commerce__categories { display: flex; gap: 8px; margin-bottom: 68px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid rgba(21,61,53,.14); }.outdoor-commerce__categories::-webkit-scrollbar { display: none; }.outdoor-commerce__categories button { flex: 0 0 auto; padding: 14px 18px 17px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #6f7974; font-size: 13px; font-weight: 700; cursor: pointer; }.outdoor-commerce__categories button span { margin-right: 8px; color: var(--oc-gold); font-size: 10px; }.outdoor-commerce__categories button.active { border-color: var(--oc-green); color: var(--oc-green); }
+        .outdoor-commerce__section-heading { margin-bottom: 20px; }.outdoor-commerce__section-heading > span, .outdoor-commerce__category-heading > span { color: #86918b; font-size: 12px; }.outdoor-commerce__featured { margin-bottom: 78px; }.outdoor-commerce__featured-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }.outdoor-commerce__featured-card, .outdoor-commerce__product { overflow: hidden; padding: 0; border: 1px solid rgba(21,61,53,.12); border-radius: 18px; background: white; color: inherit; text-align: left; cursor: pointer; transition: transform .2s, box-shadow .2s; }.outdoor-commerce__featured-card:hover, .outdoor-commerce__product:hover:not(:disabled) { transform: translateY(-4px); box-shadow: 0 16px 35px rgba(21,61,53,.12); }.outdoor-commerce__food-image { position: relative; height: 190px; display: grid; place-items: center; background: linear-gradient(135deg, #d9e2d4, #afc6b0); color: var(--oc-green); font-family: var(--font-serif); font-size: 54px; }.outdoor-commerce__food-copy { display: grid; gap: 5px; padding: 16px; }.outdoor-commerce__food-copy small { color: var(--oc-gold); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }.outdoor-commerce__food-copy strong { color: var(--oc-green); font-family: var(--font-serif); font-size: 20px; font-weight: 500; }.outdoor-commerce__food-copy span { color: var(--oc-green); font-size: 14px; font-weight: 800; }
+        .outdoor-commerce__menu-list { display: grid; gap: 70px; }.outdoor-commerce__category { scroll-margin-top: 24px; }.outdoor-commerce__category-heading { margin-bottom: 20px; }.outdoor-commerce__product-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }.outdoor-commerce__product-image { position: relative; height: 155px; display: grid; place-items: center; background: #e5eadf; color: #8fa893; font-family: var(--font-serif); font-size: 42px; }.outdoor-commerce__product-image b { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12,41,36,.7); color: white; font-family: var(--font-sans); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }.outdoor-commerce__product-copy { display: grid; gap: 7px; padding: 15px; }.outdoor-commerce__product-copy strong { color: var(--oc-green); font-family: var(--font-serif); font-size: 17px; font-weight: 500; }.outdoor-commerce__product-copy p { display: -webkit-box; overflow: hidden; margin: 0; color: #818b85; font-size: 12px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }.outdoor-commerce__product-copy > div { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; color: var(--oc-green); font-size: 14px; font-weight: 800; }.outdoor-commerce__product-copy i { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--oc-green); color: white; font-size: 20px; font-style: normal; font-weight: 400; }.outdoor-commerce__product.is-sold-out { opacity: .58; cursor: not-allowed; }
+        .outdoor-commerce .drawer-overlay { z-index: 200; }.outdoor-commerce .cart-pill { z-index: 100; }
+        .outdoor-commerce .drawer-overlay { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: rgba(8,34,29,.68); backdrop-filter: blur(5px); }
+        .outdoor-commerce .drawer { width: 100%; max-width: 580px; max-height: 92vh; overflow-y: auto; border-radius: 24px 24px 0 0; background: white; }
+        .outdoor-commerce .drawer-img-wrap { position: relative; height: 220px; }.outdoor-commerce .drawer-body { position: relative; padding: 26px 26px 38px; }.outdoor-commerce .drawer-close { position: absolute; top: 16px; right: 16px; z-index: 2; width: 34px; height: 34px; border: 0; border-radius: 50%; background: #edf0eb; cursor: pointer; }.outdoor-commerce .drawer-title { padding-right: 40px; color: var(--oc-green); font-family: var(--font-serif); font-size: 32px; }.outdoor-commerce .drawer-desc { color: #6f7974; font-size: 14px; }.outdoor-commerce .drawer-meta { display: flex; gap: 14px; align-items: center; margin: 14px 0 24px; }.outdoor-commerce .drawer-price { color: var(--oc-green); font-size: 20px; font-weight: 800; }.outdoor-commerce .drawer-cal, .outdoor-commerce .drawer-time { padding: 4px 8px; border-radius: 99px; background: #edf0eb; color: #6f7974; font-size: 11px; }
+        .outdoor-commerce .mod-group { margin-bottom: 22px; }.outdoor-commerce .mod-group-title { margin-bottom: 8px; color: var(--oc-ink); font-size: 14px; font-weight: 800; }.outdoor-commerce .mod-required { color: #a47d38; font-size: 11px; font-weight: 500; }.outdoor-commerce .mod-option { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid #e5e9e3; cursor: pointer; }.outdoor-commerce .mod-name { flex: 1; font-size: 14px; }.outdoor-commerce .mod-price { color: var(--oc-green); font-size: 12px; font-weight: 700; }.outdoor-commerce .notes-label { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; color: var(--oc-ink); font-size: 13px; font-weight: 800; }.outdoor-commerce .notes-input { resize: none; padding: 11px; border: 1px solid #dce3dc; border-radius: 10px; font: inherit; outline: 0; }.outdoor-commerce .notes-input:focus { border-color: var(--oc-green); }
+        .outdoor-commerce .drawer-footer { display: flex; gap: 15px; align-items: center; margin-top: 24px; }.outdoor-commerce .qty-ctrl { display: flex; gap: 10px; align-items: center; }.outdoor-commerce .qty-btn { width: 36px; height: 36px; border: 1px solid var(--oc-green); border-radius: 50%; background: white; color: var(--oc-green); font-size: 18px; cursor: pointer; }.outdoor-commerce .qty-val { width: 25px; text-align: center; font-weight: 800; }.outdoor-commerce .btn-add-cart { flex: 1; padding: 13px 18px; border: 0; border-radius: 10px; background: var(--oc-green); color: white; font-weight: 800; cursor: pointer; }
+        .outdoor-commerce .cart-pill { position: fixed; bottom: 24px; left: 50%; display: flex; align-items: center; gap: 14px; padding: 14px 22px; transform: translateX(-50%); border-radius: 99px; background: var(--oc-green); color: white; box-shadow: 0 16px 36px rgba(8,34,29,.28); white-space: nowrap; }.outdoor-commerce .cart-pill-link { position: absolute; inset: 0; }.outdoor-commerce .cart-badge { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--oc-gold); color: var(--oc-deep); font-size: 11px; font-weight: 800; }.outdoor-commerce .cart-label { font-size: 13px; font-weight: 700; }.outdoor-commerce .cart-total { font-size: 14px; font-weight: 800; }
+        @media (min-width: 640px) { .outdoor-commerce .drawer-overlay { align-items: center; }.outdoor-commerce .drawer { border-radius: 24px; max-height: 88vh; } }
+        @media (max-width: 900px) { .outdoor-commerce__featured-grid, .outdoor-commerce__product-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 640px) { .outdoor-commerce__hero { min-height: 600px; }.outdoor-commerce__hero-content { width: calc(100% - 36px); margin-top: 80px; }.outdoor-commerce__hero h1 { font-size: clamp(3.6rem, 17vw, 6rem); }.outdoor-commerce__hero-note { display: none; }.outdoor-commerce__content { width: calc(100% - 36px); padding-top: 48px; }.outdoor-commerce__intro, .outdoor-commerce__section-heading, .outdoor-commerce__category-heading { align-items: flex-start; flex-direction: column; gap: 12px; }.outdoor-commerce__categories { margin-bottom: 48px; }.outdoor-commerce__featured-grid, .outdoor-commerce__product-grid { gap: 10px; }.outdoor-commerce__food-image { height: 135px; }.outdoor-commerce__product-image { height: 125px; }.outdoor-commerce__food-copy, .outdoor-commerce__product-copy { padding: 12px; }.outdoor-commerce__food-copy strong { font-size: 16px; }.outdoor-commerce__product-copy strong { font-size: 15px; }.outdoor-commerce__product-copy p { font-size: 11px; }.outdoor-commerce__promo { padding-inline: 14px; gap: 8px 12px; }.outdoor-commerce__promo strong { font-size: 16px; } }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── Main dining client ───────────────────────────────────────────────────────
 export function DiningClient({ store, menus, experience = 'restaurant', loadError = false }: Props) {
   const { addItem, setServiceMode, setOrderType } = useCart();
@@ -163,6 +296,10 @@ export function DiningClient({ store, menus, experience = 'restaurant', loadErro
     setServiceMode(isOutdoor ? 'OUTDOOR' : 'RESTAURANT');
     if (isOutdoor) setOrderType('DELIVERY');
   }, [isOutdoor]);
+
+  if (isOutdoor) {
+    return <OutdoorCommerceExperience store={store} categories={allCategories} currency={currency} />;
+  }
 
   return (
     <div className={`dining-page${isOutdoor ? ' outdoor-service-page' : ''}`}>

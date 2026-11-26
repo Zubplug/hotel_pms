@@ -33,6 +33,7 @@ export interface CommerceStore {
   pickupEnabled: boolean;
   deliveryFee: number;
   minimumOrderAmount: number;
+  announcementBanner?: string | null;
   status: string;
 }
 
