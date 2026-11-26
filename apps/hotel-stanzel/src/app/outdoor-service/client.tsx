@@ -532,12 +532,8 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
                   {categoryIcon(selectedCategory.name)}
                 </div>
                 <div>
-                  <span className="os-category__eyebrow">
-                    {String(allCategories.findIndex(cat => cat.id === selectedCategory.id) + 1).padStart(2, '0')} · {selectedCategory.menuName}
-                  </span>
                   <h2 className="os-category__title">{selectedCategory.name}</h2>
                 </div>
-                <span className="os-category__count">{selectedProducts.length} items</span>
               </div>
 
               <div className="os-product-grid">
