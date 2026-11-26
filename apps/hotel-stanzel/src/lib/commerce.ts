@@ -45,6 +45,8 @@ export interface CommerceProduct {
   price: number;
   compareAtPrice: number | null;
   isFeatured?: boolean;
+  soldCount?: number;
+  tags?: string[];
   calories?: number | null;
   prepTimeMinutes: number | null;
   isAvailable: boolean;
@@ -79,6 +81,16 @@ export interface CommerceMenu {
   id: string;
   name: string;
   categories: CommerceCategory[];
+}
+
+export interface CommercePromotionSummary {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  value: number;
+  minimumOrderAmount: number | null;
+  validTo: string;
 }
 
 export interface PlaceOrderRequest {
@@ -148,6 +160,13 @@ export async function getMenu(): Promise<CommerceMenu[]> {
   if (!res.ok) throw new Error('Failed to load menu');
   const json = await res.json();
   return json.data;
+}
+
+export async function getPromotions(): Promise<CommercePromotionSummary[]> {
+  const res = await fetch(storefront('/promotions'), { next: { revalidate: 60 } });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data ?? [];
 }
 
 export async function placeOrder(body: PlaceOrderRequest): Promise<PlaceOrderResponse> {

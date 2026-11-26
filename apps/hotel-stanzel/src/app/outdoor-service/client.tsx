@@ -21,6 +21,7 @@ import { useCart } from '@/lib/cart-context';
 import type {
   CommerceStore, CommerceMenu, CommerceCategory,
   CommerceProduct, CommerceModifierOption,
+  CommercePromotionSummary,
 } from '@/lib/commerce';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -64,11 +65,10 @@ function ProductSheet({
   product: CommerceProduct;
   currency: string;
   onClose: () => void;
-  onAdd: (p: CommerceProduct, qty: number, mods: CommerceModifierOption[], notes: string) => void;
+  onAdd: (p: CommerceProduct, qty: number, mods: CommerceModifierOption[]) => void;
 }) {
   const [qty, setQty] = useState(1);
   const [selectedMods, setSelectedMods] = useState<Record<string, string>>({});
-  const [notes, setNotes] = useState('');
 
   const modifierPrice = product.modifierGroups
     .flatMap(g => g.options)
@@ -138,18 +138,6 @@ function ProductSheet({
             </div>
           ))}
 
-          {/* Notes */}
-          <div className="os-notes">
-            <label className="os-notes__label">Special Instructions</label>
-            <textarea
-              className="os-notes__input"
-              placeholder="Allergies, spice level, substitutions…"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={2}
-            />
-          </div>
-
           {/* Footer */}
           <div className="os-sheet__footer">
             <div className="os-qty">
@@ -161,7 +149,7 @@ function ProductSheet({
               className="os-sheet__add-btn"
               onClick={() => {
                 const mods = product.modifierGroups.flatMap(g => g.options).filter(o => Object.values(selectedMods).includes(o.id));
-                onAdd(product, qty, mods, notes);
+                onAdd(product, qty, mods);
                 onClose();
               }}
             >
@@ -249,11 +237,12 @@ function FloatingCart({ currency }: { currency: string }) {
 interface Props {
   store: CommerceStore | null;
   menus: CommerceMenu[];
+  promotions: CommercePromotionSummary[];
 }
 
 type FlatCategory = CommerceCategory & { menuName: string };
 
-export function OutdoorServiceClient({ store, menus }: Props) {
+export function OutdoorServiceClient({ store, menus, promotions }: Props) {
   const { addItem } = useCart();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<CommerceProduct | null>(null);
@@ -296,21 +285,33 @@ export function OutdoorServiceClient({ store, menus }: Props) {
   }, []);
 
   // Filter products by search
-  const filteredCategories: FlatCategory[] = search.trim()
-    ? allCategories.map(cat => ({
-      ...cat,
-      products: cat.products.filter(p =>
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        (p.description ?? '').toLowerCase().includes(search.toLowerCase())
-      ),
-    })).filter(cat => cat.products.length > 0)
-    : allCategories;
+  const selectedCategory = allCategories.find(cat => cat.id === activeId) ?? allCategories[0];
+  const selectedProducts = selectedCategory
+    ? selectedCategory.products.filter(product => {
+      const query = search.trim().toLowerCase();
+      return !query
+        || product.name.toLowerCase().includes(query)
+        || (product.description ?? '').toLowerCase().includes(query);
+    })
+    : [];
 
-  // Pop-out special featured items (first 4 available products with images)
+  // Keep the API as the source of truth: explicitly featured products lead,
+  // followed by the best-selling available items when the catalogue has not
+  // been curated yet.
   const featuredProducts: CommerceProduct[] = allCategories
     .flatMap(c => c.products)
-    .filter(p => p.isAvailable && p.imageUrl)
+    .filter(p => p.isAvailable)
+    .sort((a, b) => {
+      const featuredDelta = Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured));
+      return featuredDelta || (b.soldCount ?? 0) - (a.soldCount ?? 0);
+    })
     .slice(0, 4);
+
+  const bestSellingProducts = allCategories
+    .flatMap(c => c.products)
+    .filter(p => p.isAvailable)
+    .sort((a, b) => (b.soldCount ?? 0) - (a.soldCount ?? 0))
+    .slice(0, 6);
 
   return (
     <div className="os-page">
@@ -334,10 +335,7 @@ export function OutdoorServiceClient({ store, menus }: Props) {
             <span className="os-hero__dot" />
             Outdoor &amp; Poolside Dining
           </div>
-          <h1 className="os-hero__title">
-            Good food.<br />
-            <em className="os-hero__title-em">Open air.</em>
-          </h1>
+          <h1 className="os-hero__title">Poolside dining, made easy.</h1>
           <p className="os-hero__sub">
             Freshly prepared favourites and chilled drinks —<br />
             delivered to your poolside table, cabana or garden terrace.
@@ -373,6 +371,27 @@ export function OutdoorServiceClient({ store, menus }: Props) {
           </div>
         </div>
       </section>
+
+      {promotions.length > 0 && (
+        <section className="os-promos" aria-label="Current offers">
+          <div className="os-promos__intro">
+            <span className="os-promos__spark">✦</span>
+            <div>
+              <p className="os-promos__eyebrow">Today at Stanzel</p>
+              <h2 className="os-promos__title">Offers made for the open air</h2>
+            </div>
+          </div>
+          <div className="os-promos__list">
+            {promotions.map(promo => (
+              <div className="os-promo-card" key={promo.id}>
+                <span className="os-promo-card__type">{promo.type === 'PERCENTAGE' ? `${promo.value}% OFF` : 'SPECIAL OFFER'}</span>
+                <strong>{promo.name}</strong>
+                <span>Use code <b>{promo.code}</b>{promo.minimumOrderAmount ? ` · min. ${fmt(promo.minimumOrderAmount, currency)}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ═══ MARQUEE STRIP ══════════════════════════════════════════════════ */}
       <div className="os-marquee" aria-hidden>
@@ -437,6 +456,27 @@ export function OutdoorServiceClient({ store, menus }: Props) {
         </section>
       )}
 
+      {bestSellingProducts.length > 0 && (
+        <section className="os-bestsellers">
+          <div className="os-bestsellers__header">
+            <div>
+              <p className="os-featured__eyebrow">Loved by guests</p>
+              <h2 className="os-featured__title">Best sellers</h2>
+            </div>
+            <span className="os-bestsellers__note">Popular choices, ready to order</span>
+          </div>
+          <div className="os-bestsellers__grid">
+            {bestSellingProducts.map(product => (
+              <button key={product.id} className="os-bestseller-card" onClick={() => setSelectedProduct(product)}>
+                <span className="os-bestseller-card__rank">★</span>
+                <span className="os-bestseller-card__name">{product.name}</span>
+                <span className="os-bestseller-card__price">{fmt(product.price, currency)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ═══ MENU SECTION ═══════════════════════════════════════════════════ */}
       <section id="os-menu" className="os-menu-section">
         {/* Search bar */}
@@ -475,35 +515,33 @@ export function OutdoorServiceClient({ store, menus }: Props) {
 
         {/* Product grid */}
         <div className="os-menu-body">
-          {filteredCategories.length === 0 && (
+          {!selectedCategory || selectedProducts.length === 0 ? (
             <div className="os-no-results">
-              <p>No items match "{search}"</p>
+              <p>{search ? `No items match “${search}” in ${selectedCategory?.name ?? 'this category'}.` : 'This category has no available items.'}</p>
               <button className="os-no-results__clear" onClick={() => setSearch('')}>Clear search</button>
             </div>
-          )}
-
-          {filteredCategories.map((cat, cIdx) => (
+          ) : (
             <section
-              key={cat.id}
-              id={cat.id}
-              ref={el => { if (el) sectionRefs.current[cat.id] = el; }}
+              key={selectedCategory.id}
+              id={selectedCategory.id}
+              ref={el => { if (el) sectionRefs.current[selectedCategory.id] = el; }}
               className="os-category"
             >
               <div className="os-category__header">
                 <div className="os-category__icon-wrap" aria-hidden>
-                  {categoryIcon(cat.name)}
+                  {categoryIcon(selectedCategory.name)}
                 </div>
                 <div>
                   <span className="os-category__eyebrow">
-                    {String(cIdx + 1).padStart(2, '0')} · {cat.menuName}
+                    {String(allCategories.findIndex(cat => cat.id === selectedCategory.id) + 1).padStart(2, '0')} · {selectedCategory.menuName}
                   </span>
-                  <h2 className="os-category__title">{cat.name}</h2>
+                  <h2 className="os-category__title">{selectedCategory.name}</h2>
                 </div>
-                <span className="os-category__count">{cat.products.length} items</span>
+                <span className="os-category__count">{selectedProducts.length} items</span>
               </div>
 
               <div className="os-product-grid">
-                {cat.products.map(product => (
+                {selectedProducts.map(product => (
                   <button
                     key={product.id}
                     className={`os-product-card${!product.isAvailable ? ' os-product-card--unavailable' : ''}`}
@@ -521,7 +559,7 @@ export function OutdoorServiceClient({ store, menus }: Props) {
                           />
                         ) : (
                           <div className="os-product-card__hex-placeholder">
-                            {categoryIcon(cat.name)}
+                            {categoryIcon(selectedCategory.name)}
                           </div>
                         )}
                         {!product.isAvailable && (
@@ -549,7 +587,7 @@ export function OutdoorServiceClient({ store, menus }: Props) {
                 ))}
               </div>
             </section>
-          ))}
+          )}
         </div>
       </section>
 
@@ -586,7 +624,7 @@ export function OutdoorServiceClient({ store, menus }: Props) {
           product={selectedProduct}
           currency={currency}
           onClose={() => setSelectedProduct(null)}
-          onAdd={(p, qty, mods, notes) => addItem(p, qty, mods, notes)}
+          onAdd={(p, qty, mods) => addItem(p, qty, mods)}
         />
       )}
 
@@ -607,9 +645,8 @@ export function OutdoorServiceClient({ store, menus }: Props) {
         /* ── Hero ── */
         .os-hero {
           position: relative;
-          height: 100svh;
-          min-height: 600px;
-          max-height: 900px;
+          min-height: 470px;
+          height: min(62svh, 620px);
           display: flex;
           align-items: center;
           overflow: hidden;
@@ -673,7 +710,7 @@ export function OutdoorServiceClient({ store, menus }: Props) {
 
         .os-hero__title {
           font-family: var(--font-serif);
-          font-size: clamp(3.5rem, 8vw, 7rem);
+          font-size: clamp(2.8rem, 6vw, 5.5rem);
           font-weight: 300; line-height: 0.95;
           color: var(--color-ivory);
           margin-bottom: var(--space-6);
@@ -752,6 +789,65 @@ export function OutdoorServiceClient({ store, menus }: Props) {
           50% { transform: translateY(-8px); }
         }
         .os-ambient-card__emoji { font-size: 1.3rem; }
+
+        /* ── Promotions ── */
+        .os-promos {
+          max-width: 1280px; margin: 0 auto;
+          padding: var(--space-10) var(--space-6) 0;
+          display: grid; grid-template-columns: minmax(230px, 0.7fr) 1.3fr;
+          gap: var(--space-8); align-items: center;
+        }
+        .os-promos__intro { display: flex; align-items: center; gap: var(--space-4); }
+        .os-promos__spark {
+          display: grid; place-items: center; width: 46px; height: 46px;
+          border-radius: 50%; color: #0d2b22; background: var(--color-gold);
+          font-size: 1.35rem;
+        }
+        .os-promos__eyebrow, .os-bestsellers__note {
+          color: var(--color-gold); font-size: var(--text-xs); font-weight: 700;
+          letter-spacing: 0.14em; text-transform: uppercase;
+        }
+        .os-promos__title { font-family: var(--font-serif); font-size: var(--text-2xl); font-weight: 400; }
+        .os-promos__list { display: flex; gap: var(--space-3); overflow-x: auto; scrollbar-width: none; }
+        .os-promos__list::-webkit-scrollbar { display: none; }
+        .os-promo-card {
+          min-width: 220px; padding: var(--space-4) var(--space-5);
+          border: 1px solid rgba(201,169,110,0.3); border-radius: var(--radius-xl);
+          background: linear-gradient(135deg, rgba(201,169,110,0.16), rgba(255,255,255,0.04));
+          display: flex; flex-direction: column; gap: 4px;
+        }
+        .os-promo-card__type { color: var(--color-gold); font-size: 10px; font-weight: 800; letter-spacing: 0.14em; }
+        .os-promo-card strong { color: var(--color-ivory); font-size: var(--text-sm); }
+        .os-promo-card > span:last-child { color: rgba(250,248,244,0.62); font-size: var(--text-xs); }
+        .os-promo-card b { color: var(--color-gold); letter-spacing: 0.08em; }
+
+        /* ── Best sellers ── */
+        .os-bestsellers { max-width: 1280px; margin: 0 auto; padding: 0 var(--space-6) var(--space-16); }
+        .os-bestsellers__header { display: flex; justify-content: space-between; align-items: end; gap: var(--space-4); margin-bottom: var(--space-6); }
+        .os-bestsellers__note { color: rgba(250,248,244,0.5); letter-spacing: 0.04em; text-transform: none; }
+        .os-bestsellers__grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-3); }
+        .os-bestseller-card {
+          min-height: 132px; padding: var(--space-4); text-align: left; cursor: pointer;
+          color: var(--color-ivory); background: rgba(255,255,255,0.055);
+          border: 1px solid rgba(201,169,110,0.16); border-radius: var(--radius-xl);
+          display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-3);
+          transition: transform .2s, border-color .2s, background .2s;
+        }
+        .os-bestseller-card:hover { transform: translateY(-4px); border-color: var(--color-gold); background: rgba(201,169,110,0.12); }
+        .os-bestseller-card__rank { color: var(--color-gold); }
+        .os-bestseller-card__name { font-size: var(--text-sm); font-weight: 700; line-height: 1.3; }
+        .os-bestseller-card__price { color: var(--color-gold); font-size: var(--text-sm); font-weight: 800; }
+        @media (max-width: 900px) {
+          .os-promos { grid-template-columns: 1fr; gap: var(--space-4); }
+          .os-bestsellers__grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 600px) {
+          .os-hero { min-height: 440px; height: 68svh; }
+          .os-hero__content { padding: 0 var(--space-5); }
+          .os-hero__sub br { display: none; }
+          .os-bestsellers__header { align-items: flex-start; flex-direction: column; }
+          .os-bestsellers__grid { grid-template-columns: repeat(2, 1fr); }
+        }
 
         /* ── Marquee ── */
         .os-marquee {

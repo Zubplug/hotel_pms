@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getMenu, getStorefront } from '@/lib/commerce';
+import { getMenu, getPromotions, getStorefront } from '@/lib/commerce';
 import { OutdoorServiceClient } from './client';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -18,19 +18,21 @@ export const metadata: Metadata = {
 export const revalidate = 30;
 
 export default async function OutdoorServicePage() {
-  const [storeResult, menuResult] = await Promise.allSettled([
+  const [storeResult, menuResult, promotionsResult] = await Promise.allSettled([
     getStorefront(),
     getMenu(),
+    getPromotions(),
   ]);
 
   const store = storeResult.status === 'fulfilled' ? storeResult.value : null;
   const menus = menuResult.status === 'fulfilled' ? menuResult.value : [];
+  const promotions = promotionsResult.status === 'fulfilled' ? promotionsResult.value : [];
 
   return (
     <>
       <Header />
       <main id="main-content">
-        <OutdoorServiceClient store={store} menus={menus} />
+        <OutdoorServiceClient store={store} menus={menus} promotions={promotions} />
       </main>
       <Footer />
     </>
