@@ -297,10 +297,43 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
   const [incidentCount, setIncidentCount] = useState(0);
   const logout = useLogout();
   const { provider, isDesktopMode } = useLodgeCoreProvider();
+  const [terminalStatus, setTerminalStatus] = useState<any | null>(null);
+  const [sessionOutletId, setSessionOutletId] = useState('');
   const [poolLoginOpen, setPoolLoginOpen] = useState(false);
   const { data: session } = useLodgeCoreSession();
   const userDisplayName = (session?.user as { name?: string } | undefined)?.name ?? 'Pool Staff';
   const userInitials = userDisplayName.split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase();
+
+  // Pool Operations is a workspace on the provisioned POOL_POS terminal.
+  // Keep the terminal outlet/session authoritative; switching workspaces must
+  // never switch the operator, outlet, or financial shift underneath it.
+  const terminalOutletId = String(terminalStatus?.outletId || '').trim();
+  const activeOutletId = isDesktopMode
+    ? terminalOutletId
+    : sessionOutletId || String((session?.user as any)?.outletId || '').trim();
+  const desktopPoolTerminalReady = !isDesktopMode || !terminalStatus || !terminalStatus.terminalType || terminalStatus.terminalType === 'POOL_POS';
+
+  useEffect(() => {
+    let active = true;
+    const loadContext = async () => {
+      try {
+        if (isDesktopMode) {
+          const status = await provider.system?.getTerminalStatus?.();
+          if (active) setTerminalStatus(status || null);
+          return;
+        }
+        const sessionId = localStorage.getItem('lodgecore_pos_session_id') || '';
+        if (!sessionId) return;
+        const context = await provider.pos.getSessionContext(sessionId);
+        const outletId = context?.data?.outlet?.id || context?.data?.outletId || '';
+        if (active) setSessionOutletId(String(outletId).trim());
+      } catch {
+        // The existing auth screen provides the user-facing recovery path.
+      }
+    };
+    void loadContext();
+    return () => { active = false; };
+  }, [isDesktopMode, provider]);
 
   useEffect(() => {
     let active = true;
@@ -378,6 +411,7 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
         authMode="POS_OPERATOR"
         isOpen={poolLoginOpen}
         cancellable={false}
+        outletId={activeOutletId || undefined}
         onAuthenticated={() => setPoolLoginOpen(false)}
       />
       {/* Desktop sidebar */}
@@ -451,6 +485,24 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
             </div>
           </div>
 
+          {/* Workspace switcher: changes the workspace only; the provisioned
+              terminal outlet and current POS shift remain unchanged. */}
+          <nav aria-label="POS workspace" className="hidden lg:flex items-center gap-1 rounded-xl border p-1" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+            <Link
+              href="/pos"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors"
+              style={{ color: '#94a3b8' }}
+              title="Return to Pool Bar POS sales"
+            >
+              <ShoppingCart className="h-3.5 w-3.5" />
+              POS Sales
+            </Link>
+            <span className="flex items-center gap-1.5 rounded-lg bg-sky-400/15 px-2.5 py-1.5 text-[10px] font-bold text-sky-300" aria-current="page">
+              <Waves className="h-3.5 w-3.5" />
+              Pool Operations
+            </span>
+          </nav>
+
           {/* Facility + status */}
           {shellData?.facility && (
             <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-medium" style={{ color: '#64748b' }}>
@@ -503,7 +555,16 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
-          {children}
+          {desktopPoolTerminalReady ? children : (
+            <div className="flex min-h-full items-center justify-center p-6">
+              <section className="max-w-md rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-6 text-center">
+                <Waves className="mx-auto h-8 w-8 text-amber-300" />
+                <h2 className="mt-4 text-lg font-bold text-white">Pool Operations is not available on this terminal</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-400">This desktop is provisioned for a different terminal type. Use a terminal provisioned as Pool POS to access pool operations.</p>
+                <Link href="/pos" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2.5 text-sm font-bold text-slate-950">Return to POS Sales</Link>
+              </section>
+            </div>
+          )}
         </main>
       </div>
     </div>

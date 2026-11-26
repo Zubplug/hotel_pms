@@ -91,6 +91,7 @@ public class TerminalBootstrapService
             bankingModel = bankingModel,
             outletId = terminal.OutletId,
             outletType = outletType,
+            terminalType = terminal.TerminalType,
             desktopMode = desktopMode
         };
     }

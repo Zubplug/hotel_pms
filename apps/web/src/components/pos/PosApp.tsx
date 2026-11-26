@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
   Loader2, CreditCard, Banknote, LayoutGrid,
   ChefHat, Scissors, X, Building2, Send, Flame, Lock,
-  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, AlertTriangle, Ban, Bell
+  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, AlertTriangle, Ban, Bell, Monitor, MonitorX
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -136,6 +136,10 @@ export default function PosApp() {
   const [guestCount, setGuestCount] = useState(2);
   const [sessionContext, setSessionContext] = useState<any | null>(null);
   const [terminalStatus, setTerminalStatus] = useState<any | null>(null);
+  // A desktop terminal is provisioned for exactly one outlet. Keep that
+  // identity independent from the operator session so the catalog and staff
+  // list cannot change when a waiter signs in.
+  const terminalOutletId = isDesktopMode ? String(terminalStatus?.outletId || '').trim() : '';
   const [posSessionId, setPosSessionId] = useState<string>('');
   const [bankingModel, setBankingModel] = useState<string>('CENTRAL_CASHIER');
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
@@ -185,8 +189,11 @@ export default function PosApp() {
   // Pool Operations is available only to terminals attached to a pool-type
   // outlet. The outlet's saved type is authoritative; the POS terminal type
   // must not make the pool link appear on restaurant, bar, or club outlets.
-  const outletType = String(sessionContext?.outlet?.type || '').trim().toUpperCase();
-  const isPoolOutlet = ['POOL', 'RECREATION', 'SWIMMING_POOL', 'SWIMMING_POOL_OUTLET'].includes(outletType);
+  const outletType = String(sessionContext?.outlet?.type || terminalStatus?.outletType || '').trim().toUpperCase();
+  const terminalType = String(terminalStatus?.terminalType || '').trim().toUpperCase();
+  const isPoolOutlet =
+    ['POOL', 'RECREATION', 'SWIMMING_POOL', 'SWIMMING_POOL_OUTLET'].includes(outletType) ||
+    terminalType === 'POOL_POS';
 
   const lockOperator = useCallback(() => {
     operatorSwitchOverride.current = true;
@@ -460,7 +467,7 @@ export default function PosApp() {
   const { isExpired, isRevoked, restrictedMode } = useLicenseGuard({ sessionContext, terminalStatus });
 
   useEffect(() => {
-    if (!isDesktopMode || terminalPropertyId) return;
+    if (!isDesktopMode || terminalStatus) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -474,7 +481,7 @@ export default function PosApp() {
       }
     })();
     return () => { cancelled = true; };
-  }, [isDesktopMode, provider, terminalPropertyId]);
+  }, [isDesktopMode, provider, terminalStatus]);
 
 
   useEffect(() => {
@@ -494,19 +501,23 @@ export default function PosApp() {
   // Load products / categories + restore session context
   // ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!propertyId) return;
+    if (!propertyId || (isDesktopMode && !terminalOutletId)) {
+      if (isDesktopMode && terminalStatus?.registrationState === 'UNREGISTERED') {
+        setIsLoading(false);
+      }
+      return;
+    }
     const fetchData = async () => {
       try {
         const configuredBankingModel = (session as any)?.user?.bankingModel;
         if (configuredBankingModel) setBankingModel(configuredBankingModel);
-        if (isDesktopMode) {
-          const localTerminalStatus = await provider.system?.getTerminalStatus?.();
-          setTerminalStatus(localTerminalStatus);
-          if (localTerminalStatus?.bankingModel) setBankingModel(localTerminalStatus.bankingModel);
-          if (localTerminalStatus?.propertyId && !terminalPropertyId) setTerminalPropertyId(localTerminalStatus.propertyId);
-        }
-        // Read the active outlet from localStorage — set when the operator selects their outlet at session start
-        const activeOutletId = localStorage.getItem('lodgecore_pos_outlet_id') || undefined;
+        // Desktop catalog scope comes only from the provisioned terminal. Do
+        // not fall back to a property-wide query: that makes a newly
+        // provisioned Pool Bar appear correct before login and then disappear
+        // when the authenticated session reloads the catalog.
+        const activeOutletId = isDesktopMode
+          ? terminalOutletId
+          : (localStorage.getItem('lodgecore_pos_outlet_id') || '').trim() || undefined;
         const [prodRes, catRes] = await Promise.all([
           provider.pos.getProducts(propertyId, activeOutletId),
           provider.pos.getCategories(propertyId, activeOutletId),
@@ -613,16 +624,14 @@ export default function PosApp() {
       }
     };
     fetchData();
-  }, [propertyId, provider, session]);
+  }, [isDesktopMode, propertyId, provider, session, terminalOutletId, terminalStatus?.registrationState]);
 
-  // Desktop starts the catalog before operator authentication so the shell can
-  // render, but that first request has no outlet ID and therefore returns the
-  // property-wide catalog. Once the operator/session identifies its outlet,
-  // reload the catalog scoped to that outlet. Without this refresh, the All
-  // tab combines identical kitchen/bar menu copies from multiple outlets.
+  // Browser POS may restore an authenticated outlet after login. Desktop does
+  // not reload here: its provisioned terminal outlet is already authoritative
+  // and must remain stable across operator authentication and shift opening.
   const authenticatedOutletId = sessionContext?.outlet?.id || sessionContext?.outletId || '';
   useEffect(() => {
-    if (!propertyId || !authenticatedOutletId) return;
+    if (isDesktopMode || !propertyId || !authenticatedOutletId) return;
     let cancelled = false;
 
     const reloadOutletCatalog = async () => {
@@ -658,7 +667,7 @@ export default function PosApp() {
 
     reloadOutletCatalog();
     return () => { cancelled = true; };
-  }, [propertyId, provider, authenticatedOutletId]);
+  }, [isDesktopMode, propertyId, provider, authenticatedOutletId]);
 
   // Redirect if no operator logged in (not cash drawer)
   useEffect(() => {
@@ -1514,15 +1523,26 @@ export default function PosApp() {
                   </div>
 
                   {isDesktopMode && (
-                    <button
-                      type="button"
-                      onClick={() => void toggleCustomerDisplay()}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${customerDisplayEnabled ? 'bg-cyan-50 border-cyan-200 text-cyan-700' : 'bg-white border-slate-200 text-slate-500'}`}
-                      title={customerDisplaySupported ? 'Toggle customer-facing second screen' : customerDisplayReason || 'Customer display unavailable'}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${customerDisplayEnabled ? 'bg-cyan-500' : 'bg-slate-300'}`} />
-                      {customerDisplaySupported ? `Display ${customerDisplayEnabled ? 'On' : 'Off'}` : '2nd screen unavailable'}
-                    </button>
+                    customerDisplaySupported ? (
+                      <button
+                        type="button"
+                        onClick={() => void toggleCustomerDisplay()}
+                        aria-label={`Customer display ${customerDisplayEnabled ? 'on' : 'off'}`}
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${customerDisplayEnabled ? 'border-cyan-200 bg-cyan-50 text-cyan-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
+                        title={`Customer display ${customerDisplayEnabled ? 'on' : 'off'} · Click to toggle`}
+                      >
+                        {customerDisplayEnabled ? <Monitor className="h-4 w-4" /> : <MonitorX className="h-4 w-4" />}
+                      </button>
+                    ) : (
+                      <span
+                        role="img"
+                        aria-label="Customer display unavailable"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-300"
+                        title={customerDisplayReason || 'Customer display unavailable on this terminal'}
+                      >
+                        <MonitorX className="h-4 w-4" />
+                      </span>
+                    )
                   )}
 
                   {/* Cart toggle */}
@@ -1936,7 +1956,9 @@ export default function PosApp() {
         authMode="POS_OPERATOR"
         isOpen={!activeOperator || showSwitchPad || (Boolean(activeOperator) && !hasOpenPosShift)}
         cancellable={!!activeOperator && showSwitchPad && hasOpenPosShift}
-        outletId={sessionContext?.outlet?.id || sessionContext?.outletId}
+        outletId={isDesktopMode
+          ? terminalOutletId
+          : (sessionContext?.outlet?.id || sessionContext?.outletId)}
         onCancel={() => setShowSwitchPad(false)}
         onAuthenticated={(operator: any, token: string, authData?: any) => {
           const normalizedOperator = {
