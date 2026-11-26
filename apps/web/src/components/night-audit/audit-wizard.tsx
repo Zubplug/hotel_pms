@@ -287,8 +287,11 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
     <>
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!executing) onOpenChange(nextOpen); }}>
         <DialogContent
-          className="relative !flex !h-[calc(100vh-1rem)] !h-[calc(100dvh-1rem)] !max-h-[calc(100vh-1rem)] !max-h-[calc(100dvh-1rem)] !min-h-0 !w-[calc(100vw-2rem)] !max-w-[calc(100vw-2rem)] flex-col !gap-0 overflow-hidden rounded-3xl border-white/[0.08] p-0 shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
-          style={{ background: '#060b18' }}
+          className="!fixed !top-2 !right-2 !bottom-2 !left-2 !flex !h-auto !max-h-none !min-h-0 !w-auto !max-w-none !translate-x-0 !translate-y-0 data-open:animate-none data-closed:animate-none flex-col !gap-0 overflow-hidden rounded-3xl border-white/[0.08] p-0 shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
+          style={{
+            background: '#060b18',
+            transform: 'none',
+          }}
         >
           {/* ── Header ── */}
           <div
