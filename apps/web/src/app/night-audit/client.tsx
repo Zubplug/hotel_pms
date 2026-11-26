@@ -230,6 +230,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   const [successResult, setSuccessResult] = useState<any>(null);
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
+  const [backgroundRunning, setBackgroundRunning] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
     if (!propertyId) return;
@@ -240,6 +241,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || 'Unable to load audit status');
       setData(json.data);
+      if (backgroundRunning && !json.data.activeAudit) setBackgroundRunning(false);
       setLastRefresh(new Date());
 
       try {
@@ -283,9 +285,14 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       setLoading(false);
       setRefreshing(false);
     }
-  }, [propertyId, managerMode]);
+  }, [propertyId, managerMode, backgroundRunning]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!data?.activeAudit && !backgroundRunning) return;
+    const timer = window.setInterval(() => { void load(true); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [data?.activeAudit, backgroundRunning, load]);
   useEffect(() => {
     const refresh = () => void load(true);
     window.addEventListener('night-audit:refresh', refresh);
@@ -306,8 +313,17 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         throw new Error(`Audit service returned an invalid response (HTTP ${res.status}). Please retry or contact support if it continues.`);
       }
       if (!res.ok) throw new Error(json.error?.message || 'Audit execution failed');
-      setWizardOpen(false); setSuccessResult(json.data); await load(true);
+      setWizardOpen(false);
+      if (res.status === 202 || json.data?.accepted) {
+        setBackgroundRunning(true);
+        setMessage('Night Audit is running in the background. This screen will update automatically until posting is complete.');
+      } else {
+        setBackgroundRunning(false);
+        setSuccessResult(json.data);
+      }
+      await load(true);
     } catch (err: any) {
+      setBackgroundRunning(false);
       setError(err.message); setFailureMessage(err.message || 'The Night Audit could not be completed.');
     } finally { setExecuting(false); }
   };

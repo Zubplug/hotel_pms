@@ -13,6 +13,17 @@ import { postGuestAmenityPackInTransaction } from './services/guest-amenity-serv
 import { hasEntitlement } from '@/lib/auth/entitlement';
 
 const BATCH_SIZE = 50;
+const STALE_AUDIT_TIMEOUT_MS = 10 * 60 * 1000;
+
+async function markNightAuditStage(auditId: string, stage: string, details?: string) {
+  await prisma.nightAudit.update({
+    where: { id: auditId },
+    data: {
+      updatedAt: new Date(),
+      notes: details ? `AUDIT_STAGE:${stage} ${details}` : `AUDIT_STAGE:${stage}`,
+    },
+  });
+}
 
 import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation, getFnbControl, postEventHallRevenueForDate, submitDueEventInvoicesForReview } from './night-audit-service';
 
@@ -169,7 +180,7 @@ export async function executeNightAudit(
       throw new Error(`CONFLICT:Night Audit for ${businessDate.toISOString().split('T')[0]} has already been completed.`);
     }
     if (existing?.status === 'IN_PROGRESS' || existing?.status === 'POSTING') {
-      const isStale = existing.updatedAt && (existing.updatedAt.getTime() < Date.now() - 45 * 60 * 1000);
+      const isStale = existing.updatedAt && (existing.updatedAt.getTime() < Date.now() - STALE_AUDIT_TIMEOUT_MS);
       if (isStale) {
         const recovered = await tx.nightAudit.updateMany({
           where: { id: existing.id, status: existing.status, updatedAt: existing.updatedAt },
@@ -274,12 +285,14 @@ export async function executeNightAudit(
     // must use a dedicated system identity rather than impersonating staff.
     if (!userId) throw new Error('AUTHENTICATED_AUDITOR_REQUIRED: Night Audit requires an authenticated actor.');
     const actorId = userId;
+    await markNightAuditStage(auditRun.id, 'PREPARING', `businessDate=${businessDate.toISOString().slice(0, 10)}`);
 
     // Generate all recurring hall billing periods due on the date being
     // closed before the close package is finalized. This keeps the billing
     // cutoff aligned with the audited business date rather than the date
     // after the property rolls forward.
     try {
+      await markNightAuditStage(auditRun.id, 'RECURRING_BILLING');
       leaseBilling = await processLeaseBilling(propertyId, actorId ? { userId: actorId } : undefined, undefined, businessDate);
     } catch (leaseError) {
       throw new Error(`BLOCKER:Recurring hall billing could not be generated for ${businessDate.toISOString().slice(0, 10)}: ${leaseError instanceof Error ? leaseError.message : String(leaseError)}`);
@@ -289,12 +302,14 @@ export async function executeNightAudit(
     // never approves or issues them. Accounting and Cashier remain separate
     // control steps.
     if (actorId) {
+      await markNightAuditStage(auditRun.id, 'EVENT_INVOICES');
       await submitDueEventInvoicesForReview(propertyId, actorId, businessDate);
     }
 
     // Revenue is recognized at the event/service date, never when a future
     // event invoice is issued. The journal reference is idempotent, so a
     // retry or recovery audit cannot recognize the same invoice twice.
+    await markNightAuditStage(auditRun.id, 'EVENT_REVENUE');
     await postEventHallRevenueForDate(propertyId, actorId || userId || 'system', businessDate);
 
     // 3. Post Room Charges
@@ -331,13 +346,15 @@ export async function executeNightAudit(
     let totalRoomChargesPosted = 0;
     let errors = 0;
     let lastHeartbeat = Date.now();
+    let amenitiesStageMarked = false;
+    await markNightAuditStage(auditRun.id, 'ROOM_CHARGES', `eligible=${eligibleReservations.length}`);
     for (let i = 0; i < eligibleReservations.length; i += BATCH_SIZE) {
       const batch = eligibleReservations.slice(i, i + BATCH_SIZE);
 
       if (Date.now() - lastHeartbeat > 15000) {
         await prisma.nightAudit.update({
           where: { id: auditRun.id },
-          data: { updatedAt: new Date() }
+          data: { updatedAt: new Date(), notes: `AUDIT_STAGE:ROOM_CHARGES processed=${Math.min(i, eligibleReservations.length)} total=${eligibleReservations.length}` }
         }).catch((e) => console.error('[Night Audit] Heartbeat failed:', e));
         lastHeartbeat = Date.now();
       }
@@ -958,6 +975,10 @@ export async function executeNightAudit(
         // transaction. A shortage or configuration problem must never roll
         // back an otherwise valid room charge or stop financial cutover.
         if (professionalOperationsEnabled) {
+          if (!amenitiesStageMarked) {
+            await markNightAuditStage(auditRun.id, 'GUEST_AMENITIES');
+            amenitiesStageMarked = true;
+          }
           try {
             const amenityResult = await prisma.$transaction((tx: any) => postGuestAmenityPackInTransaction(tx, {
               propertyId,
@@ -1016,6 +1037,8 @@ export async function executeNightAudit(
     }
     }
 
+    await markNightAuditStage(auditRun.id, 'REFERRALS');
+
     // Reconcile any completed-stay referrals that were created or checked out
     // while the desktop client was offline, or whose first fulfilment attempt
     // failed. This pass is deliberately idempotent: fulfilReachBooking locks
@@ -1052,6 +1075,8 @@ export async function executeNightAudit(
         console.error(`[Night Audit] Reach fulfilment failed for ${reachBooking.id}:`, error);
       }
     }
+
+  await markNightAuditStage(auditRun.id, 'FINALIZING');
 
   // The date was already rolled during cutover. Finish the previous date's
   // posting work and publish a final, immutable audit result.

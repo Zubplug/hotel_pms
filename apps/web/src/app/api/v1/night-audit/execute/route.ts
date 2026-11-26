@@ -10,6 +10,9 @@ import prisma from '@hotel-pms/db';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { getOperationalReview, getFinancialAudit, getSystemIntegrity } from '@/lib/night-audit-service';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -81,7 +84,10 @@ export async function POST(req: NextRequest) {
     const ipAddress = req.headers.get('x-forwarded-for') || '127.0.0.1';
     const userAgent = req.headers.get('user-agent') || 'SYSTEM';
 
-    const result = await executeNightAudit(
+    // The audit is a durable server workflow. A browser/proxy request must
+    // not remain open while room charges, amenities, journals and cutover are
+    // posted. Each stage is idempotent and persists its heartbeat/status.
+    void executeNightAudit(
       ctx,
       propertyId, 
       session.user.id, 
@@ -89,14 +95,13 @@ export async function POST(req: NextRequest) {
       (session.user as any).role || 'SYSTEM',
       ipAddress,
       userAgent
-    );
+    ).catch((error) => console.error('[Night Audit background execution]', error));
 
     return successResponse({
-      message: result.completedWithExceptions
-        ? 'Night Audit completed with exceptions. Review the close package before handover.'
-        : 'Night Audit successfully executed.',
-      ...result
-    });
+      accepted: true,
+      message: 'Night Audit accepted. Progress is being recorded and can be monitored from this screen.',
+      propertyId,
+    }, 202);
 
   } catch (err: any) {
     const errorMessage = err instanceof Error ? err.message : String(err);

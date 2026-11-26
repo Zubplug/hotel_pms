@@ -65,6 +65,9 @@ export async function GET(req: NextRequest) {
         include: { financialSnapshot: true },
       }),
     ]);
+    const activeAuditIsStale = Boolean(
+      activeAudit?.updatedAt && activeAudit.updatedAt.getTime() < Date.now() - 10 * 60 * 1000
+    );
 
     const auditStaffIds = [currentAudit?.runBy, activeAudit?.runBy, lastCompletedAudit?.runBy].filter((id): id is string => Boolean(id));
     const auditStaff = auditStaffIds.length
@@ -382,7 +385,9 @@ export async function GET(req: NextRequest) {
       // auditState is the single canonical status field. Use this in the UI.
       auditState,
       canStartAudit,
-      canResumeAudit: activeAudit?.status === 'IN_PROGRESS',
+      canResumeAudit: activeAudit?.status === 'IN_PROGRESS' || activeAuditIsStale,
+      auditRecoveryAvailable: activeAuditIsStale,
+      auditHeartbeatAt: activeAudit?.updatedAt || null,
       auditStartBlockedReason,
       // Legacy fields kept for backwards compatibility:
       auditPhase: activeAudit?.status || (currentAudit?.status ?? 'PENDING'),
