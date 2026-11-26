@@ -14,7 +14,7 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 
 type Params = { params: Promise<{ storeId: string }> };
 
@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId } = await params;
 
     const store = await prisma.commerceStore.findFirst({

@@ -1,4 +1,4 @@
-export const CATALOG_VERSION = 3;
+export const CATALOG_VERSION = 4;
 
 export type CatalogProduct = {
   code: string;
@@ -59,6 +59,8 @@ export const catalogProducts: CatalogProduct[] = [
       offlineCapable: true,       // POS bridge operates offline-first
       requiresApproval: false,    // Self-serve activation
       standaloneEligible: true,   // No MODULE_PMS required
+      includedCapabilities: ['DELIVERY', 'ANALYTICS', 'MEAL_PASS'],
+      billingDescription: 'A complete digital ordering channel for hospitality businesses, connected to LodgeCore operations and POS.',
       version: CATALOG_VERSION,
     },
   },
@@ -74,12 +76,18 @@ export const catalogProducts: CatalogProduct[] = [
       offlineCapable: true,
       standaloneOnly: true,       // For businesses with no LodgeCore base module
       requiresApproval: false,
+      standaloneEligible: true,
+      includedCapabilities: ['DELIVERY', 'ANALYTICS', 'MEAL_PASS'],
+      billingDescription: 'A self-contained food ordering operation for businesses that need commerce without a LodgeCore hotel plan.',
       version: CATALOG_VERSION,
     },
   },
-  { code: 'ADDON_FOOD_DELIVERY',  name: 'Food Commerce — Delivery Management', type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: true,  offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
-  { code: 'ADDON_FOOD_MEAL_PASS', name: 'Food Commerce — Meal Pass Engine',     type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: true,  offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
-  { code: 'ADDON_FOOD_ANALYTICS', name: 'Food Commerce — Advanced Analytics',   type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: true,  offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
+  // Retained as non-sellable capability records so existing entitlements and
+  // historical invoices remain valid. Their capabilities are included in the
+  // two customer-facing Food Commerce packages above.
+  { code: 'ADDON_FOOD_DELIVERY',  name: 'Food Commerce — Delivery Management', type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: false, offlineCapable: false, legacyCapability: true, requiresProducts: ['ADDON_FOOD_COMMERCE'], billingDescription: 'Included in Food Commerce packages.', version: CATALOG_VERSION } },
+  { code: 'ADDON_FOOD_MEAL_PASS', name: 'Food Commerce — Meal Pass Engine',     type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: false, offlineCapable: false, legacyCapability: true, requiresProducts: ['ADDON_FOOD_COMMERCE'], billingDescription: 'Included in Food Commerce packages.', version: CATALOG_VERSION } },
+  { code: 'ADDON_FOOD_ANALYTICS', name: 'Food Commerce — Advanced Analytics',   type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: false, offlineCapable: false, legacyCapability: true, requiresProducts: ['ADDON_FOOD_COMMERCE'], billingDescription: 'Included in Food Commerce packages.', version: CATALOG_VERSION } },
   { code: 'ADDON_FOOD_NETWORK',   name: 'LodgeCore Food Network',                type: 'ADDON', active: false, metadata: { family: 'COMMERCE', unit: 'STORE', sellable: false, offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
 ];
 

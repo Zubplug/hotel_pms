@@ -6,9 +6,9 @@
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
-import { errorResponse, successResponse } from '@/lib/api-response';
+import { errorResponse, paginatedResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 
 type Params = { params: Promise<{ storeId: string }> };
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId } = await params;
 
     const storeOk = await prisma.commerceStore.findFirst({
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       prisma.commerceCustomer.count({ where }),
     ]);
 
-    return successResponse(customers, 200, { page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
+    return paginatedResponse(customers, { page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
   } catch (err) {
     console.error('[commerce/manage/customers GET]', err);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);

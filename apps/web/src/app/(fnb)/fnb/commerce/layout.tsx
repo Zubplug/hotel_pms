@@ -2,7 +2,7 @@ import React from 'react';
 import { CommerceLayout } from '@/components/layout/CommerceLayout';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 import { requireOrganizationContext } from '@/lib/organization-access';
 
 export default async function CommerceDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -12,11 +12,11 @@ export default async function CommerceDashboardLayout({ children }: { children: 
   const ctx = await requireOrganizationContext(session.user.id);
 
   try {
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
   } catch {
     // Redirect to portal subscription page — same pattern as (fnb)/layout.tsx
     redirect(
-      `${process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'https://lodgecore.zubplug.com.ng'}/portal/subscription?required=ADDON_FOOD_COMMERCE`,
+      `${process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'https://lodgecore.zubplug.com.ng'}/portal/subscription?required=FOOD_COMMERCE`,
     );
   }
 

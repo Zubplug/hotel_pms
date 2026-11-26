@@ -44,8 +44,26 @@ function addOnFeatures(product: Product): string[] {
     ADDON_CUSTOM_WEBSITE_PMS: ["PMS-connected custom website", "Live LodgeCore PMS integration", "Brand-led visual direction", "HQ design and launch support"],
     ADDON_REACH: ["LodgeCore referral network listing", "Trackable referral campaigns", "Property-level booking attribution", "Referral performance reporting"],
     ADDON_EXTRA_TERMINAL: ["One additional licensed POS terminal", "Central terminal entitlement tracking", "Recurring billing per terminal", "Fast activation after payment"],
+    ADDON_FOOD_COMMERCE: ["Branded online food ordering", "Live menu and category management", "Secure checkout and payment collection", "Offline-first POS order bridge", "Delivery operations and fulfilment", "Advanced food analytics", "Meal pass management"],
+    ADDON_FOOD_STANDALONE: ["Standalone restaurant ordering channel", "Menu, modifier and product management", "Customer order tracking", "POS-ready order synchronization", "Delivery operations and fulfilment", "Advanced food analytics", "Meal pass management"],
   };
   return mapped[code] || product.modules?.map(m => m.name) || ["Extended capability module"];
+}
+
+const ADDON_DESCRIPTIONS: Record<string, string> = {
+  ADDON_FOOD_COMMERCE: "A complete digital ordering channel for hospitality businesses, including delivery, advanced analytics and meal passes, connected to LodgeCore operations and POS.",
+  ADDON_FOOD_STANDALONE: "A self-contained food ordering operation with delivery, advanced analytics and meal passes for businesses that need commerce without a LodgeCore hotel plan.",
+  ADDON_FOOD_ANALYTICS: "Advanced reporting for food revenue, products, categories, order channels and operational performance.",
+  ADDON_FOOD_DELIVERY: "Coordinate delivery areas, fees, drivers and customer fulfilment from one operational workspace.",
+  ADDON_FOOD_MEAL_PASS: "Issue and manage prepaid meal entitlements with controlled redemption and clear usage history.",
+};
+
+function addOnDescription(product: Product) {
+  if (product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)) {
+    const value = (product.metadata as Record<string, unknown>).billingDescription;
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return ADDON_DESCRIPTIONS[product.code] ?? "Extend your LodgeCore operation with a focused capability module.";
 }
 
 function isPropertyScoped(product: Product) {
@@ -55,6 +73,11 @@ function isPropertyScoped(product: Product) {
 function isRecommended(product: Product) {
   return Boolean(product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)
     && (product.metadata as Record<string, unknown>).recommended === true);
+}
+
+function isStandaloneEligible(product: Product) {
+  return Boolean(product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)
+    && (product.metadata as Record<string, unknown>).standaloneEligible === true);
 }
 
 function planFeatures(plan: Plan): { feature: string; included: boolean }[] {
@@ -746,6 +769,7 @@ function AddOnCard({
   const features = addOnFeatures(product);
   const isReach = product.code === "ADDON_REACH";
   const isExtraTerminal = product.code === "ADDON_EXTRA_TERMINAL";
+  const canPurchaseWithoutBasePlan = isStandaloneEligible(product);
   const discountedAmount = price && discount ? Math.round(price.amount * (1 - discount.percentage / 100)) : price?.amount;
 
   return (
@@ -779,6 +803,8 @@ function AddOnCard({
         ))}
       </div>
 
+      <p className="sub-addon-desc">{addOnDescription(product)}</p>
+
       <div className="sub-addon-price">
         {price ? (
           <>
@@ -797,10 +823,10 @@ function AddOnCard({
         <button
           className="btn btn-outline btn-sm sub-addon-cta"
           style={{ flex: 1 }}
-          disabled={busy !== null || !price || !canSubscribe || !scopeReady || isActive}
+          disabled={busy !== null || !price || (!canSubscribe && !canPurchaseWithoutBasePlan) || !scopeReady || isActive}
           onClick={() => price && (onSpecialAddon ? onSpecialAddon() : onCheckout(key, [price.id]))}
         >
-          {busy === key ? "Opening…" : isActive ? "Active add-on" : isReach ? "Configure Reach →" : isExtraTerminal ? "Choose terminals →" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : isReach ? "Configure Reach →" : isExtraTerminal ? "Choose terminals →" : (!canSubscribe && !canPurchaseWithoutBasePlan) ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -983,7 +1009,7 @@ export default function SubscriptionCatalogue({
 
           {!hasActiveBaseSubscription && (
             <div className="sub-error-banner portal-card" role="status" style={{ marginBottom: 20 }}>
-              Select and activate a base plan before purchasing capability add-ons. Add-ons cannot be subscribed to on their own.
+              Select and activate a base plan before purchasing most capability add-ons. Standalone-eligible products can be purchased independently.
             </div>
           )}
 

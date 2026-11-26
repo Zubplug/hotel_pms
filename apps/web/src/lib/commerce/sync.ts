@@ -11,6 +11,7 @@
  */
 
 import prisma from '@hotel-pms/db';
+import { Prisma } from '@hotel-pms/db';
 
 interface EnqueueInput {
   order: {
@@ -67,7 +68,7 @@ export async function enqueueCommerceSyncEvent(input: EnqueueInput) {
     orderType: order.orderType,
     fulfillmentType: order.fulfillmentType,
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
-    totalAmount: order.totalAmount,
+    totalAmount: typeof order.totalAmount === 'number' ? order.totalAmount : String(order.totalAmount),
     currency: order.currency,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
@@ -96,7 +97,7 @@ export async function enqueueCommerceSyncEvent(input: EnqueueInput) {
       status: 'QUEUED',
       idempotencyKey,
       payloadVersion: 1,
-      payload,
+      payload: payload as Prisma.InputJsonValue,
     },
   });
 

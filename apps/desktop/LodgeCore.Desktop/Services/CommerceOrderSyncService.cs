@@ -32,7 +32,7 @@ namespace LodgeCore.Desktop.Services;
 ///   • If the terminal is offline or the POS bridge API returns non-2xx, the
 ///     service retries on the next poll. Exponential back-off is applied after 3
 ///     consecutive failures (consistent with <see cref="SyncEngine"/> pattern).
-///   • The service is only active when the terminal has the ADDON_FOOD_COMMERCE
+///   • The service is only active when the terminal has a Food Commerce package
 ///     entitlement in its cached <c>EntitlementsJson</c>.
 /// </summary>
 public class CommerceOrderSyncService : BackgroundService
@@ -100,7 +100,7 @@ public class CommerceOrderSyncService : BackgroundService
 
         if (!HasFoodCommerceEntitlement(terminal.EntitlementsJson))
         {
-            _logger.LogDebug("CommerceOrderSyncService: ADDON_FOOD_COMMERCE not active on this terminal — skipping poll.");
+            _logger.LogDebug("CommerceOrderSyncService: Food Commerce package not active on this terminal — skipping poll.");
             return;
         }
 
@@ -395,7 +395,8 @@ public class CommerceOrderSyncService : BackgroundService
         try
         {
             var arr = JsonSerializer.Deserialize<string[]>(entitlementsJson) ?? Array.Empty<string>();
-            return arr.Contains("ADDON_FOOD_COMMERCE", StringComparer.OrdinalIgnoreCase);
+            return arr.Contains("ADDON_FOOD_COMMERCE", StringComparer.OrdinalIgnoreCase)
+                || arr.Contains("ADDON_FOOD_STANDALONE", StringComparer.OrdinalIgnoreCase);
         }
         catch { return false; }
     }

@@ -8,7 +8,7 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 import { z } from 'zod';
 
 type Params = { params: Promise<{ storeId: string }> };
@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId } = await params;
 
     const storeOk = await prisma.commerceStore.findFirst({
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId } = await params;
 
     const storeOk = await prisma.commerceStore.findFirst({
@@ -80,16 +80,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     const promo = await prisma.commercePromotion.create({
       data: {
         storeId,
+        name: data.description?.trim() || data.code,
         code: data.code,
-        discountType: data.discountType,
-        discountValue: data.discountValue,
+        type: data.discountType,
+        value: data.discountValue,
         minimumOrderAmount: data.minimumOrderAmount,
-        maxUsageCount: data.maxUsageCount,
-        maxUsagePerCustomer: data.maxUsagePerCustomer,
-        validFrom: data.validFrom ? new Date(data.validFrom) : null,
-        validTo: data.validTo ? new Date(data.validTo) : null,
+        maxUsesTotal: data.maxUsageCount,
+        maxUsesPerCustomer: data.maxUsagePerCustomer,
+        validFrom: data.validFrom ? new Date(data.validFrom) : new Date(),
+        validTo: data.validTo ? new Date(data.validTo) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         isActive: data.isActive,
-        description: data.description,
       },
     });
 

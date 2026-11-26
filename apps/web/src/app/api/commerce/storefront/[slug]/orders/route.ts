@@ -7,7 +7,7 @@
  * same key within 24h return the existing order rather than creating a new one.
  *
  * Flow:
- *   1. Validate store is ACTIVE and has ADDON_FOOD_COMMERCE entitlement.
+ *   1. Validate store is ACTIVE and has either Food Commerce package.
  *   2. Resolve/create CommerceCustomer by phone number.
  *   3. Build order with price snapshot from current product prices.
  *   4. Create CommerceOrder (status: PENDING_PAYMENT) + CommercePayment.
@@ -18,6 +18,7 @@
 
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { Prisma } from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { z } from 'zod';
 import { generateOrderRef, generateTrackingToken } from '@/lib/commerce/order-utils';
@@ -326,7 +327,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           orderType: data.orderType,
           fulfillmentType: data.fulfillmentType,
           scheduledFor: data.scheduledFor ? new Date(data.scheduledFor) : null,
-          deliveryAddress: data.deliveryAddress ?? null,
+          deliveryAddress: data.deliveryAddress ?? Prisma.JsonNull,
           deliveryNotes: data.deliveryNotes,
           subtotal,
           deliveryFee,

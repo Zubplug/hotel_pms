@@ -227,7 +227,12 @@ export async function validateCheckoutSelection(
       },
       select: { id: true },
     });
-    if (!activeBaseSubscription) {
+    const standaloneEligible = prices.every((price) => {
+      const metadata = price.product.metadata;
+      return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        && (metadata as Record<string, unknown>).standaloneEligible === true;
+    });
+    if (!activeBaseSubscription && !standaloneEligible) {
       throw new Error('An active base-plan subscription is required before purchasing an add-on');
     }
   }

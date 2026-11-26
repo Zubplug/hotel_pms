@@ -2,7 +2,7 @@
  * GET  /api/commerce/manage/stores  — list all Commerce stores for the org
  * POST /api/commerce/manage/stores  — create a new store
  *
- * Auth: staff session required. Entitlement: ADDON_FOOD_COMMERCE.
+ * Auth: staff session required. Entitlement: either Food Commerce package.
  */
 
 import { NextRequest } from 'next/server';
@@ -10,7 +10,7 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 import { encryptPaymentCredential } from '@/lib/payment-providers/credentials';
 import { z } from 'zod';
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
 
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
 
     const stores = await prisma.commerceStore.findMany({
       where: { organizationId: ctx.organizationId },
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
 
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
 
     const body = await req.json();
     const parsed = createStoreSchema.safeParse(body);

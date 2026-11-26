@@ -13,6 +13,15 @@ function billingDescription(payload: unknown) {
   return typeof value === "string" ? value : null;
 }
 
+function currentCatalogPrices<T extends { catalogVersion: number }>(product: T & { prices: Array<{ catalogVersion: number }> }) {
+  const current = product.prices.filter((price) => price.catalogVersion === product.catalogVersion);
+  if (current.length) return current;
+  // Keep the catalogue usable while an older product row is being repaired by
+  // the idempotent catalogue seed. Never hide newer valid prices from users.
+  const latestVersion = Math.max(...product.prices.map((price) => price.catalogVersion), 0);
+  return product.prices.filter((price) => price.catalogVersion === latestVersion);
+}
+
 export default async function SubscriptionPage() {
   const session = await auth();
   const user = session?.user as { organizationId?: string; name?: string | null; email?: string | null } | undefined;
@@ -24,7 +33,7 @@ export default async function SubscriptionPage() {
     prisma.trialHistory.findUnique({ where: { organizationId }, select: { status: true, startedAt: true, endedAt: true } }),
     prisma.entitlement.findMany({ where: { organizationId, status: "ACTIVE", startsAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, include: { product: true, property: { select: { name: true } } }, orderBy: [{ propertyId: "asc" }, { productCode: "asc" }] }),
     prisma.billingPlan.findMany({ where: { active: true }, orderBy: { displayOrder: "asc" }, include: { items: { include: { product: { include: { prices: { orderBy: { amount: "asc" } }, modules: { where: { active: true }, orderBy: { name: "asc" } } } } } } } }),
-    prisma.billingProduct.findMany({ where: { active: true, type: "ADDON" }, orderBy: { name: "asc" }, include: { prices: { orderBy: { amount: "asc" } }, modules: { where: { active: true }, orderBy: { name: "asc" } } } }),
+    prisma.billingProduct.findMany({ where: { active: true, type: "ADDON", code: { notIn: ["ADDON_FOOD_DELIVERY", "ADDON_FOOD_ANALYTICS", "ADDON_FOOD_MEAL_PASS"] } }, orderBy: { name: "asc" }, include: { prices: { orderBy: { amount: "asc" } }, modules: { where: { active: true }, orderBy: { name: "asc" } } } }),
     prisma.property.findMany({ where: { organizationId }, select: { id: true, name: true, isActive: true, businessDate: true, auditStatus: true }, orderBy: { name: "asc" } }),
     prisma.billingInvoice.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, status: true, currency: true, total: true, amountPaid: true, amountDue: true, periodStart: true, periodEnd: true, hostedInvoiceUrl: true, invoicePdf: true, payload: true, createdAt: true } }),
     prisma.implementationProject.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, name: true, status: true, targetGoLiveAt: true, createdAt: true } }),
@@ -44,12 +53,12 @@ export default async function SubscriptionPage() {
     ...catalogPlan,
     items: catalogPlan.items.map((item) => ({
       ...item,
-      product: { ...item.product, prices: item.product.prices.filter((price) => price.catalogVersion === item.product.catalogVersion) },
+      product: { ...item.product, prices: currentCatalogPrices(item.product) },
     })),
   }));
   const currentAddOns = addOns.map((product) => ({
     ...product,
-    prices: product.prices.filter((price) => price.catalogVersion === product.catalogVersion),
+    prices: currentCatalogPrices(product),
   }));
 
   return <PortalShell orgName={undefined} userName={user.name ?? user.email ?? undefined}><SubscriptionWorkspace data={{ subscription: subscription ? { status: subscription.status, planName: plan?.name ?? "Custom plan", planCode: plan?.code ?? null, periodStart: subscription.currentPeriodStart.toISOString(), periodEnd: subscription.currentPeriodEnd.toISOString(), cancelAtPeriodEnd: subscription.cancelAtPeriodEnd, trialEndsAt: subscription.trialEndsAt?.toISOString() ?? null, items: plan?.items.map((item) => ({ name: item.product.name, code: item.product.code, includedQty: item.includedQty, required: item.required })) ?? [] } : null, trialExpired: trialHistory?.status === "EXPIRED", entitlements: entitlements.map((entitlement) => ({ id: entitlement.id, name: entitlement.product.name, code: entitlement.productCode, propertyId: entitlement.propertyId, propertyName: entitlement.property?.name ?? "All organisation properties", expiresAt: entitlement.expiresAt?.toISOString() ?? null })), properties: properties.map((property) => ({ id: property.id, name: property.name, isActive: property.isActive, ready: Boolean(property.isActive && property.businessDate && property.auditStatus) })), invoices: invoices.map((invoice) => ({ id: invoice.id, status: invoice.status, currency: invoice.currency, total: invoice.total, amountPaid: invoice.amountPaid, amountDue: invoice.amountDue, periodStart: invoice.periodStart?.toISOString() ?? null, periodEnd: invoice.periodEnd?.toISOString() ?? null, hostedInvoiceUrl: invoice.hostedInvoiceUrl, invoicePdf: invoice.invoicePdf, billingDescription: billingDescription(invoice.payload), createdAt: invoice.createdAt.toISOString() })), projects: projects.map((project) => ({ id: project.id, name: project.name, status: project.status, targetGoLiveAt: project.targetGoLiveAt?.toISOString() ?? null, createdAt: project.createdAt.toISOString() })), latestInvoiceStatus: latestInvoice?.status ?? null, metrics }} plans={currentPlans} addOns={currentAddOns} discounts={organizationDiscounts.map((discount) => ({ planId: discount.planId, productId: discount.productId, percentage: Number(discount.percentage), reason: discount.reason }))} activeAddonCodes={entitlements.map((entitlement) => entitlement.productCode)} activeAddonPropertyIds={activeAddonPropertyIds} hasActiveBaseSubscription={Boolean(activeBaseSubscription)} trialEligible={!trialHistory && !subscription} checkoutProperties={properties.filter((property) => property.isActive).map((property) => ({ id: property.id, name: property.name }))} /></PortalShell>;

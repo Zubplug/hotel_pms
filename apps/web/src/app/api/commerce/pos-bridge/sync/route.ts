@@ -27,7 +27,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 import { z } from 'zod';
 
 const pullSchema = z.object({
@@ -79,16 +79,16 @@ export async function POST(req: NextRequest) {
 
     const store = await prisma.commerceStore.findFirst({
       where: { targetOutletId: data.outletId, organizationId: outlet.property.organizationId },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true, propertyId: true },
     });
 
     if (!store) {
       return errorResponse('NOT_FOUND', 'No Commerce store linked to this outlet.', 404);
     }
 
-    // Enforce ADDON_FOOD_COMMERCE entitlement — same pattern as all other entitlement checks
+    // Enforce either customer-facing Food Commerce package.
     try {
-      await requireEntitlement(store.organizationId, 'ADDON_FOOD_COMMERCE');
+      await requireFoodCommerceEntitlement(store.organizationId, store.propertyId);
     } catch {
       return errorResponse(
         'ENTITLEMENT_REQUIRED',

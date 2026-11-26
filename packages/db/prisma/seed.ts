@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
-import { catalogPlans, catalogProducts } from './catalog'
+import { CATALOG_VERSION, catalogPlans, catalogProducts } from './catalog'
 
 const prisma = new PrismaClient()
 
@@ -29,8 +29,8 @@ async function main() {
   for (const item of catalogProducts) {
     const product = await prisma.billingProduct.upsert({
       where: { code: item.code },
-      update: { name: item.name, type: item.type, active: item.active, catalogVersion: 1, metadata: item.metadata },
-      create: { code: item.code, name: item.name, type: item.type, active: item.active, catalogVersion: 1, metadata: item.metadata },
+      update: { name: item.name, type: item.type, active: item.active, catalogVersion: CATALOG_VERSION, metadata: item.metadata },
+      create: { code: item.code, name: item.name, type: item.type, active: item.active, catalogVersion: CATALOG_VERSION, metadata: item.metadata },
       select: { id: true },
     })
     products.set(item.code, product)

@@ -14,7 +14,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
-import { sendCommerceNotification } from '@/lib/commerce/notifications';
+import { sendOrderNotification } from '@/lib/commerce/notifications';
 import { generateOrderIdempotencyKey } from '@/lib/commerce/order-utils';
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       status: 'AWAITING_RESTAURANT',
       paymentStatus: 'PAID',
       createdAt: { lte: fifteenMinutesAgo },
-      syncEvents: { none: {} },
+      syncEvent: null,
     },
     include: {
       store: { select: { id: true, propertyId: true, targetOutletId: true } },
@@ -111,11 +111,12 @@ export async function GET(req: NextRequest) {
 
     if (event.order?.customer) {
       try {
-        await sendCommerceNotification({
-          type: 'ORDER_DELAYED',
-          order: event.order as any,
-          customer: event.order.customer as any,
-          store: event.order.store as any,
+        await sendOrderNotification({
+          event: 'SYNC_DELAYED',
+          orderId: event.order.id,
+          storeId: event.order.store.id,
+          customer: { ...event.order.customer, email: event.order.customer.email ?? undefined },
+          store: event.order.store,
         });
         notified++;
       } catch (notifyErr) {

@@ -15,3 +15,10 @@ export function decryptPaymentCredential(value: string): string {
   decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(ciphertextText, 'base64url')), decipher.final()]).toString('utf8');
 }
+
+export function encryptPaymentCredential(value: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key(), iv);
+  const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${ciphertext.toString('base64url')}`;
+}

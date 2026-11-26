@@ -9,7 +9,8 @@
  */
 
 import prisma from '..';
-import { addOnPrices, catalogProducts } from './catalog';
+import { Prisma } from '@prisma/client';
+import { addOnPrices, CATALOG_VERSION, catalogProducts } from './catalog';
 
 const FOOD_COMMERCE_CODES = [
   'ADDON_FOOD_COMMERCE',
@@ -36,14 +37,16 @@ async function main() {
         name: def.name,
         type: def.type,
         active: def.active,
-        metadata: def.metadata,
+        catalogVersion: CATALOG_VERSION,
+        metadata: def.metadata as Prisma.InputJsonValue,
       },
       create: {
         code: def.code,
         name: def.name,
         type: def.type,
         active: def.active,
-        metadata: def.metadata,
+        catalogVersion: CATALOG_VERSION,
+        metadata: def.metadata as Prisma.InputJsonValue,
       },
     });
 
@@ -63,7 +66,7 @@ async function main() {
           productId_interval_catalogVersion: {
             productId: product.id,
             interval,
-            catalogVersion: 3,
+            catalogVersion: CATALOG_VERSION,
           },
         },
         update: { amount, currency: priceDef.currency },
@@ -72,7 +75,7 @@ async function main() {
           amount,
           currency: priceDef.currency,
           interval,
-          catalogVersion: 3,
+          catalogVersion: CATALOG_VERSION,
         },
       });
       console.log(

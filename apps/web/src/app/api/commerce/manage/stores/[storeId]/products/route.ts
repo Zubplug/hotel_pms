@@ -8,7 +8,7 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 import { z } from 'zod';
 
 type Params = { params: Promise<{ storeId: string }> };
@@ -34,9 +34,6 @@ const createProductSchema = z.object({
   price: z.number().min(0),
   compareAtPrice: z.number().min(0).optional(),
   imageUrl: z.string().url().optional(),
-  isAvailable: z.boolean().default(true),
-  isAlcohol: z.boolean().default(false),
-  calories: z.number().optional(),
   prepTimeMinutes: z.number().min(0).optional(),
   tags: z.array(z.string()).default([]),
   sortOrder: z.number().default(0),
@@ -48,7 +45,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId } = await params;
 
     const storeOk = await prisma.commerceStore.findFirst({
@@ -89,7 +86,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId } = await params;
 
     const storeOk = await prisma.commerceStore.findFirst({
@@ -120,9 +117,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         price: productData.price,
         compareAtPrice: productData.compareAtPrice,
         imageUrl: productData.imageUrl,
-        isAvailable: productData.isAvailable,
-        isAlcohol: productData.isAlcohol,
-        calories: productData.calories,
         prepTimeMinutes: productData.prepTimeMinutes,
         tags: productData.tags,
         sortOrder: productData.sortOrder,
@@ -130,9 +124,9 @@ export async function POST(req: NextRequest, { params }: Params) {
         modifierGroups: modifierGroups.length > 0 ? {
           create: modifierGroups.map((mg, mgIdx) => ({
             name: mg.name,
-            required: mg.required,
-            minSelections: mg.minSelections,
-            maxSelections: mg.maxSelections,
+            isRequired: mg.required,
+            minSelect: mg.minSelections,
+            maxSelect: mg.maxSelections,
             sortOrder: mgIdx,
             options: {
               create: mg.options.map((opt, optIdx) => ({

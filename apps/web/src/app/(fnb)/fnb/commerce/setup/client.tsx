@@ -165,8 +165,6 @@ export function CommerceSetupClient() {
           <Field label="Delivery Fee (₦)">
             <input className="setup-input" type="number" min={0} value={merged.deliveryFee ?? 0} onChange={(e) => patch('deliveryFee', parseFloat(e.target.value))} />
           </Field>
-          <Field label="Average Prep Time (minutes)">
-          </Field>
         </div>
       )}
 

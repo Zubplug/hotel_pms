@@ -8,7 +8,7 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 import { z } from 'zod';
 
 type Params = { params: Promise<{ storeId: string; productId: string }> };
@@ -19,10 +19,7 @@ const patchSchema = z.object({
   price: z.number().min(0).optional(),
   compareAtPrice: z.number().min(0).nullish(),
   imageUrl: z.string().url().nullish(),
-  isAvailable: z.boolean().optional(),
   isActive: z.boolean().optional(),
-  isAlcohol: z.boolean().optional(),
-  calories: z.number().nullish(),
   prepTimeMinutes: z.number().min(0).nullish(),
   tags: z.array(z.string()).optional(),
   sortOrder: z.number().optional(),
@@ -35,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId, productId } = await params;
 
     const product = await prisma.commerceProduct.findFirst({
@@ -70,7 +67,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Sign in required', 401);
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_FOOD_COMMERCE');
+    await requireFoodCommerceEntitlement(ctx.organizationId);
     const { storeId, productId } = await params;
 
     const product = await prisma.commerceProduct.findFirst({
@@ -81,7 +78,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     // Soft delete — mark inactive rather than hard delete (preserves order history)
     await prisma.commerceProduct.update({
       where: { id: productId },
-      data: { isActive: false, isAvailable: false },
+      data: { isActive: false },
     });
 
     return successResponse({ deleted: true });
