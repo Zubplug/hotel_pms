@@ -287,6 +287,14 @@ public class SyncEngine : BackgroundService
 
     private record SyncIdentity(string DeviceId, string PropertyId, string? TerminalId);
 
+    // Catalog and configuration cursors belong to a physical terminal, not
+    // to the property. Reusing a property-wide cursor allows a newly
+    // provisioned outlet terminal to start with an incremental pull produced
+    // by another terminal (for example, Restaurant POS), leaving its local
+    // outlet catalog incomplete.
+    private static string PullCursorKey(SyncIdentity identity)
+        => $"LastPull_{identity.PropertyId}_{identity.TerminalId ?? identity.DeviceId}";
+
     private async Task<SyncIdentity?> GetSyncIdentityAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceProvider.CreateScope();
@@ -490,7 +498,7 @@ public class SyncEngine : BackgroundService
             var deviceId = identity?.DeviceId ?? "UNKNOWN";
             var propertyId = identity?.PropertyId ?? "UNKNOWN";
 
-            var lastPull = Preferences.Get($"LastPull_{propertyId}", "Never");
+            var lastPull = identity == null ? "Never" : Preferences.Get(PullCursorKey(identity), "Never");
             var lastPush = _lastSuccess.HasValue ? _lastSuccess.Value.ToString("o") : "Never";
 
             var pendingOutbox = await dbContext.OutboxEvents.CountAsync(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT", stoppingToken);
@@ -1040,7 +1048,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             // Keep the cursor used for this request in memory.  The pull API
             // must advance it whenever it says that another page exists;
             // otherwise this loop downloads the same page forever.
-            var lastPullStr = Preferences.Get($"LastPull_{identity.PropertyId}", "");
+            var pullCursorKey = PullCursorKey(identity);
+            var lastPullStr = Preferences.Get(pullCursorKey, "");
             var isIncremental = !string.IsNullOrEmpty(lastPullStr);
             var cursorParam = isIncremental ? $"&cursor={Uri.EscapeDataString(lastPullStr)}" : "";
             var blockingSessionIds = await dbContext.PosSessions
@@ -1099,7 +1108,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 if (!cursorRecoveryAttempted)
                 {
                     cursorRecoveryAttempted = true;
-                    Preferences.Remove($"LastPull_{identity.PropertyId}");
+                    Preferences.Remove(pullCursorKey);
                     _logger.LogWarning(
                         "General sync cursor did not advance at {Cursor}; resetting the local pull cursor and retrying a full pull.",
                         lastPullStr);
@@ -2320,7 +2329,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         ? ps.GetString() ?? "KITCHEN" : "KITCHEN";
                 }
                 
-                if (posCategoriesArray.GetArrayLength() > 0)
+                // Incremental pulls are normally partial. They are not an
+                // authoritative replacement for the terminal's complete
+                // category set. Deleting every local category not present in
+                // a partial response makes a newly provisioned outlet lose its
+                // menu immediately after login, when operator auth refreshes
+                // the sync. Only a full pull may reconcile removals this way.
+                if (posCategoriesArray.GetArrayLength() > 0 && !isIncremental)
                 {
                     var stale = await dbContext.ProductCategories.Where(c => outletIds.Contains(c.OutletId) && !incomingIds.Contains(c.Id)).ToListAsync(stoppingToken);
                     if (stale.Any() && !isIncremental) dbContext.ProductCategories.RemoveRange(stale);
@@ -3416,7 +3431,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
                 if (!string.IsNullOrEmpty(nextCursor))
                 {
-                    Preferences.Set($"LastPull_{propertyId}", nextCursor);
+                    Preferences.Set(pullCursorKey, nextCursor);
                 }
             }
             catch (Exception ex)

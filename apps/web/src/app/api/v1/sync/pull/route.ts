@@ -384,9 +384,12 @@ export async function GET(req: NextRequest) {
     // property to offline tills; the assigned outlet is still used for
     // orders, tables, sessions, and inventory scope.
     const posCategoryWhere = terminalOutletId
-      ? (!since
-          ? { outlet: { propertyId }, isActive: true, updatedAt: { lte: watermark } }
-          : { outlet: { propertyId }, updatedAt: { gt: since, lte: watermark } })
+      // Categories are a small reference dataset and are also the join used
+      // by the offline POS to render products. Send the active category set
+      // for device pulls even when the rest of the sync is incremental. This
+      // repairs terminals that lost categories during an older incremental
+      // sync and prevents a pool menu from disappearing after operator login.
+      ? { outlet: { propertyId }, isActive: true, updatedAt: { lte: watermark } }
       : buildOutletWhere({ outletId: { in: outletIds }, isActive: true });
     const posCategories = await prisma.productCategory.findMany({
       where: posCategoryWhere,

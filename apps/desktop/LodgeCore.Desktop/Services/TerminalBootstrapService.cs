@@ -145,6 +145,12 @@ public class TerminalBootstrapService
         context.PosTerminals.RemoveRange(context.PosTerminals);
         
         var terminalInfo = result.Data.TerminalIdentity;
+
+        // Provisioning is a terminal identity boundary. Do not reuse a pull
+        // cursor from an earlier catalog snapshot for this terminal; the next
+        // sync must bootstrap the complete outlet catalog before the POS is
+        // used. This is local-only and does not affect cloud records.
+        Microsoft.Maui.Storage.Preferences.Default.Remove($"LastPull_{terminalInfo.PropertyId}_{terminalInfo.Id}");
         
         var newTerminal = new LocalPosTerminal
         {
