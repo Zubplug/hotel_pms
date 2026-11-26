@@ -94,6 +94,20 @@ function AlertStrip({
   );
 }
 
+async function readApiJson(response: Response, context: string): Promise<any> {
+  const raw = await response.text();
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    const contentType = response.headers.get('content-type') || 'unknown content type';
+    const preview = raw.replace(/\s+/g, ' ').trim().slice(0, 120);
+    throw new Error(
+      `${context} returned an invalid response (HTTP ${response.status}, ${contentType}).` +
+      (preview ? ` ${preview}` : ' Please retry.')
+    );
+  }
+}
+
 /* ── Manager's Flash (shown after audit is closed) ──────────────────────────── */
 function ManagersFlash({ flashData, data }: { flashData: any; data: NightAuditData }) {
   const cur = data.property.baseCurrency;
@@ -237,7 +251,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     setError(null);
     try {
       const res = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`, { cache: 'no-store' });
-      const json = await res.json();
+      const json = await readApiJson(res, 'Night Audit status service');
       if (!res.ok) throw new Error(json.error?.message || 'Unable to load audit status');
       setData(json.data);
       if (backgroundRunning && !json.data.activeAudit) setBackgroundRunning(false);
@@ -245,7 +259,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
 
       try {
         const accountingResponse = await fetch(`/api/v1/accountant/revenue?propertyId=${propertyId}`, { cache: 'no-store' });
-        const accountingJson = await accountingResponse.json();
+        const accountingJson = await readApiJson(accountingResponse, 'Accounting summary service');
         if (accountingResponse.ok) setAccountingDepartments(accountingJson.data?.departments || accountingJson.departments || []);
       } catch { /* Night Audit snapshot remains the fallback. */ }
 
@@ -268,7 +282,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       if (json.data.currentAudit) {
         try {
           const fr = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${json.data.businessDate}`, { cache: 'no-store' });
-          const fj = await fr.json();
+          const fj = await readApiJson(fr, 'Manager flash service');
           if (fr.ok) setFlashData(fj.data || fj);
         } catch { /* ignore */ }
       } else {
@@ -306,11 +320,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ propertyId }),
       });
-      const raw = await res.text();
-      let json: any;
-      try { json = JSON.parse(raw); } catch {
-        throw new Error(`Audit service returned an invalid response (HTTP ${res.status}). Please retry or contact support if it continues.`);
-      }
+      const json = await readApiJson(res, 'Night Audit execution service');
       if (!res.ok) throw new Error(json.error?.message || 'Audit execution failed');
       setWizardOpen(false);
       if (res.status === 202 || json.data?.accepted) {
