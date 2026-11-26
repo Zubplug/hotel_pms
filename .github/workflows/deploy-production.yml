@@ -71,7 +71,9 @@ jobs:
             lodgecore-expire-demo-accounts.timer \
             lodgecore-expire-trials.timer \
             lodgecore-refund-escalation.timer \
-            lodgecore-ota-reconciliation.timer; do
+            lodgecore-ota-reconciliation.timer \
+            lodgecore-commerce-scheduled-orders.timer \
+            lodgecore-commerce-sync-watchdog.timer; do
             sudo systemctl enable --now "$timer"
           done
 

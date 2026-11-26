@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LodgeCore Commerce sync watchdog every five minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+RandomizedDelaySec=30s
+Unit=lodgecore-commerce-sync-watchdog.service
+
+[Install]
+WantedBy=timers.target

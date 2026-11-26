@@ -75,6 +75,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalBreakfastRedemption> BreakfastRedemptions { get; set; } = null!;
     public DbSet<LocalBreakfastEligibilitySnapshot> BreakfastEligibilitySnapshots { get; set; } = null!;
     public DbSet<LocalPoolEntry> PoolEntries { get; set; } = null!;
+    public DbSet<LocalCommerceInboundOrder> CommerceInboundOrders { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
@@ -610,6 +611,45 @@ public class LocalDbContext : DbContext
                 when (ex.SqliteErrorCode == 1 &&
                       ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
         }
+    }
+
+    /// <summary>
+    /// Creates the CommerceInboundOrders table on upgraded terminals.
+    /// New installs receive it via EnsureCreated; existing installs need this call.
+    /// </summary>
+    public async Task ApplyCommerceInboundOrderSchemaAsync()
+    {
+        await Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS CommerceInboundOrders (
+                SyncEventId      TEXT NOT NULL PRIMARY KEY,
+                CommerceOrderId  TEXT NOT NULL,
+                OrderRef         TEXT NOT NULL,
+                LocalPosOrderId  TEXT NULL,
+                LocalKotIdsJson  TEXT NULL,
+                OrderType        TEXT NOT NULL DEFAULT 'PICKUP',
+                CustomerName     TEXT NOT NULL DEFAULT '',
+                CustomerPhone    TEXT NULL,
+                ItemsJson        TEXT NOT NULL DEFAULT '[]',
+                TotalAmount      TEXT NOT NULL DEFAULT '0',
+                InjectionStatus  TEXT NOT NULL DEFAULT 'PENDING',
+                RetryCount       INTEGER NOT NULL DEFAULT 0,
+                LastError        TEXT NULL,
+                ReceivedAt       TEXT NOT NULL,
+                InjectedAt       TEXT NULL,
+                CloudAcknowledgedAt TEXT NULL,
+                KotPrintedAt     TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_CommerceInboundOrders_Status
+                ON CommerceInboundOrders(InjectionStatus);
+        ");
+        try
+        {
+            await Database.ExecuteSqlRawAsync(
+                "ALTER TABLE CommerceInboundOrders ADD COLUMN CloudAcknowledgedAt TEXT NULL");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex)
+            when (ex.SqliteErrorCode == 1 &&
+                  ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

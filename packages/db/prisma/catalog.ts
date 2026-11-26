@@ -1,4 +1,4 @@
-export const CATALOG_VERSION = 2;
+export const CATALOG_VERSION = 3;
 
 export type CatalogProduct = {
   code: string;
@@ -43,6 +43,44 @@ export const catalogProducts: CatalogProduct[] = [
   { code: 'ADDON_EXTRA_USER_PACK', name: 'Additional User Pack', type: 'ADDON', active: false, metadata: { family: 'SCALE', unit: 'USER_PACK', capacityKey: 'maxUsers', capacityAmount: 5, sellable: false, offlineCapable: true, version: CATALOG_VERSION } },
   { code: 'ADDON_PREMIUM_SUPPORT', name: 'Premium Support', type: 'ADDON', active: false, metadata: { family: 'SERVICES', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_DEDICATED_SLA', name: 'Dedicated Support and SLA', type: 'ADDON', active: false, metadata: { family: 'SERVICES', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
+
+  // ---------------------------------------------------------------------------
+  // FOOD COMMERCE ADD-ONS
+  // ---------------------------------------------------------------------------
+  {
+    code: 'ADDON_FOOD_COMMERCE',
+    name: 'Food Commerce',
+    type: 'ADDON',
+    active: true,
+    metadata: {
+      family: 'COMMERCE',
+      unit: 'STORE',
+      sellable: true,
+      offlineCapable: true,       // POS bridge operates offline-first
+      requiresApproval: false,    // Self-serve activation
+      standaloneEligible: true,   // No MODULE_PMS required
+      version: CATALOG_VERSION,
+    },
+  },
+  {
+    code: 'ADDON_FOOD_STANDALONE',
+    name: 'Food Commerce Standalone',
+    type: 'ADDON',
+    active: true,
+    metadata: {
+      family: 'COMMERCE',
+      unit: 'STORE',
+      sellable: true,
+      offlineCapable: true,
+      standaloneOnly: true,       // For businesses with no LodgeCore base module
+      requiresApproval: false,
+      version: CATALOG_VERSION,
+    },
+  },
+  { code: 'ADDON_FOOD_DELIVERY',  name: 'Food Commerce — Delivery Management', type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: true,  offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
+  { code: 'ADDON_FOOD_MEAL_PASS', name: 'Food Commerce — Meal Pass Engine',     type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: true,  offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
+  { code: 'ADDON_FOOD_ANALYTICS', name: 'Food Commerce — Advanced Analytics',   type: 'ADDON', active: true,  metadata: { family: 'COMMERCE', unit: 'STORE', sellable: true,  offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
+  { code: 'ADDON_FOOD_NETWORK',   name: 'LodgeCore Food Network',                type: 'ADDON', active: false, metadata: { family: 'COMMERCE', unit: 'STORE', sellable: false, offlineCapable: false, requiresProducts: ['ADDON_FOOD_COMMERCE'], version: CATALOG_VERSION } },
 ];
 
 export const planPrices = [
@@ -60,9 +98,15 @@ export const oneTimePrices = [
 ] as const;
 
 export const addOnPrices = [
-  { code: 'ADDON_BEDS24', month: 2500000, year: 25000000, currency: 'ngn' }, // ₦25,000/month or ₦250,000/year per property
-  { code: 'ADDON_CORPORATE_API', month: 15000000, year: 150000000, currency: 'ngn' }, // ₦150,000/month or ₦1,500,000/year per property
-  { code: 'ADDON_EXTRA_TERMINAL', month: 1000000, year: 10000000, currency: 'ngn' }, // ₦10,000/month or ₦100,000/year per terminal
+  { code: 'ADDON_BEDS24',           month: 2500000,  year: 25000000,  currency: 'ngn' }, // ₦25,000/month or ₦250,000/year per property
+  { code: 'ADDON_CORPORATE_API',    month: 15000000, year: 150000000, currency: 'ngn' }, // ₦150,000/month or ₦1,500,000/year per property
+  { code: 'ADDON_EXTRA_TERMINAL',   month: 1000000,  year: 10000000,  currency: 'ngn' }, // ₦10,000/month or ₦100,000/year per terminal
+  // Food Commerce add-ons (prices in kobo ×100)
+  { code: 'ADDON_FOOD_COMMERCE',    month: 2500000,  year: 25000000,  currency: 'ngn' }, // ₦25,000/month or ₦250,000/year per store
+  { code: 'ADDON_FOOD_STANDALONE',  month: 2500000,  year: 25000000,  currency: 'ngn' }, // ₦25,000/month or ₦250,000/year (standalone)
+  { code: 'ADDON_FOOD_DELIVERY',    month: 1500000,  year: 15000000,  currency: 'ngn' }, // ₦15,000/month or ₦150,000/year
+  { code: 'ADDON_FOOD_MEAL_PASS',   month: 1500000,  year: 15000000,  currency: 'ngn' }, // ₦15,000/month or ₦150,000/year
+  { code: 'ADDON_FOOD_ANALYTICS',   month: 2000000,  year: 20000000,  currency: 'ngn' }, // ₦20,000/month or ₦200,000/year
 ] as const;
 
 export const catalogPlans: CatalogPlan[] = [

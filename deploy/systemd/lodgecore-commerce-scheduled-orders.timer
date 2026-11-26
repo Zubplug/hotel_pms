@@ -1,0 +1,10 @@
+[Unit]
+Description=Run LodgeCore Commerce sync recovery every minute
+
+[Timer]
+OnCalendar=*:0/1
+Persistent=true
+Unit=lodgecore-commerce-scheduled-orders.service
+
+[Install]
+WantedBy=timers.target

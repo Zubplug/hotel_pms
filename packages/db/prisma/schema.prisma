@@ -104,6 +104,9 @@ model Organization {
   attendanceGeofences          AttendanceGeofence[]
   payrollPayouts               PayrollPayout[]
 
+  // Food Commerce
+  commerceStores               CommerceStore[]
+
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
@@ -338,6 +341,9 @@ model Property {
   disciplinaryRecords          DisciplinaryRecord[]
   serviceDeskTickets           HrServiceDeskTicket[]
   compensationChangeRequests   CompensationChangeRequest[]
+
+  // Food Commerce
+  commerceStores               CommerceStore[]
 }
 
 model OrganizationApprovalRequest {
@@ -10017,4 +10023,691 @@ model PoolIncident {
 
   @@index([propertyId, status, severity])
   @@index([facilityId, createdAt])
+}
+
+// =============================================================================
+// FOOD COMMERCE
+// =============================================================================
+// All models below are purely additive.
+// No existing model is modified except for the two optional relation arrays
+// added to Organization and Property above.
+//
+// Architecture principle: THREE ORDER CONCEPTS
+//   CommerceOrder       — the customer's cloud-side order (source of truth)
+//   CommerceSyncEvent   — the durable event queue to the offline POS
+//   PosOrder            — the outlet's local operational order (desktop only)
+//
+// The cloud NEVER creates a PosOrder directly.
+// The desktop POS is the ONLY system that creates PosOrders from Commerce.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// STORE
+// -----------------------------------------------------------------------------
+
+model CommerceStore {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// Nullable — standalone restaurants have no Property.
+  propertyId String?   @db.Uuid
+  property   Property? @relation(fields: [propertyId], references: [id])
+
+  /// Nullable — set when linked to a PosOutlet for POS sync.
+  targetOutletId String? @db.Uuid
+
+  slug        String  @unique // /order/[slug]
+  name        String
+  description String?
+  logoUrl     String?
+  bannerUrl   String?
+  faviconUrl  String?
+
+  /// LUXURY_DINING | MODERN_RESTAURANT | QUICK_COMMERCE
+  theme String @default("MODERN_RESTAURANT")
+
+  primaryColor   String?
+  secondaryColor String?
+  fontFamily     String?
+
+  /// DRAFT | ACTIVE | SUSPENDED | CLOSED
+  status String @default("DRAFT")
+
+  /// JSON: { mon: { open: "08:00", close: "22:00", closed: false }, ... }
+  operatingHours Json?
+
+  minimumOrderAmount Decimal @default(0) @db.Decimal(18, 4)
+  currency           String  @default("NGN")
+  deliveryEnabled    Boolean @default(true)
+  pickupEnabled      Boolean @default(true)
+
+  /// FLAT | ZONE | FREE_ABOVE_THRESHOLD
+  deliveryFeeMode   String   @default("FLAT")
+  deliveryFee       Decimal  @default(0) @db.Decimal(18, 4)
+  freeDeliveryAbove Decimal? @db.Decimal(18, 4)
+
+  allowOnlinePayment Boolean @default(true)
+  allowPayOnDelivery Boolean @default(true)
+  allowPayOnPickup   Boolean @default(true)
+
+  /// Per-store gateway credentials (secrets encrypted at rest)
+  paystackPublicKey    String?
+  paystackSecretKey    String?
+  flutterwavePublicKey String?
+  flutterwaveSecretKey String?
+  /// PAYSTACK | FLUTTERWAVE
+  preferredGateway String @default("PAYSTACK")
+
+  /// Notification config (Decision 01)
+  notifySmsEnabled      Boolean @default(true)
+  notifyEmailEnabled    Boolean @default(true)
+  notifyWhatsappEnabled Boolean @default(false)
+  termiiSenderName      String?
+  /// JSON map of event → channels
+  notificationEvents Json?
+
+  announcementBanner String?
+  metaTitle          String?
+  metaDescription    String?
+
+  /// Food Network opt-in (Phase 10). Defaults false. Requires CommerceNetworkEnrollment.
+  networkOptedIn      Boolean   @default(false)
+  networkOptedInAt    DateTime? @db.Timestamptz
+  networkTermsVersion String?
+
+  websiteProjectId String? @db.Uuid
+
+  menus              CommerceMenu[]
+  products           CommerceProduct[]
+  orders             CommerceOrder[]
+  customers          CommerceCustomer[]
+  drivers            CommerceDriver[]
+  deliveryZones      CommerceDeliveryZone[]
+  promotions         CommercePromotion[]
+  mealPasses         CommerceMealPass[]
+  groupOrderSessions CommerceGroupOrderSession[]
+  syncEvents         CommerceSyncEvent[]
+  notificationLogs   CommerceNotificationLog[]
+  networkEnrollment  CommerceNetworkEnrollment?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+  @@index([propertyId])
+  @@index([slug])
+}
+
+// -----------------------------------------------------------------------------
+// MENU HIERARCHY
+// -----------------------------------------------------------------------------
+
+model CommerceMenu {
+  id        String        @id @default(uuid()) @db.Uuid
+  storeId   String        @db.Uuid
+  store     CommerceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean       @default(true)
+  sortOrder Int           @default(0)
+  /// Time-of-day availability: "06:00"
+  availableFrom String?
+  availableTo   String?
+
+  categories CommerceCategory[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, isActive])
+}
+
+model CommerceCategory {
+  id          String       @id @default(uuid()) @db.Uuid
+  menuId      String       @db.Uuid
+  menu        CommerceMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  storeId     String       @db.Uuid
+  name        String
+  description String?
+  imageUrl    String?
+  isActive    Boolean      @default(true)
+  sortOrder   Int          @default(0)
+  availableFrom String?
+  availableTo   String?
+
+  products CommerceProduct[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([menuId, isActive, sortOrder])
+}
+
+model CommerceProduct {
+  id         String           @id @default(uuid()) @db.Uuid
+  storeId    String           @db.Uuid
+  store      CommerceStore    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  categoryId String           @db.Uuid
+  category   CommerceCategory @relation(fields: [categoryId], references: [id])
+
+  /// Optional link to an existing PosProduct for price syncing
+  posProductId String? @db.Uuid
+
+  name        String
+  description String?
+  imageUrl    String?
+  imageUrls   String[] @default([])
+  /// Must be true if the image was AI-generated. Storefront warns operator before publish.
+  imageIsAiGenerated Boolean @default(false)
+
+  price          Decimal  @db.Decimal(18, 4)
+  compareAtPrice Decimal? @db.Decimal(18, 4)
+  taxRate        Decimal  @default(0) @db.Decimal(5, 2)
+
+  isActive      Boolean @default(true)
+  isFeatured    Boolean @default(false)
+  isChefSpecial Boolean @default(false)
+
+  /// null = unlimited stock for Chef's Special Drops
+  availableQuantity Int?
+  soldCount         Int @default(0)
+
+  tags            String[] @default([])
+  prepTimeMinutes Int?
+  sortOrder       Int      @default(0)
+
+  modifierGroups CommerceModifierGroup[]
+  orderItems     CommerceOrderItem[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, isActive, sortOrder])
+  @@index([categoryId])
+  @@index([storeId, isFeatured])
+}
+
+model CommerceModifierGroup {
+  id         String          @id @default(uuid()) @db.Uuid
+  productId  String          @db.Uuid
+  product    CommerceProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name       String
+  isRequired Boolean         @default(false)
+  minSelect  Int             @default(0)
+  maxSelect  Int?
+  sortOrder  Int             @default(0)
+
+  options CommerceModifierOption[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([productId])
+}
+
+model CommerceModifierOption {
+  id              String                @id @default(uuid()) @db.Uuid
+  groupId         String                @db.Uuid
+  group           CommerceModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name            String
+  priceAdjustment Decimal               @default(0) @db.Decimal(18, 4)
+  isDefault       Boolean               @default(false)
+  isActive        Boolean               @default(true)
+  sortOrder       Int                   @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([groupId, isActive])
+}
+
+// -----------------------------------------------------------------------------
+// CUSTOMER IDENTITY
+// -----------------------------------------------------------------------------
+
+model CommerceCustomer {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  name  String
+  phone String
+  email String?
+
+  /// Snapshot of last known delivery address
+  deliveryAddress Json?
+
+  orderCount Int     @default(0)
+  totalSpend Decimal @default(0) @db.Decimal(18, 4)
+
+  /// NDPR/GDPR-aligned consent
+  consentToPersonalisation Boolean   @default(false)
+  consentToWhatsapp        Boolean   @default(false)
+  consentRecordedAt        DateTime? @db.Timestamptz
+
+  orders     CommerceOrder[]
+  mealPasses CommerceMealPass[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([storeId, phone])
+  @@index([storeId, phone])
+}
+
+// -----------------------------------------------------------------------------
+// ORDER LIFECYCLE
+// -----------------------------------------------------------------------------
+
+model CommerceOrder {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id])
+
+  customerId String?           @db.Uuid
+  customer   CommerceCustomer? @relation(fields: [customerId], references: [id])
+
+  /// Human-readable reference: LC-YYYYMMDD-NNNN
+  orderRef String @unique
+
+  /// Client checkout key; prevents duplicate orders before POS sync is queued.
+  clientIdempotencyKey String?
+
+  /// PENDING_PAYMENT | PAYMENT_RECEIVED | AWAITING_RESTAURANT | ACCEPTED
+  /// | PREPARING | READY | OUT_FOR_DELIVERY | DELIVERED | PICKED_UP
+  /// | CANCELLED | REFUNDED
+  status String @default("PENDING_PAYMENT")
+
+  /// DELIVERY | PICKUP
+  orderType       String
+  /// NOW | SCHEDULED
+  fulfillmentType String    @default("NOW")
+  scheduledFor    DateTime? @db.Timestamptz
+
+  deliveryAddress Json?
+  deliveryNotes   String?
+
+  subtotal       Decimal @db.Decimal(18, 4)
+  deliveryFee    Decimal @default(0) @db.Decimal(18, 4)
+  discountAmount Decimal @default(0) @db.Decimal(18, 4)
+  taxAmount      Decimal @default(0) @db.Decimal(18, 4)
+  totalAmount    Decimal @db.Decimal(18, 4)
+  currency       String  @default("NGN")
+
+  /// ONLINE | PAY_ON_DELIVERY | PAY_ON_PICKUP
+  paymentMethod String
+  /// PENDING | PAID | REFUNDED | FAILED
+  paymentStatus String @default("PENDING")
+
+  specialInstructions String?
+
+  /// Shareable token for public order tracking — no login required
+  trackingToken String @unique
+
+  groupOrderSessionId  String?                    @db.Uuid
+  groupOrderSession    CommerceGroupOrderSession? @relation(fields: [groupOrderSessionId], references: [id])
+  promotionId          String?                    @db.Uuid
+  promotion            CommercePromotion?         @relation(fields: [promotionId], references: [id])
+  mealPassRedemptionId String?                    @db.Uuid
+
+  // === Three-Order-Concept boundary ===
+  // The cloud NEVER creates a PosOrder. These fields track the sync lifecycle.
+  /// PENDING | QUEUED | DELIVERED | ACKNOWLEDGED | REJECTED | FAILED
+  posSyncStatus        String    @default("PENDING")
+  posSyncAttempts      Int       @default(0)
+  posSyncLastAttemptAt DateTime? @db.Timestamptz
+  posAcknowledgedAt    DateTime? @db.Timestamptz
+  posRejectionReason   String?
+  /// Desktop-local PosOrder ID, reported back after local creation. Informational only.
+  reportedPosOrderId String?
+
+  /// Notification timestamps
+  customerNotifiedAt   DateTime? @db.Timestamptz
+  preparingNotifiedAt  DateTime? @db.Timestamptz
+  readyNotifiedAt      DateTime? @db.Timestamptz
+  dispatchedNotifiedAt DateTime? @db.Timestamptz
+  deliveredNotifiedAt  DateTime? @db.Timestamptz
+
+  items         CommerceOrderItem[]
+  payment       CommercePayment?
+  delivery      CommerceDelivery?
+  syncEvent     CommerceSyncEvent?
+  notifications CommerceNotificationLog[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, status])
+  @@unique([storeId, clientIdempotencyKey])
+  @@index([trackingToken])
+  @@index([orderRef])
+  @@index([storeId, createdAt])
+  @@index([storeId, posSyncStatus])
+}
+
+model CommerceOrderItem {
+  id      String        @id @default(uuid()) @db.Uuid
+  orderId String        @db.Uuid
+  order   CommerceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String          @db.Uuid
+  product   CommerceProduct @relation(fields: [productId], references: [id])
+
+  /// Snapshots at time of order (prices may change after)
+  productName     String
+  productImageUrl String?
+  quantity        Int
+  unitPrice       Decimal @db.Decimal(18, 4)
+  totalPrice      Decimal @db.Decimal(18, 4)
+
+  /// JSON: [{ groupName, optionName, priceAdjustment }]
+  selectedModifiers Json
+  specialNote       String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([orderId])
+}
+
+// -----------------------------------------------------------------------------
+// PAYMENT
+// -----------------------------------------------------------------------------
+
+model CommercePayment {
+  id      String        @id @default(uuid()) @db.Uuid
+  orderId String        @unique @db.Uuid
+  order   CommerceOrder @relation(fields: [orderId], references: [id])
+  storeId String        @db.Uuid
+
+  /// PAYSTACK | FLUTTERWAVE | PAY_ON_DELIVERY | PAY_ON_PICKUP
+  provider          String
+  providerReference String?
+  amount            Decimal @db.Decimal(18, 4)
+  currency          String
+
+  /// PENDING | VERIFIED | FAILED | REFUNDED
+  status     String    @default("PENDING")
+  verifiedAt DateTime? @db.Timestamptz
+  refundedAt DateTime? @db.Timestamptz
+  refundRef  String?
+  metadata   Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, status])
+  @@index([providerReference])
+}
+
+// -----------------------------------------------------------------------------
+// POS SYNC BRIDGE
+// -----------------------------------------------------------------------------
+
+/// The durable, retryable event that carries a CommerceOrder to the offline POS.
+/// The desktop POS is the ONLY system that creates PosOrders from Commerce orders.
+/// The cloud NEVER creates PosOrders directly.
+model CommerceSyncEvent {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id])
+  orderId String        @unique @db.Uuid
+  order   CommerceOrder @relation(fields: [orderId], references: [id])
+
+  targetOutletId   String  @db.Uuid
+  targetPropertyId String? @db.Uuid
+
+  /// QUEUED | DELIVERED | ACKNOWLEDGED | REJECTED | FAILED
+  status String @default("QUEUED")
+
+  /// Desktop checks this key before creating a local PosOrder
+  idempotencyKey String @unique
+
+  /// Versioned payload — allows desktop to handle schema evolution
+  payloadVersion Int  @default(1)
+  payload        Json
+
+  attempts       Int       @default(0)
+  lastAttemptAt  DateTime? @db.Timestamptz
+  deliveredAt    DateTime? @db.Timestamptz
+  acknowledgedAt DateTime? @db.Timestamptz
+  rejectedAt     DateTime? @db.Timestamptz
+  failureReason  String?
+
+  /// Desktop reports back its local PosOrder ID after acknowledgement
+  reportedPosOrderId String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, status])
+  @@index([targetOutletId, status])
+  @@index([idempotencyKey])
+}
+
+// -----------------------------------------------------------------------------
+// DELIVERY
+// -----------------------------------------------------------------------------
+
+model CommerceDelivery {
+  id      String        @id @default(uuid()) @db.Uuid
+  orderId String        @unique @db.Uuid
+  order   CommerceOrder @relation(fields: [orderId], references: [id])
+
+  driverId String?         @db.Uuid
+  driver   CommerceDriver? @relation(fields: [driverId], references: [id])
+
+  /// PENDING_ASSIGNMENT | ASSIGNED | PICKED_UP | EN_ROUTE | DELIVERED | FAILED
+  status String @default("PENDING_ASSIGNMENT")
+
+  estimatedDeliveryMinutes Int?
+  actualPickupAt           DateTime? @db.Timestamptz
+  actualDeliveryAt         DateTime? @db.Timestamptz
+  deliveryNotes            String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model CommerceDriver {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  name         String
+  phone        String
+  vehicleType  String?
+  vehiclePlate String?
+  isActive     Boolean @default(true)
+
+  /// AVAILABLE | ON_DELIVERY | OFFLINE
+  currentStatus      String   @default("OFFLINE")
+  currentLocationLat Decimal? @db.Decimal(10, 7)
+  currentLocationLng Decimal? @db.Decimal(10, 7)
+
+  deliveries CommerceDelivery[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, currentStatus])
+}
+
+model CommerceDeliveryZone {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  name             String
+  deliveryFee      Decimal  @db.Decimal(18, 4)
+  radiusKm         Decimal? @db.Decimal(8, 2)
+  /// GeoJSON polygon for irregular zones
+  polygonCoords    Json?
+  estimatedMinutes Int?
+  isActive         Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, isActive])
+}
+
+// -----------------------------------------------------------------------------
+// PROMOTIONS
+// -----------------------------------------------------------------------------
+
+model CommercePromotion {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  code String @unique
+  name String
+  /// PERCENTAGE | FLAT | FREE_DELIVERY | BUY_X_GET_Y
+  type String
+
+  value                Decimal  @db.Decimal(18, 4)
+  minimumOrderAmount   Decimal? @db.Decimal(18, 4)
+  maxUsesTotal         Int?
+  maxUsesPerCustomer   Int?
+  usedCount            Int      @default(0)
+  validFrom            DateTime @db.Timestamptz
+  validTo              DateTime @db.Timestamptz
+  isActive             Boolean  @default(true)
+  /// Empty array = all products
+  applicableProductIds String[] @default([])
+
+  orders CommerceOrder[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, isActive])
+  @@index([code])
+}
+
+// -----------------------------------------------------------------------------
+// MEAL PASS
+// -----------------------------------------------------------------------------
+
+model CommerceMealPass {
+  id         String           @id @default(uuid()) @db.Uuid
+  storeId    String           @db.Uuid
+  store      CommerceStore    @relation(fields: [storeId], references: [id])
+  customerId String           @db.Uuid
+  customer   CommerceCustomer @relation(fields: [customerId], references: [id])
+
+  name           String
+  totalMeals     Int
+  remainingMeals Int
+  purchasePrice  Decimal   @db.Decimal(18, 4)
+  validFrom      DateTime  @db.Timestamptz
+  validTo        DateTime? @db.Timestamptz
+  isActive       Boolean   @default(true)
+
+  redemptions CommerceMealPassRedemption[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, customerId])
+}
+
+model CommerceMealPassRedemption {
+  id         String           @id @default(uuid()) @db.Uuid
+  mealPassId String           @db.Uuid
+  mealPass   CommerceMealPass @relation(fields: [mealPassId], references: [id])
+  orderId    String           @db.Uuid
+  redeemedAt DateTime         @default(now()) @db.Timestamptz
+
+  @@index([mealPassId])
+}
+
+// -----------------------------------------------------------------------------
+// GROUP ORDERING
+// -----------------------------------------------------------------------------
+
+model CommerceGroupOrderSession {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id])
+
+  hostCustomerId String?
+  /// Shareable link token
+  shareToken String @unique
+  /// OPEN | LOCKED | CHECKED_OUT | CANCELLED | EXPIRED
+  status     String @default("OPEN")
+
+  expiresAt DateTime  @db.Timestamptz
+  lockedAt  DateTime? @db.Timestamptz
+
+  orders CommerceOrder[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([storeId, status])
+  @@index([shareToken])
+}
+
+// -----------------------------------------------------------------------------
+// NOTIFICATION LOG
+// -----------------------------------------------------------------------------
+
+/// Full audit trail of every notification sent for Commerce orders.
+model CommerceNotificationLog {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id])
+  orderId String        @db.Uuid
+  order   CommerceOrder @relation(fields: [orderId], references: [id])
+
+  /// SMS | EMAIL | WHATSAPP
+  channel String
+  /// ORDER_PLACED | PAYMENT_CONFIRMED | PREPARING | READY_FOR_PICKUP
+  /// | OUT_FOR_DELIVERY | DELIVERED | CANCELLED | SYNC_DELAYED
+  event String
+
+  recipient String
+
+  /// PENDING | SENT | DELIVERED | FAILED | BOUNCED
+  status         String    @default("PENDING")
+  providerRef    String?
+  providerStatus String?
+  failureReason  String?
+  attemptCount   Int       @default(0)
+  lastAttemptAt  DateTime? @db.Timestamptz
+  deliveredAt    DateTime? @db.Timestamptz
+
+  /// Set when primary channel failed and fallback was used
+  fallbackChannel String?
+  fallbackLogId   String? @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([orderId, channel])
+  @@index([storeId, status, createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// FOOD NETWORK OPT-IN
+// -----------------------------------------------------------------------------
+
+/// Tracks a business's explicit opt-in to the LodgeCore Food Network marketplace.
+/// CommerceStore.networkOptedIn is set to true only when status = ACCEPTED here.
+model CommerceNetworkEnrollment {
+  id      String        @id @default(uuid()) @db.Uuid
+  storeId String        @unique @db.Uuid
+  store   CommerceStore @relation(fields: [storeId], references: [id])
+
+  /// PENDING | ACCEPTED | WITHDRAWN
+  status String @default("PENDING")
+
+  termsVersion String
+  acceptedAt   DateTime? @db.Timestamptz
+  withdrawnAt  DateTime? @db.Timestamptz
+  withdrawnBy  String?   @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }

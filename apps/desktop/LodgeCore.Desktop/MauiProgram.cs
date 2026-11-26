@@ -79,6 +79,7 @@ public static class MauiProgram
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.SyncEngine>();
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.EscPosService>();
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.KotPrintService>();
+        builder.Services.AddHostedService<LodgeCore.Desktop.Services.CommerceOrderSyncService>();
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.DesktopServiceManager>();
         builder.Services.AddTransient<OfflinePMSInterop>();
         builder.Services.AddSingleton(sp => 
@@ -130,6 +131,7 @@ public static class MauiProgram
             db.ApplyGuestCreditAllocationSchemaAsync().GetAwaiter().GetResult(); // offline credit allocation table
             db.ApplyEventInvoiceSchemaAsync().GetAwaiter().GetResult();
             db.ApplyPoolOperationsSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyCommerceInboundOrderSchemaAsync().GetAwaiter().GetResult(); // Food Commerce online order injection
         }
 
         return app;

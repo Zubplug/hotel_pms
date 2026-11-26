@@ -4,8 +4,10 @@ import { PaymentProvider, InitializePaymentRequest, InitializePaymentResponse, V
 export class PaystackProvider implements PaymentProvider {
   private secretKey: string;
 
-  constructor() {
-    this.secretKey = process.env.PAYSTACK_SECRET_KEY || 'sk_test_placeholder';
+  constructor(secretKey?: string) {
+    // Accepts an optional per-store key (used by Food Commerce for per-business gateway keys).
+    // Falls back to PAYSTACK_SECRET_KEY env var for the platform-level hotel folio payments.
+    this.secretKey = secretKey ?? process.env.PAYSTACK_SECRET_KEY ?? 'sk_test_placeholder';
   }
 
   async initializeTransaction(request: InitializePaymentRequest): Promise<InitializePaymentResponse> {
