@@ -1,24 +1,18 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { useProperty } from '@/components/PropertyProvider';
 import { NightAuditData } from '@/types/night-audit';
 import {
   Loader2, MoonStar, XCircle, AlertTriangle, CheckCircle2,
   RefreshCcw, Hotel, Activity, LogIn, LogOut, Users, UserX,
 } from 'lucide-react';
-import { format } from 'date-fns';
 
-import { StatusBanner } from '@/components/night-audit/dashboard/status-banner';
-import { AuditReadiness } from '@/components/night-audit/dashboard/audit-readiness';
-import { OccupancyChart } from '@/components/night-audit/dashboard/occupancy-chart';
-import { MetricCards } from '@/components/night-audit/dashboard/metric-cards';
+import { NightAuditOverview } from '@/components/night-audit/dashboard/night-audit-overview';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
-import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 import { AuditSuccessModal } from '@/components/night-audit/audit-success-modal';
 import { AuditFailureModal } from '@/components/night-audit/audit-failure-modal';
-import { money, cx, TONE_HEX } from '@/components/night-audit/dashboard/ui';
+import { cx, money, TONE_HEX } from '@/components/night-audit/dashboard/ui';
 
 /* ── Background gradient ────────────────────────────────────────────────────── */
 const BG = 'linear-gradient(160deg, #030712 0%, #05090f 55%, #070a18 100%)';
@@ -227,8 +221,6 @@ function ManagersFlash({ flashData, data }: { flashData: any; data: NightAuditDa
 export default function NightAuditDashboard({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId, isLoading: propertyLoading } = useProperty();
   const [data, setData] = useState<NightAuditData | null>(null);
-  const [accountingDepartments, setAccountingDepartments] = useState<Array<{ accountCode?: string; accountName: string; today: number }>>([]);
-  const [flashData, setFlashData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -239,7 +231,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   const [message, setMessage] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<any>(null);
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
-  const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
   const [backgroundRunning, setBackgroundRunning] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
@@ -253,12 +244,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       setData(json.data);
       if (backgroundRunning && !json.data.activeAudit) setBackgroundRunning(false);
       setLastRefresh(new Date());
-
-      try {
-        const accountingResponse = await fetch(`/api/v1/accountant/revenue?propertyId=${propertyId}`, { cache: 'no-store' });
-        const accountingJson = await readApiJson(accountingResponse, 'Accounting summary service');
-        if (accountingResponse.ok) setAccountingDepartments(accountingJson.data?.departments || accountingJson.departments || []);
-      } catch { /* Night Audit snapshot remains the fallback. */ }
 
       const blockers = [
         ...(json.data.system?.openPosSessions || []),
@@ -275,16 +260,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           '/night-audit/ar-ledger': (json.data.financial?.highBalances || []).length,
         },
       }));
-
-      if (json.data.currentAudit) {
-        try {
-          const fr = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${json.data.businessDate}`, { cache: 'no-store' });
-          const fj = await readApiJson(fr, 'Manager flash service');
-          if (fr.ok) setFlashData(fj.data || fj);
-        } catch { /* ignore */ }
-      } else {
-        setFlashData(null);
-      }
 
       if (json.data.auditState === 'OVERDUE' && json.data.canStartAudit && !quiet && !managerMode) {
         setWizardOpen(true);
@@ -334,10 +309,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     } finally { setExecuting(false); }
   };
 
-  const handleQueueResolve = (actionType: string, payload: any) =>
-    setResolutionAction({ type: actionType as any, item: payload });
-  const handleResolutionSuccess = () => { setResolutionAction(null); load(true); };
-
   // ── Loading / empty states ───────────────────────────────────────────────────
   if (propertyLoading) return <Spinner label="Loading workspace…" />;
   if (!propertyId) return (
@@ -363,9 +334,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     </CenteredShell>
   );
   if (loading || !data) return <Spinner label="Loading audit status…" />;
-
-  const isAuditInProgress = data.auditState === 'IN_PROGRESS' || data.auditState === 'POSTING';
-  const isCompleted = data.auditState === 'COMPLETED' || data.auditState === 'COMPLETED_WITH_EXCEPTIONS';
 
   return (
     <div
@@ -403,54 +371,15 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           </div>
         )}
 
-        {/* ── 1. Command Header ────────────────────────────────────────────── */}
-        <StatusBanner
+        <NightAuditOverview
           data={data}
-          isAuditInProgress={isAuditInProgress}
-          onOpenWizard={() => { if (data.canStartAudit || data.canResumeAudit) setWizardOpen(true); }}
           refreshing={refreshing}
           managerMode={managerMode}
+          onOpenWizard={() => { if (data.canStartAudit || data.canResumeAudit) setWizardOpen(true); }}
+          onRefresh={() => void load(true)}
         />
 
         {/* ── 2. Work area ─────────────────────────────────────────────────── */}
-        {!isCompleted ? (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-            {/* Main column: attention queue, financial summary, and close control */}
-            <div className="min-w-0 space-y-4">
-              <Link
-                href="/night-audit/attention"
-                className="group flex items-center justify-between rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] px-5 py-4 transition-colors hover:border-rose-300/40 hover:bg-rose-400/[0.09]"
-              >
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-300/75">Attention Queue</p>
-                  <p className="mt-1 text-sm font-semibold text-white">
-                    {data.summary.blockers > 0 ? `${data.summary.blockers} blocker${data.summary.blockers === 1 ? '' : 's'} require resolution` : 'No blocking items'}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">{data.summary.warnings} warning{data.summary.warnings === 1 ? '' : 's'} · Open the full operational queue</p>
-                </div>
-                <span className="rounded-xl border border-rose-300/25 px-3 py-2 text-xs font-bold text-rose-200 transition-transform group-hover:translate-x-0.5">Review queue →</span>
-              </Link>
-              <MetricCards data={data} accountingDepartments={accountingDepartments} />
-            </div>
-
-            {/* Right command rail: readiness and operational context */}
-            <div className="flex flex-col gap-4">
-              <AuditReadiness data={data} />
-              <OccupancyChart rooms={data.analytics.rooms} />
-            </div>
-          </div>
-        ) : (
-          /* ── Completed state ─────────────────────────────────────────────── */
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-            <div className="min-w-0 space-y-4">
-              {flashData && <ManagersFlash flashData={flashData} data={data} />}
-              <MetricCards data={data} accountingDepartments={accountingDepartments} />
-            </div>
-            <div className="flex flex-col gap-4">
-              <OccupancyChart rooms={data.analytics.rooms} />
-            </div>
-          </div>
-        )}
 
         {/* ── Freshness footer ─────────────────────────────────────────────── */}
         <div
@@ -484,13 +413,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           onExecute={execute}
           executing={executing}
           onRefresh={() => load(true)}
-        />
-      )}
-      {!managerMode && (
-        <ResolutionManager
-          action={resolutionAction}
-          onClose={() => setResolutionAction(null)}
-          onSuccess={handleResolutionSuccess}
         />
       )}
       <AuditSuccessModal
