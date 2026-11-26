@@ -870,7 +870,7 @@ export default function SubscriptionCatalogue({
   const [reachModalOpen, setReachModalOpen] = useState(false);
   const [terminalModalOpen, setTerminalModalOpen] = useState(false);
   const hasCommerceWebsitePrerequisite = activeAddonCodes.includes("ADDON_CUSTOM_WEBSITE_API") || activeAddonCodes.includes("ADDON_CUSTOM_WEBSITE_PMS");
-  const foodCommercePrerequisiteReady = currentPlanCode === "PROFESSIONAL" && hasCommerceWebsitePrerequisite;
+  const foodCommercePrerequisiteReady = planRank(currentPlanCode ?? '') >= planRank('PROFESSIONAL') && hasCommerceWebsitePrerequisite;
 
   async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1), quantity = 1) {
     if (!priceIds.length) return setError("This option does not have a published price for the selected billing interval yet.");

@@ -218,6 +218,32 @@ export async function validateCheckoutSelection(
     if (missingRequired.length) throw new Error('Selected prices do not include every required plan product');
   }
   const propertyIds = subscriptionScope(input.propertyIds ?? []);
+  const planRank: Record<string, number> = {
+    ESSENTIAL: 1,
+    STARTER: 1,
+    PROFESSIONAL: 2,
+    BUSINESS: 3,
+    ENTERPRISE: 4,
+    ENTERPRISE_PLUS: 5,
+  };
+  const minimumPlanCodes = prices.flatMap((price) => {
+    const metadata = price.product.metadata;
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+    const value = (metadata as Record<string, unknown>).minimumPlanCode;
+    return typeof value === 'string' && value.length > 0 ? [value] : [];
+  });
+  for (const minimumPlanCode of new Set(minimumPlanCodes)) {
+    const qualifyingPlans = await db.subscription.findMany({
+      where: {
+        organizationId: input.organizationId,
+        status: { in: [...ADDON_ELIGIBLE_SUBSCRIPTION_STATUSES] },
+      },
+      select: { plan: { select: { code: true } } },
+    });
+    if (!qualifyingPlans.some((subscription: any) => planRank[String(subscription.plan?.code ?? '').toUpperCase()] >= planRank[minimumPlanCode.toUpperCase()])) {
+      throw new Error(`An active ${minimumPlanCode} plan or higher is required before purchasing this add-on`);
+    }
+  }
   const requiredPlanCodes = prices.flatMap((price) => {
     const metadata = price.product.metadata;
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];

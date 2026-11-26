@@ -59,7 +59,7 @@ export const catalogProducts: CatalogProduct[] = [
       offlineCapable: true,       // POS bridge operates offline-first
       requiresApproval: false,    // Self-serve activation
       standaloneEligible: true,
-      requiredPlanCodes: ['PROFESSIONAL'],
+      minimumPlanCode: 'PROFESSIONAL',
       requiredAnyProducts: ['ADDON_CUSTOM_WEBSITE_PMS', 'ADDON_CUSTOM_WEBSITE_API'],
       includedCapabilities: ['DELIVERY', 'ANALYTICS', 'MEAL_PASS'],
       billingDescription: 'A complete digital ordering channel for Professional properties with a LodgeCore-connected or standalone API website.',
