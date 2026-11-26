@@ -422,6 +422,11 @@ export async function reconcileOrganizationEntitlements(
         { status: 'TRIALING', trialEndsAt: { gt: now } },
         { status: 'ACTIVE', currentPeriodEnd: { gt: now } },
         { status: 'PAST_DUE', currentPeriodEnd: { gt: now }, OR: [{ pastDueSince: null }, { pastDueSince: { gt: graceCutoff } }] },
+        // One-time products remain entitled after the short-lived billing
+        // record reaches its synthetic period end. The subscription itself
+        // must still be ACTIVE; recurring products continue to use the
+        // normal current-period checks above.
+        { status: 'ACTIVE', items: { some: { price: { interval: 'one_time' } } } },
       ],
     },
     include: {
@@ -429,23 +434,23 @@ export async function reconcileOrganizationEntitlements(
       plan: { include: { items: { include: { product: true } } } },
     },
   });
-  const active = new Map<string, { productCode: string; propertyId: string | null; expiresAt: Date; startsAt: Date; quantity: number | null; additive: boolean }>();
+  const active = new Map<string, { productCode: string; propertyId: string | null; expiresAt: Date | null; startsAt: Date; quantity: number | null; additive: boolean }>();
   for (const subscription of subscriptions) {
-    const expiresAt = effectiveSubscriptionDeadline(subscription);
-    const quantities = new Map<string, { quantity: number | null; additive: boolean }>(subscription.items.map((item) => {
+    const quantities = new Map<string, { quantity: number | null; additive: boolean; permanent: boolean }>(subscription.items.map((item) => {
       const metadata = item.price.product.metadata;
       const additive = Boolean(metadata && typeof metadata === 'object' && !Array.isArray(metadata) && (metadata as Record<string, unknown>).capacityKey);
-      return [item.price.product.code, { quantity: item.quantity, additive }] as const;
+      return [item.price.product.code, { quantity: item.quantity, additive, permanent: item.price.interval === 'one_time' }] as const;
     }));
-    for (const item of subscription.plan?.items ?? []) quantities.set(item.product.code, { quantity: item.includedQty ?? null, additive: false });
+    for (const item of subscription.plan?.items ?? []) quantities.set(item.product.code, { quantity: item.includedQty ?? null, additive: false, permanent: false });
     for (const propertyId of (subscription.scopePropertyIds.length ? subscription.scopePropertyIds : [null])) {
       for (const [productCode, entry] of quantities) {
         const scopeKey = `${organizationId}:${propertyId ?? '*'}:${productCode}`;
         const current = active.get(scopeKey);
-        if (current?.additive && entry.additive && current.expiresAt >= subscription.currentPeriodStart) {
+        const expiresAt = entry.permanent ? null : effectiveSubscriptionDeadline(subscription);
+        if (current?.additive && entry.additive && (current.expiresAt === null || current.expiresAt >= subscription.currentPeriodStart)) {
           current.quantity = current.quantity === null || entry.quantity === null ? null : current.quantity + entry.quantity;
-          if (expiresAt > current.expiresAt) current.expiresAt = expiresAt;
-        } else if (!current || current.expiresAt < expiresAt) active.set(scopeKey, { productCode, propertyId, expiresAt, startsAt: subscription.currentPeriodStart, quantity: entry.quantity, additive: entry.additive });
+          if (current.expiresAt !== null && expiresAt !== null && expiresAt > current.expiresAt) current.expiresAt = expiresAt;
+        } else if (!current || current.expiresAt !== null && (expiresAt === null || current.expiresAt < expiresAt)) active.set(scopeKey, { productCode, propertyId, expiresAt, startsAt: subscription.currentPeriodStart, quantity: entry.quantity, additive: entry.additive });
       }
     }
   }
