@@ -13,6 +13,7 @@ interface Props {
   store: CommerceStore | null;
   menus: CommerceMenu[];
   experience?: 'restaurant' | 'outdoor';
+  loadError?: boolean;
 }
 
 function fmt(amount: number, currency = 'NGN') {
@@ -130,8 +131,8 @@ function CartPill({ currency }: { currency: string }) {
 }
 
 // ─── Main dining client ───────────────────────────────────────────────────────
-export function DiningClient({ store, menus, experience = 'restaurant' }: Props) {
-  const { addItem } = useCart();
+export function DiningClient({ store, menus, experience = 'restaurant', loadError = false }: Props) {
+  const { addItem, setServiceMode, setOrderType } = useCart();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<CommerceProduct | null>(null);
   const categoryRefs = useRef<Record<string, HTMLElement>>({});
@@ -154,6 +155,14 @@ export function DiningClient({ store, menus, experience = 'restaurant' }: Props)
 
   const currency = store?.currency ?? 'NGN';
   const isOutdoor = experience === 'outdoor';
+  const featuredProducts = isOutdoor
+    ? allCategories.flatMap(category => category.products.filter(product => product.isFeatured)).slice(0, 4)
+    : [];
+
+  useEffect(() => {
+    setServiceMode(isOutdoor ? 'OUTDOOR' : 'RESTAURANT');
+    if (isOutdoor) setOrderType('DELIVERY');
+  }, [isOutdoor]);
 
   return (
     <div className={`dining-page${isOutdoor ? ' outdoor-service-page' : ''}`}>
@@ -181,12 +190,56 @@ export function DiningClient({ store, menus, experience = 'restaurant' }: Props)
         </div>
       </section>
 
+      {isOutdoor && (
+        <section className="outdoor-service-bar" aria-label="Outdoor service information">
+          <div className="outdoor-service-bar__inner">
+            <div className="outdoor-service-bar__intro">
+              <span className="outdoor-service-bar__kicker">Stanzel Outdoor Service</span>
+              <strong>Order from where you are.</strong>
+              <span>Poolside favourites, drinks and light bites brought to your marked service point.</span>
+            </div>
+            <div className="outdoor-service-bar__steps">
+              <span><b>01</b> Choose your menu</span>
+              <span><b>02</b> Add to order</span>
+              <span><b>03</b> Share your poolside location at checkout</span>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {isOutdoor && featuredProducts.length > 0 && (
+        <section className="outdoor-featured" aria-labelledby="outdoor-featured-title">
+          <div className="outdoor-featured__heading">
+            <div>
+              <p className="eyebrow">From the outdoor menu</p>
+              <h2 id="outdoor-featured-title">Made for the moment</h2>
+            </div>
+            <p>Guest favourites selected for relaxed afternoons and poolside evenings.</p>
+          </div>
+          <div className="outdoor-featured__grid">
+            {featuredProducts.map(product => (
+              <button key={product.id} className="featured-product" onClick={() => setSelectedProduct(product)}>
+                <div className="featured-product__image">
+                  {product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="280px" style={{ objectFit: 'cover' }} /> : <span aria-hidden>✦</span>}
+                </div>
+                <div className="featured-product__body">
+                  <strong>{product.name}</strong>
+                  <span>{fmt(product.price, currency)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {menus.length === 0 ? (
         // Fallback when menu isn't loaded (store offline / draft)
         <section className="section">
           <div className="container" style={{ textAlign: 'center', paddingBlock: '5rem' }}>
-            <p style={{ fontSize: 'var(--text-xl)', color: 'var(--color-muted)' }}>
-              Our online menu is currently unavailable. Please call us or visit in person.
+            <p className="menu-fallback__eyebrow">{loadError ? 'Service temporarily unavailable' : 'Menu coming soon'}</p>
+            <h2>{loadError ? 'We could not load the outdoor menu.' : 'Our online menu is being prepared.'}</h2>
+            <p style={{ fontSize: 'var(--text-base)', color: 'var(--color-muted)' }}>
+              Please call us or speak with a member of the team for assistance.
             </p>
           </div>
         </section>
@@ -276,6 +329,30 @@ export function DiningClient({ store, menus, experience = 'restaurant' }: Props)
         .outdoor-service-page { background: #f6f2e9; }
         .outdoor-service-page .dining-hero__overlay { background: linear-gradient(to top, rgba(8,35,31,0.94) 0%, rgba(8,35,31,0.12) 65%); }
         .outdoor-service-page .product-feed { background: rgba(255,255,255,0.42); border-radius: var(--radius-2xl); padding: var(--space-8); }
+        .outdoor-service-bar { background: var(--color-green); color: var(--color-ivory); border-bottom: 1px solid rgba(201,169,110,0.28); }
+        .outdoor-service-bar__inner { max-width: 1200px; margin: 0 auto; padding: 22px var(--space-6); display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+        .outdoor-service-bar__intro { display: grid; gap: 3px; }
+        .outdoor-service-bar__kicker { color: var(--color-gold); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+        .outdoor-service-bar__intro strong { font-family: var(--font-serif); font-size: var(--text-xl); font-weight: 500; }
+        .outdoor-service-bar__intro span:last-child { color: rgba(250,248,244,0.72); font-size: var(--text-sm); }
+        .outdoor-service-bar__steps { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 20px; color: rgba(250,248,244,0.76); font-size: var(--text-xs); }
+        .outdoor-service-bar__steps b { color: var(--color-gold); margin-right: 5px; font-size: 10px; }
+        @media (max-width: 768px) { .outdoor-service-bar__inner { align-items: flex-start; flex-direction: column; gap: var(--space-4); } .outdoor-service-bar__steps { justify-content: flex-start; } }
+        .outdoor-featured { max-width: 1200px; margin: 0 auto; padding: var(--space-12) var(--space-6) 0; }
+        .outdoor-featured__heading { display: flex; align-items: end; justify-content: space-between; gap: var(--space-6); margin-bottom: var(--space-6); }
+        .outdoor-featured__heading h2 { color: var(--color-green); font-family: var(--font-serif); font-size: var(--text-3xl); margin-top: 4px; }
+        .outdoor-featured__heading > p { max-width: 300px; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.6; }
+        .outdoor-featured__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
+        .featured-product { padding: 0; overflow: hidden; text-align: left; background: white; border: 1px solid var(--color-border); border-radius: var(--radius-2xl); cursor: pointer; transition: transform 0.18s, box-shadow 0.18s; }
+        .featured-product:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+        .featured-product__image { position: relative; height: 150px; display: grid; place-items: center; background: var(--color-ivory-dark); color: var(--color-gold-dark); font-size: 2rem; }
+        .featured-product__body { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; }
+        .featured-product__body strong { color: var(--color-green); font-size: var(--text-sm); }
+        .featured-product__body span { color: var(--color-green); font-size: var(--text-sm); font-weight: 700; white-space: nowrap; }
+        .menu-fallback__eyebrow { color: var(--color-gold-dark); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+        .menu-fallback h2 { color: var(--color-green); font-family: var(--font-serif); margin: var(--space-3) 0; }
+        @media (max-width: 900px) { .outdoor-featured__grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 540px) { .outdoor-featured__heading { align-items: flex-start; flex-direction: column; } .outdoor-featured__grid { grid-template-columns: 1fr 1fr; gap: 10px; } .featured-product__image { height: 120px; } .featured-product__body { align-items: flex-start; flex-direction: column; gap: 5px; } }
 
         .dining-hero {
           position: relative; height: 540px;

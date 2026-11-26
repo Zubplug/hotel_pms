@@ -55,8 +55,8 @@ const placeOrderSchema = z.object({
   scheduledFor: z.string().datetime().optional(),
   deliveryAddress: z
     .object({
-      street: z.string(),
-      city: z.string(),
+      street: z.string().trim().min(3).max(300),
+      city: z.string().trim().min(2).max(100),
       state: z.string().optional(),
       notes: z.string().optional(),
     })

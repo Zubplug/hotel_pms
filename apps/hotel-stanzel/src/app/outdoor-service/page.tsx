@@ -12,16 +12,16 @@ export const metadata: Metadata = {
 export const revalidate = 30;
 
 export default async function OutdoorServicePage() {
-  const [store, menus] = await Promise.all([
-    getStorefront().catch(() => null),
-    getMenu().catch(() => []),
-  ]);
+  const [storeResult, menuResult] = await Promise.allSettled([getStorefront(), getMenu()]);
+  const store = storeResult.status === 'fulfilled' ? storeResult.value : null;
+  const menus = menuResult.status === 'fulfilled' ? menuResult.value : [];
+  const loadError = storeResult.status === 'rejected' || menuResult.status === 'rejected';
 
   return (
     <>
       <Header />
       <main id="main-content">
-        <DiningClient store={store} menus={menus} experience="outdoor" />
+        <DiningClient store={store} menus={menus} experience="outdoor" loadError={loadError} />
       </main>
       <Footer />
     </>

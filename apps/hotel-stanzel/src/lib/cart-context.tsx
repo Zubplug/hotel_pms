@@ -26,6 +26,7 @@ interface CartState {
   promoCode: string;
   promoDiscount: number;
   orderType: 'PICKUP' | 'DELIVERY' | 'DINE_IN';
+  serviceMode: 'RESTAURANT' | 'OUTDOOR';
 }
 
 type CartAction =
@@ -34,6 +35,7 @@ type CartAction =
   | { type: 'UPDATE_QTY'; id: string; quantity: number }
   | { type: 'SET_PROMO'; code: string; discount: number }
   | { type: 'SET_ORDER_TYPE'; orderType: 'PICKUP' | 'DELIVERY' | 'DINE_IN' }
+  | { type: 'SET_SERVICE_MODE'; serviceMode: 'RESTAURANT' | 'OUTDOOR' }
   | { type: 'CLEAR' }
   | { type: 'HYDRATE'; state: CartState };
 
@@ -44,6 +46,7 @@ const initial: CartState = {
   promoCode: '',
   promoDiscount: 0,
   orderType: 'PICKUP',
+  serviceMode: 'RESTAURANT',
 };
 
 function reducer(state: CartState, action: CartAction): CartState {
@@ -69,6 +72,8 @@ function reducer(state: CartState, action: CartAction): CartState {
       return { ...state, promoCode: action.code, promoDiscount: action.discount };
     case 'SET_ORDER_TYPE':
       return { ...state, orderType: action.orderType };
+    case 'SET_SERVICE_MODE':
+      return { ...state, serviceMode: action.serviceMode };
     case 'CLEAR':
       return initial;
     case 'HYDRATE':
@@ -85,6 +90,7 @@ interface CartContext {
   updateQty: (id: string, qty: number) => void;
   setPromo: (code: string, discount: number) => void;
   setOrderType: (type: 'PICKUP' | 'DELIVERY' | 'DINE_IN') => void;
+  setServiceMode: (mode: 'RESTAURANT' | 'OUTDOOR') => void;
   clearCart: () => void;
   subtotal: number;
   itemCount: number;
@@ -99,7 +105,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) dispatch({ type: 'HYDRATE', state: JSON.parse(raw) });
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<CartState>;
+        dispatch({ type: 'HYDRATE', state: { ...initial, ...saved } });
+      }
     } catch {}
   }, []);
 
@@ -145,6 +154,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       updateQty: (id, qty) => dispatch({ type: 'UPDATE_QTY', id, quantity: qty }),
       setPromo: (code, discount) => dispatch({ type: 'SET_PROMO', code, discount }),
       setOrderType: (orderType) => dispatch({ type: 'SET_ORDER_TYPE', orderType }),
+      setServiceMode: (serviceMode) => dispatch({ type: 'SET_SERVICE_MODE', serviceMode }),
       clearCart: () => dispatch({ type: 'CLEAR' }),
       subtotal,
       itemCount,

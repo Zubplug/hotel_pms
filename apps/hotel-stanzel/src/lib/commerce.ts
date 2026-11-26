@@ -43,6 +43,7 @@ export interface CommerceProduct {
   imageUrl: string | null;
   price: number;
   compareAtPrice: number | null;
+  isFeatured?: boolean;
   calories?: number | null;
   prepTimeMinutes: number | null;
   isAvailable: boolean;
@@ -84,6 +85,7 @@ export interface PlaceOrderRequest {
   orderType: 'PICKUP' | 'DELIVERY';
   fulfillmentType?: 'NOW' | 'SCHEDULED';
   deliveryAddress?: { street: string; city: string; state?: string; notes?: string };
+  deliveryNotes?: string;
   items: { productId: string; quantity: number; modifierOptionIds?: string[]; specialNote?: string }[];
   promotionCode?: string;
   idempotencyKey: string;

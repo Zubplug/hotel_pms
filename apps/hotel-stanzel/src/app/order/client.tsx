@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/cart-context';
@@ -19,12 +19,13 @@ type Step = 'details' | 'review' | 'payment';
 export function CheckoutClient() {
   const router = useRouter();
   const { state, updateQty, removeItem, setPromo, clearCart, subtotal, itemCount } = useCart();
+  const isOutdoor = state.serviceMode === 'OUTDOOR';
 
   const [step, setStep] = useState<Step>('details');
   const [form, setForm] = useState({
     name: '', phone: '', email: '',
     orderType: state.orderType as string,
-    deliveryAddress: '', tableNumber: '', notes: '',
+    deliveryAddress: '', serviceArea: '', notes: '',
   });
   const [promoInput, setPromoInput] = useState('');
   const [promoMsg, setPromoMsg] = useState('');
@@ -32,6 +33,10 @@ export function CheckoutClient() {
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOutdoor) setForm(current => ({ ...current, orderType: 'DELIVERY' }));
+  }, [isOutdoor]);
 
   const deliveryFee = form.orderType === 'DELIVERY' ? 1500 : 0;
   const finalTotal = subtotal + deliveryFee - promoDiscount;
@@ -43,7 +48,7 @@ export function CheckoutClient() {
         <div className="empty-icon">🛒</div>
         <h2>Your order is empty</h2>
         <p>Browse our menu and add something delicious.</p>
-        <Link href="/dining" className="btn btn-primary">View Menu</Link>
+        <Link href={isOutdoor ? '/outdoor-service' : '/dining'} className="btn btn-primary">View Menu</Link>
       </div>
     );
   }
@@ -70,10 +75,12 @@ export function CheckoutClient() {
     setLoading(true);
     setError('');
     try {
+      const effectiveOrderType = isOutdoor ? 'DELIVERY' : form.orderType;
       const order = await placeOrder({
         customer: { name: form.name, phone: form.phone, email: form.email || undefined },
-        orderType: form.orderType as 'PICKUP' | 'DELIVERY',
-        deliveryAddress: form.orderType === 'DELIVERY' ? { street: form.deliveryAddress, city: 'Lagos' } : undefined,
+        orderType: effectiveOrderType as 'PICKUP' | 'DELIVERY',
+        deliveryAddress: effectiveOrderType === 'DELIVERY' ? { street: form.deliveryAddress, city: 'Abuja', notes: form.serviceArea || undefined } : undefined,
+        deliveryNotes: effectiveOrderType === 'DELIVERY' ? form.notes || undefined : undefined,
         specialInstructions: form.notes || undefined,
         promotionCode: state.promoCode || undefined,
         idempotencyKey: generateKey(),
@@ -133,17 +140,27 @@ export function CheckoutClient() {
             <div className="checkout-card">
               <h2 className="checkout-card__title">Your Details</h2>
 
-              <div className="order-type-tabs">
-                {['PICKUP', 'DELIVERY'].map(t => (
-                  <button
-                    key={t}
-                    className={`order-type-tab${form.orderType === t ? ' active' : ''}`}
-                    onClick={() => setForm(f => ({ ...f, orderType: t }))}
-                  >
-                    {t === 'PICKUP' ? '🏃 Pickup' : '🚗 Delivery'}
-                  </button>
-                ))}
-              </div>
+              {isOutdoor ? (
+                <div className="outdoor-checkout-notice">
+                  <span className="outdoor-checkout-notice__icon" aria-hidden>✦</span>
+                  <div>
+                    <strong>Outdoor service delivery</strong>
+                    <p>Your order will be prepared by the team and delivered to the service address below.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="order-type-tabs">
+                  {['PICKUP', 'DELIVERY'].map(t => (
+                    <button
+                      key={t}
+                      className={`order-type-tab${form.orderType === t ? ' active' : ''}`}
+                      onClick={() => setForm(f => ({ ...f, orderType: t }))}
+                    >
+                      {t === 'PICKUP' ? '🏃 Pickup' : '🚗 Delivery'}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="form-grid">
                 <label className="form-label">
@@ -159,13 +176,21 @@ export function CheckoutClient() {
                   <input className="form-input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="you@example.com" type="email" />
                 </label>
                 {form.orderType === 'DELIVERY' && (
-                  <label className="form-label" style={{ gridColumn: '1 / -1' }}>
-                    Delivery Address *
-                    <input className="form-input" value={form.deliveryAddress} onChange={e => setForm(f => ({ ...f, deliveryAddress: e.target.value }))} placeholder="Room 203, Stanzel Grand Resort or street address" />
-                  </label>
+                  <>
+                    <label className="form-label" style={{ gridColumn: '1 / -1' }}>
+                      {isOutdoor ? 'Poolside / outdoor service address *' : 'Delivery Address *'}
+                      <input className="form-input" value={form.deliveryAddress} onChange={e => setForm(f => ({ ...f, deliveryAddress: e.target.value }))} placeholder={isOutdoor ? 'Pool deck, cabana 2, or your exact service point' : 'Room 203, Stanzel Grand Resort or street address'} />
+                    </label>
+                    {isOutdoor && (
+                      <label className="form-label" style={{ gridColumn: '1 / -1' }}>
+                        Area details (optional)
+                        <input className="form-input" value={form.serviceArea} onChange={e => setForm(f => ({ ...f, serviceArea: e.target.value }))} placeholder="Poolside, terrace, cabana, table or lounger" />
+                      </label>
+                    )}
+                  </>
                 )}
                 <label className="form-label" style={{ gridColumn: '1 / -1' }}>
-                  Order Notes (optional)
+                  {isOutdoor ? 'Delivery instructions (optional)' : 'Order Notes (optional)'}
                   <textarea className="form-input form-textarea" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Allergies, delivery instructions…" rows={2} />
                 </label>
               </div>
@@ -243,7 +268,7 @@ export function CheckoutClient() {
         <aside className="checkout-summary">
           <div className="checkout-card">
             <h3 className="summary-title">Your Order</h3>
-            <p className="summary-type">{form.orderType === 'DELIVERY' ? '🚗 Delivery' : '🏃 Pickup'}</p>
+            <p className="summary-type">{isOutdoor ? '✦ Outdoor service' : form.orderType === 'DELIVERY' ? '🚗 Delivery' : '🏃 Pickup'}</p>
             {state.items.map(i => (
               <div key={i.id} className="summary-item">
                 <span className="summary-item__qty">{i.quantity}×</span>
@@ -285,6 +310,10 @@ export function CheckoutClient() {
         .order-type-tabs { display: flex; gap: var(--space-3); margin-bottom: var(--space-6); }
         .order-type-tab { flex: 1; padding: var(--space-3); border: 1.5px solid var(--color-border); border-radius: var(--radius-lg); background: white; cursor: pointer; font-weight: 600; font-size: var(--text-sm); transition: all 0.18s; }
         .order-type-tab.active { border-color: var(--color-green); background: var(--color-green); color: var(--color-ivory); }
+        .outdoor-checkout-notice { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); margin-bottom: var(--space-6); border: 1px solid rgba(201,169,110,0.45); border-radius: var(--radius-lg); background: rgba(201,169,110,0.1); color: var(--color-green); }
+        .outdoor-checkout-notice__icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; background: var(--color-green); color: var(--color-gold); }
+        .outdoor-checkout-notice strong { display: block; margin-bottom: 3px; }
+        .outdoor-checkout-notice p { color: var(--color-muted); font-size: var(--text-sm); margin: 0; line-height: 1.5; }
 
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-6); }
         @media (max-width: 540px) { .form-grid { grid-template-columns: 1fr; } }
