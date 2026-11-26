@@ -25,7 +25,14 @@ export default function AccountantAuditPage() {
   const trialQuery = useQuery<TrialBalance>({ queryKey: ['accountant-trial-balance', propertyId, businessDate], queryFn: () => readApi(`/api/v1/night-audit/reports/trial-balance?propertyId=${propertyId}&businessDate=${businessDate}`), enabled: Boolean(propertyId && businessDate) });
   const receivablesQuery = useQuery<{ receivables: Receivable[] }>({ queryKey: ['accountant-audit-receivables', propertyId], queryFn: () => readApi(`/api/v1/reports/receivables?propertyId=${propertyId}&minBalance=0`), enabled: Boolean(propertyId) });
   const flashQuery = useQuery<FlashReport>({ queryKey: ['accountant-flash-report', propertyId, businessDate], queryFn: () => readApi(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${businessDate}`), enabled: Boolean(propertyId && businessDate) });
-  const refresh = () => { void statusQuery.refetch(); void trialQuery.refetch(); void receivablesQuery.refetch(); void flashQuery.refetch(); };
+  const refresh = async () => {
+    await Promise.all([
+      statusQuery.refetch(),
+      trialQuery.refetch(),
+      receivablesQuery.refetch(),
+      flashQuery.refetch(),
+    ]);
+  };
   const executeAudit = async () => { if (!propertyId) return; setIsExecuting(true); try { const response = await fetch('/api/v1/night-audit/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId }) }); const body = await response.json(); if (!response.ok || body.success === false) throw new Error(body.error?.message || body.error || 'Night Audit could not be started'); setWizardOpen(false); toast.success('Night Audit completed successfully'); refresh(); } catch (error: unknown) { toast.error(error instanceof Error ? error.message : 'Night Audit could not be started'); } finally { setIsExecuting(false); } };
 
   if (statusQuery.isLoading) return <div className="flex min-h-full items-center justify-center bg-[#08111f]"><Loader2 className="h-8 w-8 animate-spin text-emerald-300" /></div>;

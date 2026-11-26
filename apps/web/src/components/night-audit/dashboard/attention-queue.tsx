@@ -54,11 +54,11 @@ export function AttentionQueue({
       items.push({ id: stableId('handover', item), label: 'Pending Cash Handover', description: `${item.drawerName ?? 'Drawer'} · GC action`, type: 'warning', category: 'cash', actionType: 'CASH_HANDOVER', payload: { ...item, propertyId: data.property.id } as any }));
     (data.operational.arrivals || []).forEach((item: any) => {
       const g = item.primaryGuest;
-      items.push({ id: stableId('arr', item), label: 'Pending Arrival', description: g ? `${g.firstName ?? 'Guest'} ${g.lastName ?? ''}`.trim() : 'Guest', type: 'warning', category: 'operations', actionType: 'ARRIVALS', payload: item });
+      items.push({ id: stableId('arr', item), label: 'Pending Arrival', description: g ? `${g.firstName ?? 'Guest'} ${g.lastName ?? ''}`.trim() : 'Guest', type: 'blocker', category: 'operations', actionType: 'ARRIVALS', payload: item });
     });
     (data.operational.departures || []).forEach((item: any) => {
       const g = item.primaryGuest;
-      items.push({ id: stableId('dep', item), label: 'Pending Departure', description: g ? `${g.firstName ?? 'Guest'} ${g.lastName ?? ''}`.trim() : 'Guest', type: 'warning', category: 'operations', actionType: 'DEPARTURES', payload: item });
+      items.push({ id: stableId('dep', item), label: 'Pending Departure', description: g ? `${g.firstName ?? 'Guest'} ${g.lastName ?? ''}`.trim() : 'Guest', type: 'blocker', category: 'operations', actionType: 'DEPARTURES', payload: item });
     });
     (data.operational.roomReconciliation?.filter((r: any) => r.issue) || []).forEach((item: any) =>
       items.push({ id: stableId('room', item), label: 'Room Discrepancy', description: `Room ${item.roomNumber ?? ''}`, type: 'warning', category: 'operations', actionType: 'ROOM_DISCREPANCY', payload: item }));
@@ -92,8 +92,8 @@ export function AttentionQueue({
       <PanelHeader
         icon={Activity}
         title="Attention Queue"
-        subtitle="Items requiring resolution before close"
-        tone="rose"
+        subtitle={blockerCount > 0 ? 'Blockers must be resolved before close' : warningCount > 0 ? 'Warnings to review before handover' : 'No unresolved attention items'}
+        tone={blockerCount > 0 ? 'rose' : warningCount > 0 ? 'amber' : 'emerald'}
         actions={
           <>
             {blockerCount > 0 && <Badge tone="rose" dot>{blockerCount} blocker{blockerCount !== 1 ? 's' : ''}</Badge>}
@@ -157,7 +157,7 @@ export function AttentionQueue({
                         'group/btn inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors',
                         isBlocker
                           ? 'border-rose-400/25 bg-rose-400/[0.06] text-rose-300 hover:bg-rose-400/[0.14]'
-                          : 'border-white/[0.08] bg-white/[0.03] text-slate-400 hover:bg-white/[0.07] hover:text-white',
+                          : 'border-amber-400/25 bg-amber-400/[0.06] text-amber-300 hover:bg-amber-400/[0.14]',
                       )}
                     >
                       Resolve

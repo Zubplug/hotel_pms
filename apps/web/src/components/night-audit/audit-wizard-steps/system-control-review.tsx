@@ -42,19 +42,19 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
       {openPosOrders?.length > 0 && (
         <div>
           <div className="mb-3">
-            <h4 className="text-sm font-bold text-amber-300">
+            <h4 className="text-sm font-bold text-rose-300">
               Open POS Orders — Waiter Action Required ({openPosOrders.length})
             </h4>
-            <p className="mt-0.5 text-xs text-amber-400/70">
+            <p className="mt-0.5 text-xs text-rose-400/70">
               These orders have not been settled or voided. Notify the responsible waiter to resolve them on their POS terminal.
             </p>
           </div>
 
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-amber-400">
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.05] p-4">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-rose-400/20 bg-rose-400/10 text-rose-300">
               <Info className="h-4 w-4" />
             </span>
-            <p className="mt-1 text-[13px] text-amber-200">
+            <p className="mt-1 text-[13px] text-rose-200">
               The waiter must log back into their POS terminal, then settle or void each order before the business day can close.
             </p>
           </div>
@@ -63,10 +63,10 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
             {openPosOrders.map((order: any) => (
               <div
                 key={order.id}
-                className="flex flex-col justify-between gap-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.03] p-4 text-sm shadow-sm transition-colors hover:border-amber-400/25 sm:flex-row sm:items-center"
+                className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.04] p-4 text-sm shadow-sm transition-colors hover:border-rose-400/30 sm:flex-row sm:items-center"
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400/10 text-amber-400">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-400/10 text-rose-300">
                     <ClipboardList className="h-4 w-4" />
                   </span>
                   <div className="min-w-0">
@@ -77,7 +77,7 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                     <p className="mt-0.5 truncate text-xs text-slate-500">
                       {order.outletName} · <span className="capitalize">{order.orderType?.replace('_', ' ')}</span>
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-amber-400/90">
+                    <p className="mt-1 text-xs font-semibold text-rose-300/90">
                       Waiter: {order.waiterName}
                     </p>
                   </div>
@@ -96,7 +96,7 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                   <button
                     type="button"
                     onClick={() => onResolve('POS_ORDER', order)}
-                    className="mt-1 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-200 transition hover:bg-amber-300/20"
+                    className="mt-1 rounded-lg border border-rose-300/30 bg-rose-300/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-rose-200 transition hover:bg-rose-300/20"
                   >
                     Void after investigation
                   </button>
@@ -156,11 +156,11 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
         <div className="pt-2">
           <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
             <div>
-              <h4 className="text-sm font-bold text-violet-200">Cashier Shifts Awaiting Review ({shiftReviews.length})</h4>
-              <p className="mt-0.5 text-xs text-violet-300/70">Review the cashier’s declaration and variance. Approval releases the shift for Night Audit; it does not close the shift.</p>
+              <h4 className="text-sm font-bold text-rose-300">Cashier Shifts Awaiting Review — Blocker ({shiftReviews.length})</h4>
+              <p className="mt-0.5 text-xs text-rose-400/70">Review the cashier’s declaration and variance. Approval releases the shift for Night Audit; it does not close the shift.</p>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[.12em] text-violet-200">
-              <Clock3 className="h-3.5 w-3.5" /> Independent control
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-300/25 bg-rose-300/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[.12em] text-rose-200">
+              <Clock3 className="h-3.5 w-3.5" /> Approval required
             </span>
           </div>
           <div className="space-y-3">
@@ -168,10 +168,10 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
               const variance = Number(shift.variance || 0);
               const hasVariance = Math.abs(variance) > 0.01;
               return (
-                <div key={`${shift.type}-${shift.id}`} className="rounded-2xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[.08] to-indigo-400/[.03] p-4 shadow-sm">
+                <div key={`${shift.type}-${shift.id}`} className="rounded-2xl border border-rose-300/20 bg-gradient-to-br from-rose-400/[.08] to-indigo-400/[.03] p-4 shadow-sm">
                   <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-300/20 bg-violet-300/10 text-violet-200"><ShieldCheck className="h-5 w-5" /></span>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/10 text-rose-200"><ShieldCheck className="h-5 w-5" /></span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2"><p className="font-bold text-white">{shift.displayName}</p><span className="rounded-md border border-white/10 bg-white/[.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-300">{shift.controlStatus.replaceAll('_', ' ')}</span></div>
                         <p className="mt-1 text-xs text-slate-400">Submitted by <span className="font-semibold text-slate-200">{shift.operatorName}</span>{shift.submittedAt ? ` · ${new Date(shift.submittedAt).toLocaleString()}` : ''}</p>
@@ -185,7 +185,7 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                   </div>
                   <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[.07] pt-3 sm:flex-row sm:items-center">
                     <p className="text-xs leading-5 text-slate-500">The cashier remains responsible for the submitted record. Any variance must include an approval reason.</p>
-                    <button type="button" onClick={() => onResolve('SHIFT_REVIEW', shift)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-400 px-4 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-violet-300 sm:w-auto"><ShieldCheck className="h-4 w-4" /> Open review</button>
+                    <button type="button" onClick={() => onResolve('SHIFT_REVIEW', shift)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-400 px-4 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-rose-300 sm:w-auto"><ShieldCheck className="h-4 w-4" /> Open review</button>
                   </div>
                 </div>
               );
@@ -213,7 +213,7 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                     {` · ${pos.status || 'OPEN'}`}
                   </p>
                 </div>
-                <span className="w-full shrink-0 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2 text-center text-xs font-bold text-amber-300 sm:w-auto">
+                <span className="w-full shrink-0 rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2 text-center text-xs font-bold text-rose-300 sm:w-auto">
                   Cashier action required
                 </span>
               </div>
@@ -236,7 +236,7 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                   <p className="font-bold text-rose-200">Shift Reference: {fd.shiftReference}</p>
                   <p className="mt-0.5 text-xs text-rose-300/80">Status: <span className="capitalize text-rose-200">{fd.status.toLowerCase()}</span></p>
                 </div>
-                <span className="w-full shrink-0 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2 text-center text-xs font-bold text-amber-300 sm:w-auto">
+                <span className="w-full shrink-0 rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2 text-center text-xs font-bold text-rose-300 sm:w-auto">
                   Cashier action required
                 </span>
               </div>

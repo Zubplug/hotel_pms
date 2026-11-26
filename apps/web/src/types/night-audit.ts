@@ -57,6 +57,7 @@ export interface FinancialData {
   pendingDiscounts: any[];
   unverifiedComplimentary: any[];
   pendingCheckInBypasses: any[];
+  paymentCorrections?: any[];
   rateVariances: any[];
   pendingNightAuditPostings?: any[];
   eventHall?: {
@@ -64,6 +65,7 @@ export interface FinancialData {
     awaitingApproval: any[];
     approvedAwaitingIssue: any[];
     missingRevenuePosting: any[];
+    reviewInvoices: any[];
     postedCount: number;
     blockers: number;
     warnings: number;

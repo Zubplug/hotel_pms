@@ -37,6 +37,7 @@ export async function getNightAuditPreview(ctx: any, propertyId: string) {
 
   if (financial.highBalances.length > 0) warnings++;
   if (financial.unverifiedComplimentary?.length > 0) blockers++;
+  if (financial.paymentCorrections?.length > 0) blockers++;
   if (financial.eventHall?.blockers > 0) blockers++;
   if (financial.eventHall?.warnings > 0) warnings++;
 
@@ -96,12 +97,13 @@ export async function executeNightAudit(
   if (!isRecovery) {
     const { openPosSessions, openFrontdeskSessions, shiftReviews, financialSyncConflicts, openPosOrders } = await getSystemIntegrity(ctx, propertyId);
     const operationalReview = await getOperationalReview(ctx, propertyId);
-    const { unverifiedComplimentary, pendingCheckInBypasses } = await getFinancialAudit(ctx, propertyId);
+    const { unverifiedComplimentary, pendingCheckInBypasses, paymentCorrections: financialPaymentCorrections = [] } = await getFinancialAudit(ctx, propertyId);
     const { unverifiedTransactions } = await getCashReconciliation(ctx, propertyId);
     const { exceptions: { openOrders: additionalFnbOpenOrders, openSessions: additionalFnbOpenSessions } } = await getFnbControl(ctx, propertyId);
     
     if (unverifiedComplimentary.length > 0) throw new Error('BLOCKER:Cannot execute audit. Unverified complimentary transactions must be resolved.');
     if (pendingCheckInBypasses.length > 0) throw new Error('BLOCKER:Cannot execute audit. Pending check-in bypasses must be resolved.');
+    if (financialPaymentCorrections.length > 0) throw new Error('BLOCKER:Cannot execute audit. Payment corrections must be approved or rejected first.');
     if (unverifiedTransactions.length > 0) throw new Error('BLOCKER:Cannot execute audit. Unverified cash/bank transactions exist.');
     
     if (openPosSessions.length > 0 || additionalFnbOpenSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');

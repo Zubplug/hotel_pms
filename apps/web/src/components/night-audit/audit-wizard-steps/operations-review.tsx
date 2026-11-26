@@ -29,19 +29,19 @@ export function OperationsReview({ data, onResolve }: OperationsReviewProps) {
       {arrivals?.length > 0 && (
         <div>
           <div className="mb-3">
-            <h4 className="text-sm font-bold text-sky-300">Pending Arrivals</h4>
-            <p className="mt-0.5 text-xs text-sky-400/70">Guests scheduled to arrive today must be checked in, cancelled, or marked as no-show.</p>
+            <h4 className="text-sm font-bold text-rose-300">Pending Arrivals — Blocker</h4>
+            <p className="mt-0.5 text-xs text-rose-400/70">Guests scheduled to arrive today must be checked in, cancelled, or marked as no-show before the audit can close.</p>
           </div>
           <div className="space-y-2">
             {arrivals.map((arr: any) => (
-              <div key={arr.id} className="flex flex-col justify-between gap-3 rounded-xl border border-white/[0.06] p-4 text-sm transition-all hover:border-white/[0.1] sm:flex-row sm:items-center" style={GLASS}>
+              <div key={arr.id} className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.04] p-4 text-sm transition-all hover:border-rose-400/30 sm:flex-row sm:items-center">
                 <div>
                   <p className="font-bold text-slate-200">{arr.primaryGuest?.firstName} {arr.primaryGuest?.lastName}</p>
                   <p className="mt-0.5 text-xs text-slate-500">Confirmation: <span className="font-medium text-slate-400">{arr.confirmationNumber}</span></p>
                 </div>
                 <button 
                   onClick={() => onResolve('ARRIVALS', arr)} 
-                  className="w-full shrink-0 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-xs font-bold text-sky-300 transition-all hover:bg-sky-400/20 sm:w-auto text-center"
+                  className="w-full shrink-0 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-bold text-rose-300 transition-all hover:bg-rose-400/20 sm:w-auto text-center"
                 >
                   Resolve
                 </button>
@@ -54,19 +54,19 @@ export function OperationsReview({ data, onResolve }: OperationsReviewProps) {
       {departures?.length > 0 && (
         <div className="pt-2">
           <div className="mb-3">
-            <h4 className="text-sm font-bold text-sky-300">Pending Departures</h4>
-            <p className="mt-0.5 text-xs text-sky-400/70">Guests scheduled to depart today must be checked out or have their stay extended.</p>
+            <h4 className="text-sm font-bold text-rose-300">Pending Departures — Blocker</h4>
+            <p className="mt-0.5 text-xs text-rose-400/70">Guests scheduled to depart today must be checked out or have their stay extended before the audit can close.</p>
           </div>
           <div className="space-y-2">
             {departures.map((dep: any) => (
-              <div key={dep.id} className="flex flex-col justify-between gap-3 rounded-xl border border-white/[0.06] p-4 text-sm transition-all hover:border-white/[0.1] sm:flex-row sm:items-center" style={GLASS}>
+              <div key={dep.id} className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.04] p-4 text-sm transition-all hover:border-rose-400/30 sm:flex-row sm:items-center">
                 <div>
                   <p className="font-bold text-slate-200">{dep.primaryGuest?.firstName} {dep.primaryGuest?.lastName}</p>
                   <p className="mt-0.5 text-xs text-slate-500">Confirmation: <span className="font-medium text-slate-400">{dep.confirmationNumber}</span></p>
                 </div>
                 <button 
                   onClick={() => onResolve('DEPARTURES', dep)} 
-                  className="w-full shrink-0 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-xs font-bold text-sky-300 transition-all hover:bg-sky-400/20 sm:w-auto text-center"
+                  className="w-full shrink-0 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-bold text-rose-300 transition-all hover:bg-rose-400/20 sm:w-auto text-center"
                 >
                   Resolve
                 </button>

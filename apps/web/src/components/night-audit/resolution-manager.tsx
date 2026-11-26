@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, ShieldAlert, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { FolioDetailView } from '@/components/finance/FolioDetailView';
@@ -26,6 +26,7 @@ export type ResolutionAction =
   | { type: 'COMPLIMENTARY_VERIFICATION'; item: any }
   | { type: 'CHECKIN_BYPASS'; item: any }
   | { type: 'CASH_HANDOVER'; item: any }
+  | { type: 'PAYMENT_CORRECTION'; item: any }
   | null;
 
 interface Props {
@@ -60,9 +61,71 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'COMPLIMENTARY_VERIFICATION' && <ComplimentaryVerificationResolution propertyId={action.item.propertyId} records={action.item.records} onOpenChange={(open) => !open && onClose()} open={true} onSuccess={onSuccess} />}
         {action.type === 'CHECKIN_BYPASS' && <CheckinBypassResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'CASH_HANDOVER' && <CashHandoverResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
+        {action.type === 'PAYMENT_CORRECTION' && <PaymentCorrectionResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
   );
+}
+
+function PaymentCorrectionResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [decisionNote, setDecisionNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const guest = item.originalPayment?.reservation?.primaryGuest;
+  const guestName = `${guest?.firstName || ''} ${guest?.lastName || ''}`.trim() || 'Guest';
+  const room = item.originalPayment?.reservation?.reservationRooms?.[0]?.room?.number || '—';
+  const money = (value: unknown) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: item.currency || 'NGN', maximumFractionDigits: 2 }).format(Number(value || 0));
+  const label = (value: unknown) => String(value || '—').replaceAll('_', ' ');
+
+  const decide = async (decision: 'APPROVE' | 'REJECT') => {
+    if (decision === 'REJECT' && decisionNote.trim().length < 10) {
+      setError('Enter a rejection reason of at least 10 characters.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      // The correction endpoint resolves the PATCH target by correction ID;
+      // the original payment ID is retained in the payload for audit context.
+      const response = await fetch(`/api/v1/frontdesk/payments/${item.id}/correction`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, reason: decisionNote.trim() }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to record payment correction decision');
+      toast.success(decision === 'APPROVE' ? 'Payment correction approved and posted' : 'Payment correction rejected');
+      onSuccess();
+    } catch (cause: any) {
+      setError(cause.message || 'Unable to record payment correction decision');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return <>
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2 text-rose-200"><CreditCard className="h-5 w-5 text-rose-300" /> Payment correction review</DialogTitle>
+      <DialogDescription className="text-slate-400">This correction is blocking Night Audit until an independent reviewer records a decision.</DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4 py-4 text-sm text-slate-300">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[['Guest', guestName], ['Room', room], ['Original', money(item.amount)], ['Corrected', money(item.correctedAmount)]].map(([key, value]) => <div key={String(key)} className="rounded-xl border border-white/[.08] bg-white/[.03] p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">{key}</p><p className="mt-1 truncate font-bold text-white">{value}</p></div>)}
+      </div>
+      <div className="grid gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[.05] p-4 sm:grid-cols-2">
+        <div><p className="text-[10px] uppercase tracking-wider text-slate-500">Payment method</p><p className="mt-1 font-semibold text-rose-200">{label(item.originalMethod)} <span className="px-1 text-slate-500">→</span> {label(item.correctedMethod)}</p></div>
+        <div><p className="text-[10px] uppercase tracking-wider text-slate-500">Receipt / confirmation</p><p className="mt-1 font-semibold text-white">{item.originalPayment?.reference || item.originalPayment?.reservation?.confirmationNumber || '—'}</p></div>
+        <div className="sm:col-span-2"><p className="text-[10px] uppercase tracking-wider text-slate-500">Requester’s reason</p><p className="mt-1 whitespace-pre-wrap text-slate-200">{item.reason}</p></div>
+      </div>
+      <label className="block text-xs text-slate-300">Decision note {<span className="text-slate-500">(required when rejecting)</span>}<textarea value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-white/10 bg-white/[.04] p-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-rose-300/50" placeholder="Record your approval note or explain the rejection." /></label>
+      {error && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-300">{error}</p>}
+    </div>
+    <DialogFooter className="flex-col gap-2 sm:flex-row">
+      <Button variant="ghost" onClick={onClose} disabled={loading} className="text-slate-300 hover:text-white">Cancel</Button>
+      <Button onClick={() => void decide('REJECT')} disabled={loading || decisionNote.trim().length < 10} variant="outline" className="border-rose-400/30 text-rose-200 hover:bg-rose-400/10">Reject correction</Button>
+      <Button onClick={() => void decide('APPROVE')} disabled={loading} className="bg-emerald-500 text-slate-950 hover:bg-emerald-400">{loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Approve &amp; post correction</Button>
+    </DialogFooter>
+  </>;
 }
 
 function PosOrderVoidResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
