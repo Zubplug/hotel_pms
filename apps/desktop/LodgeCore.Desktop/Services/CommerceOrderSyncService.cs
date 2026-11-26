@@ -328,41 +328,98 @@ public class CommerceOrderSyncService : BackgroundService
 
             }
 
+            // Resolve the production station from the locally synced POS
+            // catalog. Online orders can contain both kitchen and bar items.
+            var productIds = orderItems
+                .Where(item => !string.IsNullOrWhiteSpace(item.ProductId))
+                .Select(item => item.ProductId!)
+                .Distinct()
+                .ToList();
+            var products = await db.PosProducts
+                .Where(product => productIds.Contains(product.Id))
+                .ToListAsync(ct);
+            var categoryIds = products.Select(product => product.CategoryId).Distinct().ToList();
+            var categories = await db.ProductCategories
+                .Where(category => categoryIds.Contains(category.Id))
+                .ToDictionaryAsync(category => category.Id, ct);
+            var productMap = products.ToDictionary(product => product.Id);
+
+            string ResolveStation(LocalPosOrderItem item)
+            {
+                if (item.ProductId != null && productMap.TryGetValue(item.ProductId, out var product))
+                {
+                    var station = product.ProductionStation;
+                    if (string.IsNullOrWhiteSpace(station)
+                        && categories.TryGetValue(product.CategoryId, out var category))
+                    {
+                        station = category.ProductionStation;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(station))
+                        return station.Trim().ToUpperInvariant();
+                }
+
+                return "KITCHEN";
+            }
+
+            var stationGroups = orderItems.GroupBy(ResolveStation).ToList();
+
             posOrder.Subtotal = subtotal;
             posOrder.Total    = inbound.TotalAmount > 0 ? inbound.TotalAmount : subtotal;
             posOrder.TaxAmount = 0;
             posOrder.ServiceCharge = 0;
 
-            // ── Build KOT ──
-            var kotId = Guid.NewGuid().ToString();
-            var itemIds = orderItems.Select(i => i.Id).ToList();
-            var kot   = new LocalPosKot
+            // ── Build station-specific KOTs ──
+            var kots = new List<LocalPosKot>();
+            foreach (var stationGroup in stationGroups)
             {
-                Id               = kotId,
-                OrderId          = orderId,
-                OutletId         = outlet.Id,
-                OrderNumber      = orderNumber,
-                KotNumber        = orderNumber,
-                Status           = "PENDING",
-                PrintStatus      = "QUEUED",         // KotPrintService will print this
-                ProductionStation = "KITCHEN",
-                BusinessDate     = DateTime.UtcNow.Date,
-                CreatedAt        = DateTime.UtcNow,
-                ItemIdsJson      = JsonSerializer.Serialize(itemIds),
-                DeviceId         = "ONLINE_COMMERCE",
-                CreatedBy        = "commerce-sync",
-                ServerName       = inbound.CustomerName,
-                TableNumber      = $"[{inbound.OrderType}]",
-            };
+                var station = stationGroup.Key;
+                var requiresProductionTicket = station is "KITCHEN" or "BAR";
+                var firedAt = DateTime.UtcNow;
+
+                foreach (var item in stationGroup)
+                {
+                    item.KitchenStatus = requiresProductionTicket ? "PENDING" : "DIRECT";
+                    item.SentToKitchenAt = firedAt;
+                }
+
+                if (!requiresProductionTicket) continue;
+
+                var kotId = Guid.NewGuid().ToString();
+                var kot = new LocalPosKot
+                {
+                    Id               = kotId,
+                    OrderId          = orderId,
+                    OutletId         = outlet.Id,
+                    OrderNumber      = orderNumber,
+                    KotNumber        = $"{orderNumber}-{station}",
+                    Status           = "PENDING",
+                    PrintStatus      = "QUEUED",         // KotPrintService routes by station
+                    ProductionStation = station,
+                    BusinessDate     = DateTime.UtcNow.Date,
+                    CreatedAt        = firedAt,
+                    FiredAt          = firedAt,
+                    ItemIdsJson      = JsonSerializer.Serialize(stationGroup.Select(item => item.Id)),
+                    DeviceId         = "ONLINE_COMMERCE",
+                    CreatedBy        = "commerce-sync",
+                    ServerName       = inbound.CustomerName,
+                    TableNumber      = $"[{inbound.OrderType}]",
+                };
+
+                foreach (var item in stationGroup)
+                    item.KotId = kotId;
+
+                kots.Add(kot);
+            }
 
 
             // ── Persist ──
             db.PosOrders.Add(posOrder);
             db.PosOrderItems.AddRange(orderItems);
-            db.PosKots.Add(kot);
+            db.PosKots.AddRange(kots);
 
             inbound.LocalPosOrderId   = orderId;
-            inbound.LocalKotIdsJson   = $"[\"{kotId}\"]";
+            inbound.LocalKotIdsJson   = JsonSerializer.Serialize(kots.Select(kot => kot.Id).ToList());
             inbound.InjectionStatus   = "INJECTED";
             inbound.InjectedAt        = DateTime.UtcNow;
 

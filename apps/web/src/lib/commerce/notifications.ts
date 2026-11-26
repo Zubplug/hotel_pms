@@ -48,7 +48,7 @@ interface NotificationInput {
 
 const EVENT_MESSAGES: Record<CommerceNotificationEvent, (name: string) => string> = {
   ORDER_PLACED:       (n) => `Hi ${n}, your order has been received! We'll notify you when it's being prepared.`,
-  PAYMENT_CONFIRMED:  (n) => `Hi ${n}, payment confirmed! Your order is queued for the kitchen.`,
+  PAYMENT_CONFIRMED:  (n) => `Hi ${n}, payment confirmed! Your order is queued for our kitchen and bar teams.`,
   PREPARING:          (n) => `Hi ${n}, great news! Your order is now being prepared.`,
   READY_FOR_PICKUP:   (n) => `Hi ${n}, your order is ready for pickup! Please come collect it.`,
   OUT_FOR_DELIVERY:   (n) => `Hi ${n}, your order is on its way! Our driver is heading to you.`,

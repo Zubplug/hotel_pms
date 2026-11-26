@@ -111,7 +111,11 @@ export async function POST(req: NextRequest) {
         include: {
           order: {
             include: {
-              items: true,
+              items: {
+                include: {
+                  product: { select: { posProductId: true } },
+                },
+              },
               customer: { select: { name: true, phone: true, email: true } },
               delivery: { select: { status: true } },
             },
@@ -148,7 +152,9 @@ export async function POST(req: NextRequest) {
         customerName: e.order.customer?.name ?? null,
         customerPhone: e.order.customer?.phone ?? null,
         items: e.order.items.map((item) => ({
-          productId: item.productId,
+          // CommerceProduct.id is cloud-only. The desktop must receive the
+          // linked POS product id so it can resolve station routing locally.
+          productId: item.product.posProductId ?? item.productId,
           productName: item.productName,
           quantity: item.quantity,
           unitPrice: Number(item.unitPrice),

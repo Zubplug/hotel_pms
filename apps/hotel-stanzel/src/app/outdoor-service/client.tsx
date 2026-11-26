@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Stanzel Grand Resort — Outdoor & Poolside Food Ordering
+ * Stanzel Grand Resort — Outdoor & Poolside Food & Beverage Ordering
  *
  * Design language: "Golden Hour Luxury"
  * ─ Dark emerald canvas (#0d2b22) with radial warm-gold ambient glow
@@ -315,60 +315,15 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
 
   return (
     <div className="os-page">
-      {/* ═══ HERO ═══════════════════════════════════════════════════════════ */}
-      <section className="os-hero">
-        <Image
-          src="/images/pool-evening.jpg"
-          alt="Stanzel Grand Resort poolside at golden hour"
-          fill priority
-          style={{ objectFit: 'cover', objectPosition: 'center 55%' }}
-          sizes="100vw"
-        />
-        <div className="os-hero__overlay" />
-        <div className="os-hero__particles" aria-hidden>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <span key={i} className="os-particle" style={{ '--i': i } as React.CSSProperties} />
-          ))}
+      {/* Compact ordering header — the menu remains the primary experience. */}
+      <section className="os-order-header" aria-labelledby="outdoor-order-title">
+        <div>
+          <p className="os-order-header__eyebrow">Stanzel Outdoor Service</p>
+          <h1 id="outdoor-order-title">Food, drinks &amp; bar service, wherever you are.</h1>
+          <p>Choose from the kitchen and bar menu, then tell us your poolside or outdoor service point at checkout.</p>
         </div>
-        <div className="os-hero__content">
-          <div className="os-hero__eyebrow">
-            <span className="os-hero__dot" />
-            Outdoor &amp; Poolside Dining
-          </div>
-          <h1 className="os-hero__title">Poolside dining, made easy.</h1>
-          <p className="os-hero__sub">
-            Freshly prepared favourites and chilled drinks —<br />
-            delivered to your poolside table, cabana or garden terrace.
-          </p>
-          <div className="os-hero__actions">
-            <button
-              className="os-hero__cta"
-              onClick={() => document.getElementById('os-menu')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              <span>Explore the Menu</span>
-              <span className="os-hero__cta-arrow">↓</span>
-            </button>
-            <span className="os-hero__status">
-              <span className="os-hero__status-dot" />
-              {store?.status === 'ACTIVE' ? 'Taking orders now' : 'Temporarily closed'}
-            </span>
-          </div>
-        </div>
-
-        {/* Animated ambient cards floating in hero */}
-        <div className="os-hero__ambient" aria-hidden>
-          <div className="os-ambient-card os-ambient-card--1">
-            <span className="os-ambient-card__emoji">🥘</span>
-            <span>Nigerian Main Course</span>
-          </div>
-          <div className="os-ambient-card os-ambient-card--2">
-            <span className="os-ambient-card__emoji">🍷</span>
-            <span>Premium Wines</span>
-          </div>
-          <div className="os-ambient-card os-ambient-card--3">
-            <span className="os-ambient-card__emoji">🎁</span>
-            <span>Guest Specials</span>
-          </div>
+        <div className={`os-order-header__status${store?.status === 'ACTIVE' ? ' is-active' : ''}`}>
+          <span /> {store?.status === 'ACTIVE' ? 'Taking orders' : 'Temporarily closed'}
         </div>
       </section>
 
@@ -412,8 +367,8 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
         <section className="os-featured">
           <div className="os-featured__header">
             <div>
-              <p className="os-featured__eyebrow">Guest Favourites</p>
-              <h2 className="os-featured__title">Made for the Moment</h2>
+              <p className="os-featured__eyebrow">Featured menu</p>
+              <h2 className="os-featured__title">Made for the moment</h2>
               <div className="os-gold-rule" />
             </div>
             <button
@@ -468,9 +423,16 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           <div className="os-bestsellers__grid">
             {bestSellingProducts.map(product => (
               <button key={product.id} className="os-bestseller-card" onClick={() => setSelectedProduct(product)}>
-                <span className="os-bestseller-card__rank">★</span>
-                <span className="os-bestseller-card__name">{product.name}</span>
-                <span className="os-bestseller-card__price">{fmt(product.price, currency)}</span>
+                <span className="os-bestseller-card__image">
+                  {product.imageUrl ? (
+                    <Image src={product.imageUrl} alt="" fill sizes="220px" style={{ objectFit: 'cover' }} />
+                  ) : <span aria-hidden>🍽</span>}
+                </span>
+                <span className="os-bestseller-card__content">
+                  <span className="os-bestseller-card__rank">★ Popular</span>
+                  <span className="os-bestseller-card__name">{product.name}</span>
+                  <span className="os-bestseller-card__price">{fmt(product.price, currency)}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -479,24 +441,6 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
 
       {/* ═══ MENU SECTION ═══════════════════════════════════════════════════ */}
       <section id="os-menu" className="os-menu-section">
-        {/* Search bar */}
-        <div className="os-search-wrap">
-          <div className="os-search">
-            <span className="os-search__icon">🔍</span>
-            <input
-              className="os-search__input"
-              type="search"
-              placeholder="Search the menu…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              aria-label="Search menu"
-            />
-            {search && (
-              <button className="os-search__clear" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
-            )}
-          </div>
-        </div>
-
         {/* Category nav */}
         <nav className="os-cat-nav" ref={catNavRef} aria-label="Menu categories">
           {allCategories.map((cat, idx) => (
@@ -533,6 +477,19 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
                 </div>
                 <div>
                   <h2 className="os-category__title">{selectedCategory.name}</h2>
+                </div>
+                <div className="os-category__search">
+                  <span aria-hidden>⌕</span>
+                  <input
+                    type="search"
+                    placeholder="Search this category"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    aria-label={`Search ${selectedCategory.name}`}
+                  />
+                  {search && (
+                    <button type="button" onClick={() => setSearch('')} aria-label="Clear category search">✕</button>
+                  )}
                 </div>
               </div>
 
@@ -595,9 +552,9 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           <div className="os-gold-rule" />
           <div className="os-how__steps">
             {[
-              { n: '01', icon: '🛒', title: 'Browse & Order', desc: 'Choose from our full menu — Nigerian, continental, and bar.' },
+              { n: '01', icon: '🛒', title: 'Browse & Order', desc: 'Choose from our full menu — food, drinks, and bar favourites.' },
               { n: '02', icon: '📍', title: 'Tell Us Where You Are', desc: 'Enter your cabana number, pool table or location at checkout.' },
-              { n: '03', icon: '👨‍🍳', title: 'We Prepare Fresh', desc: 'Your order is prepared and dispatched from our kitchen.' },
+              { n: '03', icon: '👨‍🍳', title: 'We Prepare Fresh', desc: 'Our kitchen and bar teams prepare your order.' },
               { n: '04', icon: '🍽', title: 'Delivered to You', desc: 'A member of staff brings it straight to your outdoor spot.' },
             ].map(step => (
               <div key={step.n} className="os-step">
@@ -786,6 +743,19 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
         }
         .os-ambient-card__emoji { font-size: 1.3rem; }
 
+        /* ── Compact order header ── */
+        .os-order-header {
+          max-width: 1280px; margin: 0 auto; padding: var(--space-10) var(--space-6) var(--space-8);
+          display: flex; align-items: end; justify-content: space-between; gap: var(--space-8);
+          border-bottom: 1px solid rgba(201,169,110,0.18);
+        }
+        .os-order-header__eyebrow { color: var(--color-gold); font-size: var(--text-xs); font-weight: 800; letter-spacing: .16em; text-transform: uppercase; margin-bottom: var(--space-3); }
+        .os-order-header h1 { max-width: 720px; font-family: var(--font-serif); font-size: clamp(2rem, 4vw, 3.8rem); font-weight: 400; line-height: 1; }
+        .os-order-header p:not(.os-order-header__eyebrow) { max-width: 620px; margin-top: var(--space-4); color: rgba(250,248,244,.64); line-height: 1.6; }
+        .os-order-header__status { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: rgba(250,248,244,.55); font-size: var(--text-sm); }
+        .os-order-header__status span { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+        .os-order-header__status.is-active span { background: #4ade80; box-shadow: 0 0 10px #4ade80; }
+
         /* ── Promotions ── */
         .os-promos {
           max-width: 1280px; margin: 0 auto;
@@ -823,14 +793,16 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
         .os-bestsellers__note { color: rgba(250,248,244,0.5); letter-spacing: 0.04em; text-transform: none; }
         .os-bestsellers__grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-3); }
         .os-bestseller-card {
-          min-height: 132px; padding: var(--space-4); text-align: left; cursor: pointer;
+          min-height: 220px; padding: 0; overflow: hidden; text-align: left; cursor: pointer;
           color: var(--color-ivory); background: rgba(255,255,255,0.055);
           border: 1px solid rgba(201,169,110,0.16); border-radius: var(--radius-xl);
-          display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-3);
+          display: flex; flex-direction: column; justify-content: space-between;
           transition: transform .2s, border-color .2s, background .2s;
         }
         .os-bestseller-card:hover { transform: translateY(-4px); border-color: var(--color-gold); background: rgba(201,169,110,0.12); }
-        .os-bestseller-card__rank { color: var(--color-gold); }
+        .os-bestseller-card__image { position: relative; display: grid; place-items: center; height: 126px; overflow: hidden; background: rgba(201,169,110,.12); color: var(--color-gold); font-size: 2rem; }
+        .os-bestseller-card__content { display: flex; flex-direction: column; gap: 5px; padding: var(--space-3) var(--space-4) var(--space-4); }
+        .os-bestseller-card__rank { color: var(--color-gold); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
         .os-bestseller-card__name { font-size: var(--text-sm); font-weight: 700; line-height: 1.3; }
         .os-bestseller-card__price { color: var(--color-gold); font-size: var(--text-sm); font-weight: 800; }
         @media (max-width: 900px) {
@@ -838,9 +810,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           .os-bestsellers__grid { grid-template-columns: repeat(3, 1fr); }
         }
         @media (max-width: 600px) {
-          .os-hero { min-height: 440px; height: 68svh; }
-          .os-hero__content { padding: 0 var(--space-5); }
-          .os-hero__sub br { display: none; }
+          .os-order-header { align-items: flex-start; flex-direction: column; gap: var(--space-4); padding-inline: var(--space-5); }
           .os-bestsellers__header { align-items: flex-start; flex-direction: column; }
           .os-bestsellers__grid { grid-template-columns: repeat(2, 1fr); }
         }
@@ -1088,11 +1058,43 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           font-size: clamp(var(--text-2xl), 3vw, var(--text-3xl));
           color: var(--color-ivory); font-weight: 400; margin: 0;
         }
+        .os-category__search {
+          margin-left: auto;
+          display: flex; align-items: center; gap: 8px;
+          min-width: 220px; max-width: 300px;
+          padding: 9px 12px;
+          border: 1px solid rgba(201,169,110,0.22);
+          border-radius: 999px;
+          background: rgba(255,255,255,0.05);
+          transition: border-color 160ms ease, background 160ms ease;
+        }
+        .os-category__search:focus-within {
+          border-color: var(--color-gold);
+          background: rgba(255,255,255,0.08);
+        }
+        .os-category__search > span { color: var(--color-gold); font-size: 1.1rem; line-height: 1; }
+        .os-category__search input {
+          min-width: 0; flex: 1; background: transparent; border: 0; outline: 0;
+          color: var(--color-ivory); font-size: var(--text-sm);
+        }
+        .os-category__search input::placeholder { color: rgba(250,248,244,0.4); }
+        .os-category__search button {
+          background: none; border: 0; color: rgba(250,248,244,0.5);
+          cursor: pointer; padding: 0; line-height: 1;
+        }
+        .os-category__search button:hover { color: var(--color-gold); }
         .os-category__count {
           margin-left: auto; font-size: var(--text-xs); font-weight: 700;
           color: rgba(250,248,244,0.35); white-space: nowrap;
           background: rgba(255,255,255,0.05); border-radius: 999px;
           padding: 4px 12px; border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        @media (max-width: 700px) {
+          .os-category__header { flex-wrap: wrap; }
+          .os-category__search {
+            order: 3; width: 100%; min-width: 0; max-width: none; margin-left: 0;
+          }
         }
 
         /* Product grid — 3 columns with hexagonal image gimmick */
