@@ -40,6 +40,8 @@ export interface RecordRedemptionParams {
   serverStaffId?: string;
   method?: 'POS_TICKET' | 'BUFFET_BATCH';
   operationId: string;
+  menuItemId?: string;
+  menuItemName?: string;
 }
 
 export class BreakfastEntitlementService {
@@ -370,6 +372,8 @@ export class BreakfastEntitlementService {
           posOrderId: params.posOrderId || null,
           method: params.method || 'POS_TICKET',
           serverStaffId: params.serverStaffId || null,
+          menuItemId: params.menuItemId || null,
+          menuItemName: params.menuItemName?.trim() || null,
           operationId: params.operationId,
         },
       });

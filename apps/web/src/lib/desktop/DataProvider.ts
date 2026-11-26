@@ -192,6 +192,7 @@ export interface LodgeCoreDataProvider {
     getBreakfastEntitlement(reservationId: string, roomNumber: string): Promise<{ data: any, error: string | null }>;
     getBreakfastEntitlements(): Promise<{ data: any, error: string | null }>;
     printBreakfastEntitlements(data: any): Promise<{ data: any, error: string | null }>;
+    redeemBreakfast(data: { reservationId: string; roomNumber: string; coversRedeemed: number; menuItemId?: string; menuItemName: string; operationId: string; operatorToken?: string | null }): Promise<{ data: any, error: string | null }>;
   };
   approvals: {
     requestItemModification(payload: any): Promise<{ success: boolean, requiresApproval?: boolean, error?: string, order?: any }>;

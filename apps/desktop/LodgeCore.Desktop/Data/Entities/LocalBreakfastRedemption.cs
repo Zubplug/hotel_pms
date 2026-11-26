@@ -14,6 +14,8 @@ public class LocalBreakfastRedemption
     public string? PosOrderId { get; set; }
     public string Method { get; set; } = "POS_TICKET"; // 'POS_TICKET' or 'BUFFET_BATCH'
     public string? ServerStaffId { get; set; }
+    public string? MenuItemId { get; set; }
+    public string? MenuItemName { get; set; }
     public string OperationId { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

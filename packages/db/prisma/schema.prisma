@@ -8780,6 +8780,8 @@ model BreakfastRedemption {
   posOrderId     String?  @db.Uuid
   method         String   @default("POS_TICKET") // 'POS_TICKET' or 'BUFFET_BATCH'
   serverStaffId  String?  @db.Uuid
+  menuItemId     String?  @db.Uuid
+  menuItemName   String?
   operationId    String   @unique
   createdAt      DateTime @default(now()) @db.Timestamptz
 

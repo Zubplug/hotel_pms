@@ -990,6 +990,8 @@ export async function POST(req: NextRequest) {
                     serverStaffId: operatorId || undefined,
                     operationId: opId,
                     method: payload.Method || payload.method || 'POS_TICKET',
+                    menuItemId: payload.MenuItemId || payload.menuItemId || undefined,
+                    menuItemName: payload.MenuItemName || payload.menuItemName || undefined,
                   },
                   tx,
                 );

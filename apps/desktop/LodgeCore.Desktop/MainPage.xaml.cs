@@ -970,6 +970,9 @@ public partial class MainPage : ContentPage
                 case "pos.getBreakfastEntitlements":
                     responseData = await pmsInterop.GetBreakfastEntitlementsAsync();
                     break;
+                case "pos.redeemBreakfast":
+                    responseData = await pmsInterop.RedeemBreakfastAsync(System.Text.Json.JsonSerializer.Serialize(parameters));
+                    break;
                 case "hardware.printBreakfastEntitlements":
                     responseData = await pmsInterop.PrintBreakfastEntitlementsAsync(
                         System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));

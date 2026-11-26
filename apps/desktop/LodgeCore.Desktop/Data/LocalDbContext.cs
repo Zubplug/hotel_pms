@@ -426,6 +426,8 @@ public class LocalDbContext : DbContext
                 PosOrderId TEXT NULL,
                 Method TEXT NOT NULL DEFAULT 'POS_TICKET',
                 ServerStaffId TEXT NULL,
+                MenuItemId TEXT NULL,
+                MenuItemName TEXT NULL,
                 OperationId TEXT NOT NULL UNIQUE,
                 CreatedAt TEXT NOT NULL
             );
@@ -452,6 +454,8 @@ public class LocalDbContext : DbContext
             CREATE INDEX IF NOT EXISTS IX_BreakfastEligibilitySnapshots_Property_Date
                 ON BreakfastEligibilitySnapshots(PropertyId, RedeemableBusinessDate);
         ");
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE BreakfastRedemptions ADD COLUMN MenuItemId TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE BreakfastRedemptions ADD COLUMN MenuItemName TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
     /// <summary>

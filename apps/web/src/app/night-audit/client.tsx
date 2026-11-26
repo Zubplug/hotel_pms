@@ -5,14 +5,14 @@ import { useProperty } from '@/components/PropertyProvider';
 import { NightAuditData } from '@/types/night-audit';
 import {
   Loader2, MoonStar, XCircle, AlertTriangle, CheckCircle2,
-  RefreshCcw, Hotel, Activity, LogIn, LogOut, Users, UserX,
+  Hotel, Activity, LogIn, LogOut, Users, UserX,
 } from 'lucide-react';
 
 import { NightAuditOverview } from '@/components/night-audit/dashboard/night-audit-overview';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { AuditSuccessModal } from '@/components/night-audit/audit-success-modal';
 import { AuditFailureModal } from '@/components/night-audit/audit-failure-modal';
-import { cx, money, TONE_HEX } from '@/components/night-audit/dashboard/ui';
+import { money, TONE_HEX } from '@/components/night-audit/dashboard/ui';
 
 /* ── Background gradient ────────────────────────────────────────────────────── */
 const BG = 'linear-gradient(160deg, #030712 0%, #05090f 55%, #070a18 100%)';
@@ -373,15 +373,12 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
 
         <NightAuditOverview
           data={data}
-          refreshing={refreshing}
           managerMode={managerMode}
           onOpenWizard={() => { if (data.canStartAudit || data.canResumeAudit) setWizardOpen(true); }}
-          onRefresh={() => void load(true)}
         />
 
         {/* ── 2. Work area ─────────────────────────────────────────────────── */}
 
-        {/* ── Freshness footer ─────────────────────────────────────────────── */}
         <div
           className="flex items-center justify-between border-t pt-3 text-[10.5px] text-slate-600"
           style={{ borderColor: 'rgba(255,255,255,0.04)' }}
@@ -392,15 +389,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
               : 'Awaiting first load'}
             {error && <span className="ml-2 text-rose-400">· refresh failed, data may be stale</span>}
           </span>
-          <button
-            onClick={() => load(true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[10.5px] font-semibold text-slate-400 transition-all hover:border-white/15 hover:bg-white/[0.05] hover:text-slate-200 disabled:opacity-50"
-            style={{ borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.025)' }}
-          >
-            <RefreshCcw className={cx('h-3.5 w-3.5', refreshing ? 'animate-spin' : '')} />
-            Refresh
-          </button>
         </div>
       </div>
 

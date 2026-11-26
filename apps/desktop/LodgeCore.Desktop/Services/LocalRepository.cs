@@ -473,7 +473,42 @@ public class LocalRepository
 
         var propertyName = property.Name;
         var auditedDate = snapshots.FirstOrDefault()?.BusinessDate.ToString("yyyy-MM-dd");
-        return new { available = true, propertyName, businessDate = businessDate.ToString("yyyy-MM-dd"), auditedBusinessDate = auditedDate, rows };
+        return new { available = true, propertyId, propertyName, businessDate = businessDate.ToString("yyyy-MM-dd"), auditedBusinessDate = auditedDate, rows };
+    }
+
+    public async Task<object> RedeemBreakfastAsync(string propertyId, string reservationId, string roomNumber, int covers, string? menuItemId, string menuItemName, string operationId, string deviceId, string outletId, string sessionId, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(operationId)) throw new InvalidOperationException("A stable breakfast redemption reference is required.");
+        if (covers < 1) throw new InvalidOperationException("At least one breakfast cover is required.");
+        if (string.IsNullOrWhiteSpace(menuItemName)) throw new InvalidOperationException("Select the breakfast item served today.");
+
+        var outlet = await _dbContext.PosOutlets.AsNoTracking().FirstOrDefaultAsync(o => o.Id == outletId && o.PropertyId == propertyId);
+        if (outlet == null || !outlet.IsActive || !string.Equals(outlet.Type, "RESTAURANT_POS", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Breakfast service is available only on an active Restaurant POS outlet.");
+
+        var property = await _dbContext.Properties.AsNoTracking().FirstOrDefaultAsync(p => p.Id == propertyId)
+            ?? throw new InvalidOperationException("Property is not available offline.");
+        var businessDate = property.BusinessDate.Date;
+        if (property.BreakfastEligibilitySnapshotDate?.Date != businessDate)
+            throw new InvalidOperationException("Breakfast service is unavailable until Night Audit publishes today's entitlement list.");
+
+        var existing = await _dbContext.BreakfastRedemptions.FirstOrDefaultAsync(r => r.OperationId == operationId);
+        if (existing != null) return new { redemption = existing, alreadyRecorded = true, businessDate = businessDate.ToString("yyyy-MM-dd") };
+
+        var snapshot = await _dbContext.BreakfastEligibilitySnapshots.AsNoTracking().FirstOrDefaultAsync(s =>
+            s.PropertyId == propertyId && s.ReservationId == reservationId && s.RedeemableBusinessDate.Date == businessDate && s.Status == "ELIGIBLE" && (string.IsNullOrWhiteSpace(roomNumber) || s.RoomNumber == roomNumber));
+        if (snapshot == null) throw new InvalidOperationException("This checked-in guest is not on the audited breakfast list.");
+
+        var redeemed = await _dbContext.BreakfastRedemptions.Where(r => r.PropertyId == propertyId && r.ReservationId == reservationId && r.BusinessDate.Date == businessDate).SumAsync(r => (int?)r.CoversRedeemed) ?? 0;
+        var remaining = Math.Max(0, snapshot.MaxCoversAllowed - redeemed);
+        if (covers > remaining) throw new InvalidOperationException($"Only {remaining} breakfast cover(s) remain for this guest today.");
+
+        var redemption = new LocalBreakfastRedemption { Id = Guid.NewGuid().ToString(), PropertyId = propertyId, ReservationId = reservationId, RoomNumber = snapshot.RoomNumber, BusinessDate = businessDate, CoversRedeemed = covers, Method = "POS_TICKET", ServerStaffId = userId, MenuItemId = menuItemId, MenuItemName = menuItemName.Trim(), OperationId = operationId, CreatedAt = DateTime.UtcNow };
+        _dbContext.BreakfastRedemptions.Add(redemption);
+        AppendSyncEvent("BREAKFAST_REDEMPTION", redemption.Id, "BREAKFAST_REDEEMED", new { redemption, PropertyId = propertyId, ReservationId = reservationId, RoomNumber = snapshot.RoomNumber, CoversRedeemed = covers, MenuItemId = menuItemId, MenuItemName = menuItemName.Trim(), BusinessDate = businessDate, OperationId = operationId }, deviceId, outletId, sessionId, userId);
+        await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
+        return new { redemption, alreadyRecorded = false, businessDate = businessDate.ToString("yyyy-MM-dd") };
     }
 
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)

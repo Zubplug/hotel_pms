@@ -82,6 +82,7 @@ export async function GET() {
     return NextResponse.json({
       data: {
         available: true,
+        propertyId,
         propertyName: property.name,
         businessDate: dateKey(businessDate),
         auditedBusinessDate: snapshots[0] ? dateKey(snapshots[0].businessDate) : null,

@@ -613,6 +613,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     },
     getBreakfastEntitlements: async () => apiFetchResult('/api/v1/fnb/breakfast/entitlements'),
     printBreakfastEntitlements: async () => ({ data: null, error: 'Direct printer output is available in the offline desktop application.' }),
+    redeemBreakfast: async (data: any) => apiFetchResult('/api/v1/fnb/breakfast/redeem', { method: 'POST', headers: data.operatorToken ? { Authorization: `Bearer ${data.operatorToken}` } : undefined, body: JSON.stringify(data) }),
   },
 
   approvals: {

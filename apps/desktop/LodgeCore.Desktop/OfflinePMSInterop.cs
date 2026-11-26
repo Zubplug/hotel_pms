@@ -1960,6 +1960,20 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> RedeemBreakfastAsync(string payloadJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync("pos:all");
+            var posContext = await _sessionManager.GetActiveContextAsync();
+            using var doc = JsonDocument.Parse(payloadJson);
+            var root = doc.RootElement;
+            var result = await _repo.RedeemBreakfastAsync(posContext.PropertyId, root.GetProperty("reservationId").GetString() ?? "", root.GetProperty("roomNumber").GetString() ?? "", root.GetProperty("coversRedeemed").GetInt32(), root.TryGetProperty("menuItemId", out var itemId) ? itemId.GetString() : null, root.GetProperty("menuItemName").GetString() ?? "", root.GetProperty("operationId").GetString() ?? "", ctx.DeviceId, ctx.OutletId ?? "", posContext.SessionId, ctx.UserId);
+            return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
     public async Task<string> PrintBreakfastEntitlementsAsync(string printDataJson)
     {
         try

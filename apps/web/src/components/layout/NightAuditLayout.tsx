@@ -119,9 +119,9 @@ const NIGHT_AUDIT_NAV = [
 const GROUPS = ['Workspace', 'Controls', 'Insights'] as const;
 
 const GROUP_META: Record<string, { accent: string; label: string }> = {
-  Workspace: { accent: 'text-amber-400/70', label: 'Workspace' },
-  Controls: { accent: 'text-indigo-400/70', label: 'Controls' },
-  Insights: { accent: 'text-violet-400/70', label: 'Insights' },
+  Workspace: { accent: 'text-amber-300', label: 'Command centre' },
+  Controls: { accent: 'text-indigo-300', label: 'Control surfaces' },
+  Insights: { accent: 'text-violet-300', label: 'Evidence & insight' },
 };
 
 function formatElapsed(seconds: number) {
@@ -430,11 +430,11 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ── Navigation ───────────────────────────────────────────────────── */}
-      <nav className={cn(
+      <nav aria-label="Night Audit navigation" className={cn(
         'relative min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         isCollapsed ? 'py-4' : 'px-2 py-4',
       )}>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           {GROUPS.map((group) => {
             const items = NIGHT_AUDIT_NAV.filter(
               (i) => i.group === group && (!(i as any).roles || (i as any).roles.includes(role))
@@ -444,9 +444,10 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             return (
               <div key={group}>
                 {!isCollapsed && (
-                  <p className={cn('mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.22em]', meta.accent)}>
-                    {meta.label}
-                  </p>
+                  <div className="mb-2 flex items-center gap-2 px-3">
+                    <p className={cn('text-[9px] font-bold uppercase tracking-[0.2em]', meta.accent)}>{meta.label}</p>
+                    <span className="h-px flex-1 bg-white/[0.06]" />
+                  </div>
                 )}
                 {isCollapsed && (
                   <div className="mx-2 mb-2 border-t border-white/[0.05]" />
@@ -640,7 +641,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             {propertyLabel && <span className="max-w-[360px] truncate text-xs font-semibold text-slate-300">{propertyLabel}</span>}
           </div>
 
-          {/* Right: property selector + refresh + user chip */}
+          {/* Right: property selector + user chip */}
           <div className="flex items-center gap-2 sm:gap-3">
             {hasMultipleProperties !== false && (
               <PropertySelector

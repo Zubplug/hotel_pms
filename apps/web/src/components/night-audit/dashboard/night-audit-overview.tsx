@@ -14,7 +14,6 @@ import {
   LogOut,
   MoonStar,
   Play,
-  RefreshCcw,
   ShieldAlert,
   Sparkles,
   Users,
@@ -105,16 +104,12 @@ function ChartTooltip({ active, payload, label, currency }: {
 
 export function NightAuditOverview({
   data,
-  refreshing,
   managerMode,
   onOpenWizard,
-  onRefresh,
 }: {
   data: NightAuditData;
-  refreshing: boolean;
   managerMode: boolean;
   onOpenWizard: () => void;
-  onRefresh: () => void;
 }) {
   const currency = data.property.baseCurrency;
   const status = statusFor(data);
@@ -168,9 +163,6 @@ export function NightAuditOverview({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={onRefresh} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.06] disabled:opacity-50" style={{ borderColor: BORDER, background: 'rgba(255,255,255,0.03)' }}>
-              <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
-            </button>
             {!managerMode && !isClosed && (
               <button onClick={onOpenWizard} disabled={isRunning || !(data.canStartAudit || data.canResumeAudit)} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" style={{ background: status.color }}>
                 {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}

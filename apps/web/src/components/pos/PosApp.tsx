@@ -1010,11 +1010,6 @@ export default function PosApp() {
       reservationId: string;
       guestName: string;
       roomNumber: string;
-      breakfastRedemption?: {
-        reservationId: string;
-        roomNumber: string;
-        coversRedeemed: number;
-      };
       complimentary?: {
         beneficiaryType: 'GUEST' | 'STAFF';
         beneficiaryGuestId?: string;
@@ -1044,13 +1039,10 @@ export default function PosApp() {
         reference,
       };
 
-      // For ROOM_CHARGE or COMPLIMENTARY breakfast redemption, include folio/reservation
+      // For ROOM_CHARGE or COMPLIMENTARY settlement, include folio/reservation
       if (roomChargeData) {
         if (roomChargeData.folioId) paymentData.folioId = roomChargeData.folioId;
         if (roomChargeData.reservationId) paymentData.reservationId = roomChargeData.reservationId;
-        if (roomChargeData.breakfastRedemption) {
-          paymentData.breakfastRedemption = roomChargeData.breakfastRedemption;
-        }
         if (roomChargeData.complimentary) paymentData.complimentary = roomChargeData.complimentary;
       }
 
@@ -1085,18 +1077,7 @@ export default function PosApp() {
         setActiveDisplayName('');
         setShowChargeModal(false);
         setSuccessDialog(
-          roomChargeData?.breakfastRedemption
-            ? {
-                isOpen: true,
-                title: 'Breakfast Entitlement Redeemed!',
-                message: `${roomChargeData.guestName} · Room ${roomChargeData.roomNumber}`,
-                meta: [
-                  { label: 'Covers Redeemed', value: `${roomChargeData.breakfastRedemption.coversRedeemed}` },
-                  { label: 'Settlement', value: 'Complimentary (₦0.00)' },
-                ],
-                statusText: isOnline ? undefined : 'Saved offline · will sync automatically',
-              }
-            : method === 'ROOM_CHARGE' && roomChargeData
+          method === 'ROOM_CHARGE' && roomChargeData
             ? {
                 isOpen: true,
                 title: 'Room charge posted',
@@ -1446,7 +1427,7 @@ export default function PosApp() {
           isPoolOutlet={isPoolOutlet}
           pendingRoomServiceCount={pendingRoomServiceOrders.length}
           onOpenRoomService={() => setShowRoomServiceAlert(true)}
-          onPrintBreakfastEntitlements={() => void handlePrintBreakfastEntitlements()}
+          onPrintBreakfastEntitlements={() => router.push('/pos/breakfast')}
         />
 
         {/* Restricted mode overlay */}

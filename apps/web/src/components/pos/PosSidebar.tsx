@@ -178,7 +178,7 @@ export function PosSidebar({
         )}
 
         <NavItem icon={ChefHat}    label="Kitchen"      onClick={onOpenKitchen} />
-        <NavItem icon={Coffee}     label="Breakfast List" onClick={() => onPrintBreakfastEntitlements?.()} />
+        {!isPoolOutlet && <NavItem icon={Coffee} label="Breakfast Service" onClick={() => onPrintBreakfastEntitlements?.()} />}
         {pendingRoomServiceCount > 0 && (
           <NavItem
             icon={Hotel}
