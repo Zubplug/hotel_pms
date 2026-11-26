@@ -1,11 +1,12 @@
 'use client';
 import React, { useMemo, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronRight, XCircle, Info, Inbox,
-  MonitorDot, Banknote, Users, Shield, Activity,
+  AlertTriangle, ChevronRight, XCircle, Info, Inbox,
+  MonitorDot, Banknote, Users, Shield, Activity, Search, SlidersHorizontal,
+  Clock3, ArrowUpRight, ListFilter,
 } from 'lucide-react';
 import { NightAuditData } from '@/types/night-audit';
-import { Panel, PanelHeader, Tabs, EmptyState, Badge, SectionDivider, cx, TONE_HEX } from './ui';
+import { Panel, PanelHeader, Tabs, EmptyState, Badge, cx, TONE_HEX } from './ui';
 
 type QueueItem = {
   id: string; label: string; description: string;
@@ -49,6 +50,8 @@ export function AttentionQueue({
   onResolveItem?: (action: string, item: Record<string, unknown> | null) => void;
 }) {
   const [cat, setCat] = useState<Cat>('all');
+  const [query, setQuery] = useState('');
+  const [priority, setPriority] = useState<'all' | 'blocker' | 'warning'>('all');
 
   const queue = useMemo<QueueItem[]>(() => {
     const items: QueueItem[] = [];
@@ -101,98 +104,100 @@ export function AttentionQueue({
     operations: queue.filter((i) => i.category === 'operations').length,
   };
 
-  const visible = cat === 'all' ? queue : queue.filter((i) => i.category === cat);
+  const visible = queue.filter((item) => {
+    const matchesCategory = cat === 'all' || item.category === cat;
+    const matchesPriority = priority === 'all' || item.type === priority;
+    const haystack = `${item.label} ${item.description} ${item.category}`.toLowerCase();
+    return matchesCategory && matchesPriority && haystack.includes(query.trim().toLowerCase());
+  });
   const blockerCount = queue.filter((i) => i.type === 'blocker').length;
   const warningCount = queue.filter((i) => i.type === 'warning').length;
 
-  const blockers = visible.filter((i) => i.type === 'blocker');
-  const warnings = visible.filter((i) => i.type !== 'blocker');
+  const filteredBlockers = visible.filter((i) => i.type === 'blocker');
+  const filteredWarnings = visible.filter((i) => i.type !== 'blocker');
 
   return (
-    <Panel>
-      <PanelHeader
-        icon={Activity}
-        title="Attention Queue"
-        subtitle={
-          blockerCount > 0
-            ? 'Blockers must be resolved before close'
-            : warningCount > 0
-            ? 'Warnings to review before handover'
-            : 'No unresolved attention items'
-        }
-        tone={blockerCount > 0 ? 'rose' : warningCount > 0 ? 'amber' : 'emerald'}
-        actions={
-          <>
-            {blockerCount > 0 && (
-              <Badge tone="rose" dot>{blockerCount} blocker{blockerCount !== 1 ? 's' : ''}</Badge>
-            )}
-            {warningCount > 0 && (
-              <Badge tone="amber" dot>{warningCount} warning{warningCount !== 1 ? 's' : ''}</Badge>
-            )}
-            {queue.length === 0 && <Badge tone="emerald">All clear</Badge>}
-          </>
-        }
-      />
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <QueueMetric label="Requires action" value={blockerCount} detail="Blocks close" tone="rose" icon={XCircle} />
+        <QueueMetric label="Review queue" value={warningCount} detail="Does not block close" tone="amber" icon={AlertTriangle} />
+        <QueueMetric label="Open exceptions" value={queue.length} detail="Across all controls" tone="indigo" icon={ListFilter} />
+        <QueueMetric label="Control mode" value="Live" detail="Refreshes every 5 seconds" tone="emerald" icon={Clock3} />
+      </div>
 
-      {/* Category tabs */}
-      {queue.length > 0 && (
-        <div className="border-b px-4 py-2.5" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-          <Tabs
-            value={cat}
-            onChange={setCat}
-            items={[
-              { key: 'all', label: 'All', count: catCounts.all },
+      <Panel>
+        <PanelHeader
+          icon={Activity}
+          title="Operations exception queue"
+          subtitle={blockerCount > 0 ? 'Resolve blockers first, then review warnings.' : warningCount > 0 ? 'No blockers remain. Review the outstanding warnings.' : 'All controls are clear for close.'}
+          tone={blockerCount > 0 ? 'rose' : warningCount > 0 ? 'amber' : 'emerald'}
+          actions={<Badge tone={blockerCount > 0 ? 'rose' : 'emerald'} dot>{blockerCount > 0 ? 'Close is gated' : 'Ready to proceed'}</Badge>}
+        />
+
+        <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-600" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search guest, room, register, or exception…" className="h-9 w-full rounded-lg border border-white/[0.08] bg-black/20 pl-9 pr-3 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-400/40" />
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-black/20 p-1">
+            <SlidersHorizontal className="ml-1.5 h-3.5 w-3.5 text-slate-600" />
+            {(['all', 'blocker', 'warning'] as const).map((value) => (
+              <button key={value} onClick={() => setPriority(value)} className={cx('rounded-md px-2.5 py-1.5 text-[10px] font-semibold capitalize transition', priority === value ? 'bg-white/[0.1] text-white' : 'text-slate-500 hover:text-slate-300')}>
+                {value === 'all' ? 'All priorities' : `${value}s`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {queue.length > 0 && (
+          <div className="overflow-x-auto border-b px-3 py-2.5" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+            <Tabs value={cat} onChange={setCat} items={[
+              { key: 'all', label: 'All controls', count: catCounts.all },
               { key: 'system', label: 'System', count: catCounts.system, tone: catCounts.system > 0 ? 'rose' : 'neutral' },
               { key: 'financial', label: 'Financial', count: catCounts.financial, tone: catCounts.financial > 0 ? 'amber' : 'neutral' },
               { key: 'cash', label: 'Cash', count: catCounts.cash, tone: catCounts.cash > 0 ? 'amber' : 'neutral' },
               { key: 'operations', label: 'Operations', count: catCounts.operations, tone: catCounts.operations > 0 ? 'sky' : 'neutral' },
-            ] as any}
-          />
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto">
-        {visible.length === 0 ? (
-          <EmptyState
-            icon={Inbox}
-            title="Inbox Zero"
-            hint="No pending exceptions or blockers. You're clear to proceed."
-            tone="emerald"
-          />
-        ) : (
-          <div>
-            {/* Blockers */}
-            {blockers.length > 0 && (
-              <>
-                {warningCount > 0 && blockerCount > 0 && cat === 'all' && (
-                  <SectionDivider label="Blockers" />
-                )}
-                <ul className="space-y-1 p-2">
-                  {blockers.map((item) => (
-                    <QueueItemCard key={item.id} item={item} onResolveItem={onResolveItem} />
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {/* Warnings */}
-            {warnings.length > 0 && (
-              <>
-                {blockerCount > 0 && warningCount > 0 && cat === 'all' && (
-                  <SectionDivider label="Warnings" />
-                )}
-                <ul className="space-y-1 p-2">
-                  {warnings.map((item) => (
-                    <QueueItemCard key={item.id} item={item} onResolveItem={onResolveItem} />
-                  ))}
-                </ul>
-              </>
-            )}
+            ] as any} />
           </div>
         )}
-      </div>
-    </Panel>
+
+        <div className="grid min-h-[280px] lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="min-w-0 border-b lg:border-b-0 lg:border-r" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+            {visible.length === 0 ? <EmptyState icon={Inbox} title={queue.length === 0 ? 'No exceptions detected' : 'No matching exceptions'} hint={queue.length === 0 ? "You're clear to proceed with the business-day close." : 'Try another search or filter.'} tone="emerald" /> : <div className="p-3">
+              {filteredBlockers.length > 0 && <QueueSection title="Blockers" count={filteredBlockers.length} tone="rose" items={filteredBlockers} onResolveItem={onResolveItem} />}
+              {filteredWarnings.length > 0 && <QueueSection title="Warnings" count={filteredWarnings.length} tone="amber" items={filteredWarnings} onResolveItem={onResolveItem} />}
+            </div>}
+          </div>
+          <aside className="bg-white/[0.015] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-300/70">Resolution protocol</p>
+            <h3 className="mt-2 text-sm font-semibold text-white">Work from impact to detail</h3>
+            <div className="mt-4 space-y-3 text-[11px] leading-relaxed text-slate-500">
+              <ProtocolStep number="01" title="Clear blockers" detail="These items prevent a controlled close." tone="rose" />
+              <ProtocolStep number="02" title="Review warnings" detail="Confirm the exception is understood or resolve it." tone="amber" />
+              <ProtocolStep number="03" title="Recheck status" detail="The queue refreshes automatically as controls change." tone="emerald" />
+            </div>
+            <div className="mt-5 rounded-xl border border-indigo-400/15 bg-indigo-400/[0.05] p-3">
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-200"><ArrowUpRight className="h-3.5 w-3.5" />Operator guidance</p>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-slate-500">Each action opens the existing resolution workflow. Changes remain auditable and are reflected here after refresh.</p>
+            </div>
+          </aside>
+        </div>
+      </Panel>
+    </div>
   );
+}
+
+function QueueMetric({ label, value, detail, tone, icon: Icon }: { label: string; value: number | string; detail: string; tone: 'rose' | 'amber' | 'indigo' | 'emerald'; icon: React.ElementType }) {
+  const color = TONE_HEX[tone];
+  return <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5"><div className="flex items-start justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p><Icon className="h-4 w-4" style={{ color }} /></div><p className="mt-2 font-mono text-2xl font-bold tabular-nums text-white">{value}</p><p className="mt-1 text-[10px] text-slate-600">{detail}</p><div className="absolute inset-x-0 bottom-0 h-px" style={{ background: `linear-gradient(90deg, ${color}70, transparent)` }} /></div>;
+}
+
+function QueueSection({ title, count, tone, items, onResolveItem }: { title: string; count: number; tone: 'rose' | 'amber'; items: QueueItem[]; onResolveItem?: (action: string, payload: Record<string, unknown> | null) => void }) {
+  return <section className="mb-4 last:mb-0"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: TONE_HEX[tone] }}>{title}</p><Badge tone={tone}>{count}</Badge></div><ul className="space-y-2">{items.map((item) => <QueueItemCard key={item.id} item={item} onResolveItem={onResolveItem} />)}</ul></section>;
+}
+
+function ProtocolStep({ number, title, detail, tone }: { number: string; title: string; detail: string; tone: 'rose' | 'amber' | 'emerald' }) {
+  return <div className="flex gap-2.5"><span className="font-mono text-[10px]" style={{ color: TONE_HEX[tone] }}>{number}</span><div><p className="font-semibold text-slate-300">{title}</p><p className="mt-0.5">{detail}</p></div></div>;
 }
 
 function QueueItemCard({
