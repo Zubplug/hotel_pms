@@ -16,19 +16,26 @@ import { AuditReadiness } from '@/components/night-audit/dashboard/audit-readine
 import { OccupancyChart } from '@/components/night-audit/dashboard/occupancy-chart';
 import { GuestAmenityControl } from '@/components/night-audit/dashboard/guest-amenity-control';
 import { CloseControl } from '@/components/night-audit/dashboard/close-control';
-import { RevenueTrendChart } from '@/components/night-audit/dashboard/revenue-trend-chart';
-import { MetricCards } from '@/components/night-audit/dashboard/metric-cards';
 import { ActivityFeed } from '@/components/night-audit/dashboard/activity-feed';
+import { MetricCards } from '@/components/night-audit/dashboard/metric-cards';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 import { AuditSuccessModal } from '@/components/night-audit/audit-success-modal';
 import { AuditFailureModal } from '@/components/night-audit/audit-failure-modal';
-import { Panel, PanelHeader, money, cx, TONE_HEX } from '@/components/night-audit/dashboard/ui';
+import { money, cx, TONE_HEX } from '@/components/night-audit/dashboard/ui';
 
-/* ── Background ─────────────────────────────────────────────────────────────── */
-const BG = 'linear-gradient(160deg,#05090f 0%,#060a12 55%,#070a18 100%)';
+/* ── Background gradient ────────────────────────────────────────────────────── */
+const BG = 'linear-gradient(160deg, #030712 0%, #05090f 55%, #070a18 100%)';
 
-/* ── Loading shells ──────────────────────────────────────────────────────────── */
+/* ── Grid texture ───────────────────────────────────────────────────────────── */
+const GRID_STYLE: React.CSSProperties = {
+  backgroundImage: [
+    'repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 32px)',
+    'repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 32px)',
+  ].join(', '),
+};
+
+/* ── Loading shells ─────────────────────────────────────────────────────────── */
 function CenteredShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center" style={{ background: BG }}>
@@ -40,11 +47,18 @@ function CenteredShell({ children }: { children: React.ReactNode }) {
 function Spinner({ label }: { label: string }) {
   return (
     <CenteredShell>
-      <div className="flex flex-col items-center gap-4">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-400/20 bg-gradient-to-br from-indigo-500/20 to-violet-500/10">
-          <MoonStar className="h-5 w-5 text-indigo-300" />
+      <div className="flex flex-col items-center gap-5">
+        <span
+          className="flex h-14 w-14 items-center justify-center rounded-2xl border"
+          style={{
+            borderColor: 'rgba(129,140,248,0.25)',
+            background: 'rgba(129,140,248,0.10)',
+            boxShadow: '0 0 32px -8px rgba(129,140,248,0.4)',
+          }}
+        >
+          <MoonStar className="h-6 w-6 text-indigo-300" />
         </span>
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-400">
+        <div className="flex items-center gap-2.5 text-sm font-medium text-slate-400">
           <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
           {label}
         </div>
@@ -53,17 +67,25 @@ function Spinner({ label }: { label: string }) {
   );
 }
 
-/* ── Inline alert strip ──────────────────────────────────────────────────────── */
+/* ── Alert strip ────────────────────────────────────────────────────────────── */
 function AlertStrip({
   variant, icon: Icon, message, action,
-}: { variant: 'error' | 'success' | 'warning'; icon: React.ElementType; message: string; action?: React.ReactNode }) {
-  const s = {
-    error: 'border-rose-400/20 bg-rose-400/[0.05] text-rose-300',
-    success: 'border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-300',
-    warning: 'border-amber-400/20 bg-amber-400/[0.05] text-amber-300',
+}: {
+  variant: 'error' | 'success' | 'warning';
+  icon: React.ElementType;
+  message: string;
+  action?: React.ReactNode;
+}) {
+  const styles = {
+    error:   { border: 'rgba(244,63,94,0.2)',   bg: 'rgba(244,63,94,0.06)',   text: '#fb7185' },
+    success: { border: 'rgba(52,211,153,0.2)',  bg: 'rgba(52,211,153,0.06)',  text: '#34d399' },
+    warning: { border: 'rgba(251,191,36,0.2)',  bg: 'rgba(251,191,36,0.06)',  text: '#fbbf24' },
   }[variant];
   return (
-    <div className={cx('flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-[12.5px] font-semibold', s)}>
+    <div
+      className="flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-[12.5px] font-semibold"
+      style={{ borderColor: styles.border, background: styles.bg, color: styles.text }}
+    >
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 shrink-0" />
         <span>{message}</span>
@@ -73,65 +95,120 @@ function AlertStrip({
   );
 }
 
-/* ── Manager's Flash compact panel ──────────────────────────────────────────── */
+/* ── Manager's Flash (shown after audit is closed) ──────────────────────────── */
 function ManagersFlash({ flashData, data }: { flashData: any; data: NightAuditData }) {
   const cur = data.property.baseCurrency;
   const occ = flashData.occupancyPercentage?.toFixed(1) || '0.0';
   const adr = Number(flashData.adr || 0);
   const revPar = Number(flashData.revPar || 0);
   const movements = [
-    { label: 'Arrivals', value: flashData.arrivals || 0, icon: LogIn, color: TONE_HEX.indigo },
-    { label: 'Departures', value: flashData.departures || 0, icon: LogOut, color: TONE_HEX.amber },
-    { label: 'Walk-ins', value: flashData.walkIns || 0, icon: Users, color: TONE_HEX.emerald },
-    { label: 'No-shows', value: flashData.noShows || 0, icon: UserX, color: TONE_HEX.rose },
+    { label: 'Arrivals',    value: flashData.arrivals   || 0, icon: LogIn,   color: TONE_HEX.indigo },
+    { label: 'Departures',  value: flashData.departures || 0, icon: LogOut,  color: TONE_HEX.amber },
+    { label: 'Walk-ins',    value: flashData.walkIns    || 0, icon: Users,   color: TONE_HEX.emerald },
+    { label: 'No-shows',    value: flashData.noShows    || 0, icon: UserX,   color: TONE_HEX.rose },
   ];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
-      {/* Revenue */}
-      <Panel>
-        <PanelHeader icon={Activity} title="Manager's Flash" subtitle="Live KPIs for the business date" tone="amber" />
-        <div className="grid grid-cols-3 gap-px border-t border-white/[0.05] bg-white/[0.03]">
+    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      {/* Revenue panel */}
+      <div
+        className="rounded-2xl border overflow-hidden"
+        style={{
+          background: 'rgba(7,15,30,0.88)',
+          borderColor: 'rgba(245,158,11,0.2)',
+          boxShadow: '0 0 60px -20px rgba(245,158,11,0.25)',
+        }}
+      >
+        <div
+          className="flex items-center gap-2.5 border-b px-4 py-3"
+          style={{ borderColor: 'rgba(255,255,255,0.05)' }}
+        >
+          <Activity className="h-4 w-4 text-amber-400" />
+          <div>
+            <p className="text-[13px] font-semibold text-white">Manager's Flash</p>
+            <p className="text-[11px] text-slate-500">Live KPIs for the business date</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-px" style={{ background: 'rgba(255,255,255,0.03)' }}>
           {[
             { label: 'Room Revenue', value: money(Number(flashData.roomRevenue || 0), cur, true), color: TONE_HEX.indigo },
-            { label: 'F&B Revenue', value: money(Number(flashData.fbRevenue || 0), cur, true), color: TONE_HEX.amber },
-            { label: 'Net Revenue', value: money(Number(flashData.netRevenue || 0), cur, true), color: TONE_HEX.emerald },
+            { label: 'F&B Revenue',  value: money(Number(flashData.fbRevenue   || 0), cur, true), color: TONE_HEX.amber },
+            { label: 'Net Revenue',  value: money(Number(flashData.netRevenue  || 0), cur, true), color: TONE_HEX.emerald },
           ].map((col) => (
-            <div key={col.label} className="bg-[#0b111e] px-3 py-2.5 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">{col.label}</p>
-              <p className="mt-0.5 font-mono text-[14px] font-bold tabular-nums" style={{ color: col.color }}>{col.value}</p>
+            <div key={col.label} className="flex flex-col items-center py-3 text-center" style={{ background: 'rgba(7,15,30,0.9)' }}>
+              <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-slate-600">{col.label}</p>
+              <p
+                className="mt-1 font-mono text-[16px] font-bold tabular-nums"
+                style={{ color: col.color, textShadow: `0 0 20px ${col.color}60` }}
+              >
+                {col.value}
+              </p>
             </div>
           ))}
         </div>
-        <div className="p-3">
-          <div className="flex items-center justify-between mb-1.5">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[10.5px] text-slate-500">Occupancy (OCC)</span>
-            <span className="font-mono text-[12px] font-bold text-emerald-300">{occ}%</span>
+            <span className="font-mono text-[13px] font-bold text-emerald-300">{occ}%</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
-            <div className="h-full rounded-full transition-all duration-700 bg-indigo-500"
-              style={{ width: `${Math.min(100, flashData.occupancyPercentage || 0)}%` }} />
+          <div className="h-2 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${Math.min(100, flashData.occupancyPercentage || 0)}%`,
+                background: TONE_HEX.indigo,
+                boxShadow: `0 0 8px ${TONE_HEX.indigo}60`,
+              }}
+            />
           </div>
-          <p className="mt-1 text-[10px] text-slate-600">{flashData.occupiedRooms || 0} / {flashData.totalRooms || 0} rooms · ADR {money(adr, cur, true)} · RevPAR {money(revPar, cur, true)}</p>
+          <p className="mt-1.5 text-[10px] text-slate-600">
+            {flashData.occupiedRooms || 0} / {flashData.totalRooms || 0} rooms · ADR {money(adr, cur, true)} · RevPAR {money(revPar, cur, true)}
+          </p>
         </div>
-      </Panel>
+      </div>
 
-      {/* Movements */}
-      <Panel>
-        <PanelHeader title="Operational Movement" tone="indigo" />
-        <div className="grid grid-cols-2 gap-px border-t border-white/[0.05] bg-white/[0.03] flex-1">
+      {/* Movements panel */}
+      <div
+        className="rounded-2xl border overflow-hidden"
+        style={{
+          background: 'rgba(7,15,30,0.88)',
+          borderColor: 'rgba(129,140,248,0.2)',
+        }}
+      >
+        <div
+          className="flex items-center gap-2.5 border-b px-4 py-3"
+          style={{ borderColor: 'rgba(255,255,255,0.05)' }}
+        >
+          <Users className="h-4 w-4 text-indigo-400" />
+          <p className="text-[13px] font-semibold text-white">Operational Movement</p>
+        </div>
+        <div className="grid grid-cols-2 gap-px flex-1" style={{ background: 'rgba(255,255,255,0.03)' }}>
           {movements.map((m) => {
             const Icon = m.icon;
             return (
-              <div key={m.label} className="flex flex-col items-center justify-center bg-[#0b111e] py-3 text-center">
-                <Icon className="h-4 w-4 mb-1" style={{ color: m.color }} />
-                <p className="font-mono text-[20px] font-bold text-white">{m.value}</p>
-                <p className="text-[9.5px] font-semibold uppercase tracking-wider" style={{ color: `${m.color}90` }}>{m.label}</p>
+              <div
+                key={m.label}
+                className="flex flex-col items-center justify-center py-5 text-center"
+                style={{ background: 'rgba(7,15,30,0.9)' }}
+              >
+                <Icon className="h-5 w-5 mb-1.5" style={{ color: m.color }} />
+                <p
+                  className="font-mono text-[24px] font-bold"
+                  style={{ color: 'white', textShadow: `0 0 20px ${m.color}50` }}
+                >
+                  {m.value}
+                </p>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-widest mt-0.5"
+                  style={{ color: `${m.color}90` }}
+                >
+                  {m.label}
+                </p>
               </div>
             );
           })}
         </div>
-      </Panel>
+      </div>
     </div>
   );
 }
@@ -165,9 +242,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       setData(json.data);
       setLastRefresh(new Date());
 
-      // Reuse the accountant's authoritative revenue mapping. It includes
-      // event invoice journals as well as folio revenue, including before the
-      // current night-audit close package has been finalized.
       try {
         const accountingResponse = await fetch(`/api/v1/accountant/revenue?propertyId=${propertyId}`, { cache: 'no-store' });
         const accountingJson = await accountingResponse.json();
@@ -175,15 +249,20 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       } catch { /* Night Audit snapshot remains the fallback. */ }
 
       const blockers = [
-        ...(json.data.system?.openPosSessions || []), ...(json.data.system?.openFrontdeskSessions || []),
-        ...(json.data.system?.financialSyncConflicts || []), ...(json.data.financial?.unverifiedComplimentary || []),
-        ...(json.data.financial?.pendingCheckInBypasses || []), ...(json.data.cash?.unverifiedTransactions || []),
+        ...(json.data.system?.openPosSessions || []),
+        ...(json.data.system?.openFrontdeskSessions || []),
+        ...(json.data.system?.financialSyncConflicts || []),
+        ...(json.data.financial?.unverifiedComplimentary || []),
+        ...(json.data.financial?.pendingCheckInBypasses || []),
+        ...(json.data.cash?.unverifiedTransactions || []),
       ].length;
       const warnings = (json.data.cash?.cashHandovers || []).length + (json.data.operational?.arrivals || []).length;
-      window.dispatchEvent(new CustomEvent('night-audit:queue-counts', { detail: {
-        '/night-audit': blockers + warnings,
-        '/night-audit/ar-ledger': (json.data.financial?.highBalances || []).length,
-      }}));
+      window.dispatchEvent(new CustomEvent('night-audit:queue-counts', {
+        detail: {
+          '/night-audit': blockers + warnings,
+          '/night-audit/ar-ledger': (json.data.financial?.highBalances || []).length,
+        },
+      }));
 
       if (json.data.currentAudit) {
         try {
@@ -195,7 +274,9 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         setFlashData(null);
       }
 
-      if (json.data.auditState === 'OVERDUE' && json.data.canStartAudit && !quiet && !managerMode) setWizardOpen(true);
+      if (json.data.auditState === 'OVERDUE' && json.data.canStartAudit && !quiet && !managerMode) {
+        setWizardOpen(true);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -215,12 +296,15 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     setExecuting(true); setError(null);
     try {
       const res = await fetch('/api/v1/night-audit/execute', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ propertyId }),
       });
       const raw = await res.text();
       let json: any;
-      try { json = JSON.parse(raw); } catch { throw new Error(`Audit service returned an invalid response (HTTP ${res.status}). Please retry or contact support if it continues.`); }
+      try { json = JSON.parse(raw); } catch {
+        throw new Error(`Audit service returned an invalid response (HTTP ${res.status}). Please retry or contact support if it continues.`);
+      }
       if (!res.ok) throw new Error(json.error?.message || 'Audit execution failed');
       setWizardOpen(false); setSuccessResult(json.data); await load(true);
     } catch (err: any) {
@@ -228,19 +312,31 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     } finally { setExecuting(false); }
   };
 
-  const handleQueueResolve = (actionType: string, payload: any) => setResolutionAction({ type: actionType as any, item: payload });
+  const handleQueueResolve = (actionType: string, payload: any) =>
+    setResolutionAction({ type: actionType as any, item: payload });
   const handleResolutionSuccess = () => { setResolutionAction(null); load(true); };
 
-  // ── Loading / empty states ────────────────────────────────────────────────
+  // ── Loading / empty states ───────────────────────────────────────────────────
   if (propertyLoading) return <Spinner label="Loading workspace…" />;
   if (!propertyId) return (
     <CenteredShell>
-      <div className="flex flex-col items-center gap-4 text-center px-6">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-400/20 bg-gradient-to-br from-indigo-500/15 to-violet-500/8">
+      <div className="flex flex-col items-center gap-5 text-center px-6">
+        <span
+          className="flex h-16 w-16 items-center justify-center rounded-2xl border"
+          style={{
+            borderColor: 'rgba(129,140,248,0.25)',
+            background: 'rgba(129,140,248,0.10)',
+            boxShadow: '0 0 40px -12px rgba(129,140,248,0.5)',
+          }}
+        >
           <Hotel className="h-7 w-7 text-indigo-300" />
         </span>
-        <h2 className="text-xl font-bold text-white">Select a Property</h2>
-        <p className="max-w-[280px] text-[13px] text-slate-500">Choose a property from the selector above to open the night audit workspace.</p>
+        <div>
+          <h2 className="text-xl font-bold text-white">Select a Property</h2>
+          <p className="mt-1 max-w-[280px] text-[13px] text-slate-500">
+            Choose a property from the selector above to open the night audit workspace.
+          </p>
+        </div>
       </div>
     </CenteredShell>
   );
@@ -250,15 +346,31 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   const isCompleted = data.auditState === 'COMPLETED' || data.auditState === 'COMPLETED_WITH_EXCEPTIONS';
 
   return (
-    <div className="min-h-full pb-16 pt-4 px-3 sm:px-4 md:px-5" style={{ background: BG }}>
-      <div className="mx-auto max-w-[1600px] space-y-4">
+    <div
+      className="relative min-h-full pb-16 pt-4 px-3 sm:px-4 md:px-5"
+      style={{ background: BG }}
+    >
+      {/* Background grid */}
+      <div className="pointer-events-none fixed inset-0 opacity-100" style={GRID_STYLE} />
+
+      <div className="relative mx-auto max-w-[1680px] space-y-4">
 
         {/* ── Alerts ──────────────────────────────────────────────────────── */}
         {(data.auditState === 'FAILED' || data.auditState === 'COMPLETED_WITH_EXCEPTIONS' || error || message) && (
           <div className="space-y-2">
             {data.auditState === 'FAILED' && (
-              <AlertStrip variant="error" icon={AlertTriangle} message="Last audit failed — review the audit log and retry."
-                action={<button onClick={() => load(true)} className="shrink-0 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-400/18">Retry</button>}
+              <AlertStrip
+                variant="error"
+                icon={AlertTriangle}
+                message="Last audit failed — review the audit log and retry."
+                action={
+                  <button
+                    onClick={() => load(true)}
+                    className="shrink-0 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-400/20"
+                  >
+                    Retry
+                  </button>
+                }
               />
             )}
             {data.auditState === 'COMPLETED_WITH_EXCEPTIONS' && !error && (
@@ -269,51 +381,56 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           </div>
         )}
 
-        {/* ── 1. Status banner (header) ────────────────────────────────────── */}
-        <StatusBanner data={data} isAuditInProgress={isAuditInProgress} onOpenWizard={() => { if (data.canStartAudit || data.canResumeAudit) setWizardOpen(true); }} refreshing={refreshing} managerMode={managerMode} />
+        {/* ── 1. Command Header ────────────────────────────────────────────── */}
+        <StatusBanner
+          data={data}
+          isAuditInProgress={isAuditInProgress}
+          onOpenWizard={() => { if (data.canStartAudit || data.canResumeAudit) setWizardOpen(true); }}
+          refreshing={refreshing}
+          managerMode={managerMode}
+        />
 
-        {/* ── 2. KPI strip (OCC / ADR / RevPAR / Revenue / Payments / Variance / In-house) */}
+        {/* ── 2. Vitals Command Row (7 KPI tiles) ──────────────────────────── */}
         <KpiStrip data={data} />
 
-        {/* ── 3. Work area (main 8 cols) + Right rail (4 cols) ─────────────── */}
+        {/* ── 3. Work area ─────────────────────────────────────────────────── */}
         {!isCompleted ? (
-          <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
-            {/* Main column */}
+          <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
+            {/* Main column: Attention queue + Close control */}
             <div className="space-y-4">
-              {/* 3a. Attention queue — primary work surface */}
               <div className="min-h-[320px]">
-                <AttentionQueue data={data} onResolveItem={managerMode ? undefined : handleQueueResolve} />
+                <AttentionQueue
+                  data={data}
+                  onResolveItem={managerMode ? undefined : handleQueueResolve}
+                />
               </div>
-              {/* 3b. Financial close control */}
               <CloseControl data={data} />
             </div>
 
-            {/* Right rail */}
+            {/* Right command rail */}
             <div className="flex flex-col gap-4">
               <AuditReadiness data={data} />
               <OccupancyChart rooms={data.analytics.rooms} />
               {data.financial.guestAmenity && <GuestAmenityControl data={data} />}
+              <MetricCards data={data} accountingDepartments={accountingDepartments} />
             </div>
           </div>
         ) : (
-          /* ── Completed state: Flash report + close control ──────────────── */
+          /* ── Completed state ─────────────────────────────────────────────── */
           <div className="space-y-4">
             {flashData && <ManagersFlash flashData={flashData} data={data} />}
             <CloseControl data={data} />
           </div>
         )}
 
-        {/* ── 4. Analytics row: Revenue trend + Metric cards ──────────────── */}
-        <div className="grid gap-4 xl:grid-cols-[2fr_3fr]">
-          <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
-          <MetricCards data={data} accountingDepartments={accountingDepartments} />
-        </div>
-
-        {/* ── 5. Activity timeline ────────────────────────────────────────── */}
+        {/* ── 4. Activity Timeline (compact drawer) ────────────────────────── */}
         <ActivityFeed data={data} />
 
         {/* ── Freshness footer ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between border-t border-white/[0.04] pt-3 text-[10.5px] text-slate-600">
+        <div
+          className="flex items-center justify-between border-t pt-3 text-[10.5px] text-slate-600"
+          style={{ borderColor: 'rgba(255,255,255,0.04)' }}
+        >
           <span>
             {lastRefresh
               ? `Refreshed at ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
@@ -323,7 +440,8 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           <button
             onClick={() => load(true)}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-[10.5px] font-semibold text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-slate-200 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[10.5px] font-semibold text-slate-400 transition-all hover:border-white/15 hover:bg-white/[0.05] hover:text-slate-200 disabled:opacity-50"
+            style={{ borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.025)' }}
           >
             <RefreshCcw className={cx('h-3.5 w-3.5', refreshing ? 'animate-spin' : '')} />
             Refresh
@@ -331,15 +449,36 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         </div>
       </div>
 
-      {/* ── Modals ────────────────────────────────────────────────────────── */}
+      {/* ── Modals ───────────────────────────────────────────────────────────── */}
       {!managerMode && (
-        <AuditWizard open={wizardOpen} onOpenChange={setWizardOpen} data={data} onExecute={execute} executing={executing} onRefresh={() => load(true)} />
+        <AuditWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          data={data}
+          onExecute={execute}
+          executing={executing}
+          onRefresh={() => load(true)}
+        />
       )}
       {!managerMode && (
-        <ResolutionManager action={resolutionAction} onClose={() => setResolutionAction(null)} onSuccess={handleResolutionSuccess} />
+        <ResolutionManager
+          action={resolutionAction}
+          onClose={() => setResolutionAction(null)}
+          onSuccess={handleResolutionSuccess}
+        />
       )}
-      <AuditSuccessModal open={!!successResult} onOpenChange={(open) => !open && setSuccessResult(null)} result={successResult} businessDate={data.businessDate} />
-      <AuditFailureModal open={!!failureMessage} onOpenChange={(open) => !open && setFailureMessage(null)} message={failureMessage || ''} onRetry={execute} />
+      <AuditSuccessModal
+        open={!!successResult}
+        onOpenChange={(open) => !open && setSuccessResult(null)}
+        result={successResult}
+        businessDate={data.businessDate}
+      />
+      <AuditFailureModal
+        open={!!failureMessage}
+        onOpenChange={(open) => !open && setFailureMessage(null)}
+        message={failureMessage || ''}
+        onRetry={execute}
+      />
     </div>
   );
 }

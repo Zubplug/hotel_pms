@@ -8,6 +8,7 @@ import {
   CalendarDays, ChevronRight, ShieldCheck, FileText, Lock, BarChart2, Zap,
   UserRound, History, Timer, ShieldAlert,
 } from 'lucide-react';
+import { PulsingBadge, GlowButton, TONE_HEX } from './ui';
 
 interface StatusBannerProps {
   data: NightAuditData;
@@ -18,11 +19,11 @@ interface StatusBannerProps {
 }
 
 const AUDIT_STEPS = [
-  { id: 1, label: 'Pre-check', icon: ShieldCheck },
+  { id: 1, label: 'Pre-check',    icon: ShieldCheck },
   { id: 2, label: 'Post charges', icon: Zap },
-  { id: 3, label: 'Reconcile', icon: BarChart2 },
-  { id: 4, label: 'Roll date', icon: Lock },
-  { id: 5, label: 'Reports', icon: FileText },
+  { id: 3, label: 'Reconcile',    icon: BarChart2 },
+  { id: 4, label: 'Roll date',    icon: Lock },
+  { id: 5, label: 'Reports',      icon: FileText },
 ];
 
 function getActiveStep(auditState: string): number {
@@ -33,12 +34,46 @@ function getActiveStep(auditState: string): number {
 
 type Tone = 'amber' | 'emerald' | 'sky' | 'rose' | 'indigo';
 
-const TONE: Record<Tone, { pill: string; dot: string; accent: string; btn: string }> = {
-  amber:   { pill: 'border-amber-400/25 bg-amber-400/[0.08] text-amber-200',     dot: 'bg-amber-400',   accent: '#f59e0b', btn: 'bg-amber-500 hover:bg-amber-400 text-slate-950' },
-  emerald: { pill: 'border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-200', dot: 'bg-emerald-400', accent: '#10b981', btn: 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' },
-  sky:     { pill: 'border-sky-400/25 bg-sky-400/[0.08] text-sky-200',           dot: 'bg-sky-400',     accent: '#38bdf8', btn: 'bg-sky-500 hover:bg-sky-400 text-slate-950' },
-  rose:    { pill: 'border-rose-400/25 bg-rose-400/[0.08] text-rose-200',        dot: 'bg-rose-400',    accent: '#f43f5e', btn: 'bg-rose-500 hover:bg-rose-400 text-white' },
-  indigo:  { pill: 'border-indigo-400/25 bg-indigo-400/[0.08] text-indigo-200',  dot: 'bg-indigo-400',  accent: '#818cf8', btn: 'bg-indigo-500 hover:bg-indigo-400 text-white' },
+const TONE: Record<Tone, {
+  pill: string; dot: string; accent: string;
+  btnVariant: 'primary' | 'danger' | 'success' | 'warning';
+  aura: string;
+}> = {
+  amber: {
+    pill: 'border-amber-400/25 bg-amber-400/[0.08] text-amber-200',
+    dot: '#f59e0b',
+    accent: '#f59e0b',
+    btnVariant: 'warning',
+    aura: 'radial-gradient(ellipse 55% 80% at 15% 50%, rgba(245,158,11,0.10) 0%, transparent 65%)',
+  },
+  emerald: {
+    pill: 'border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-200',
+    dot: '#10b981',
+    accent: '#10b981',
+    btnVariant: 'success',
+    aura: 'radial-gradient(ellipse 55% 80% at 15% 50%, rgba(16,185,129,0.10) 0%, transparent 65%)',
+  },
+  sky: {
+    pill: 'border-sky-400/25 bg-sky-400/[0.08] text-sky-200',
+    dot: '#38bdf8',
+    accent: '#38bdf8',
+    btnVariant: 'primary',
+    aura: 'radial-gradient(ellipse 55% 80% at 15% 50%, rgba(56,189,248,0.10) 0%, transparent 65%)',
+  },
+  rose: {
+    pill: 'border-rose-400/25 bg-rose-400/[0.08] text-rose-200',
+    dot: '#f43f5e',
+    accent: '#f43f5e',
+    btnVariant: 'danger',
+    aura: 'radial-gradient(ellipse 55% 80% at 15% 50%, rgba(244,63,94,0.12) 0%, transparent 65%)',
+  },
+  indigo: {
+    pill: 'border-indigo-400/25 bg-indigo-400/[0.08] text-indigo-200',
+    dot: '#818cf8',
+    accent: '#818cf8',
+    btnVariant: 'primary',
+    aura: 'radial-gradient(ellipse 55% 80% at 15% 50%, rgba(129,140,248,0.10) 0%, transparent 65%)',
+  },
 };
 
 function AuditStepper({ auditState, tone }: { auditState: string; tone: Tone }) {
@@ -48,24 +83,26 @@ function AuditStepper({ auditState, tone }: { auditState: string; tone: Tone }) 
   const accent = TONE[tone].accent;
 
   return (
-    <ol className="flex min-w-0 flex-1 items-center gap-1.5" aria-label="Audit progress">
+    <ol className="flex min-w-0 flex-1 items-center gap-1" aria-label="Audit progress">
       {AUDIT_STEPS.map((step, i) => {
         const done = isCompleted || step.id < activeStep;
         const active = !isCompleted && step.id === activeStep;
         const Icon = step.icon;
         return (
-          <li key={step.id} className="flex min-w-0 flex-1 items-center gap-1.5">
+          <li key={step.id} className="flex min-w-0 flex-1 items-center gap-1">
             <div
-              className={`flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
-                active ? 'bg-white/[0.06] text-white' : done ? 'text-slate-300' : 'text-slate-600'
-              }`}
+              className="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all"
+              style={{
+                background: active ? `${accent}12` : done ? `${accent}08` : 'transparent',
+                border: active ? `1px solid ${accent}35` : '1px solid transparent',
+              }}
               aria-current={active ? 'step' : undefined}
             >
               <span
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+                className="flex h-4.5 w-4.5 h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full"
                 style={{
-                  background: done ? accent : active ? `${accent}26` : 'rgba(255,255,255,0.05)',
-                  boxShadow: active ? `0 0 0 1px ${accent}80` : undefined,
+                  background: done ? accent : active ? `${accent}22` : 'rgba(255,255,255,0.05)',
+                  boxShadow: active ? `0 0 0 1px ${accent}60, 0 0 8px ${accent}40` : undefined,
                 }}
               >
                 {done ? (
@@ -73,15 +110,20 @@ function AuditStepper({ auditState, tone }: { auditState: string; tone: Tone }) 
                 ) : active && running ? (
                   <Loader2 className="h-2.5 w-2.5 animate-spin" style={{ color: accent }} />
                 ) : (
-                  <Icon className="h-2.5 w-2.5" style={{ color: active ? accent : undefined }} />
+                  <Icon className="h-2.5 w-2.5" style={{ color: active ? accent : '#475569' }} />
                 )}
               </span>
-              <span className="hidden truncate md:inline">{step.label}</span>
+              <span
+                className="hidden truncate md:inline"
+                style={{ color: active ? 'white' : done ? '#cbd5e1' : '#475569' }}
+              >
+                {step.label}
+              </span>
             </div>
             {i < AUDIT_STEPS.length - 1 && (
               <span
-                className="h-px min-w-[8px] flex-1 rounded-full"
-                style={{ background: done ? `${accent}99` : 'rgba(255,255,255,0.07)' }}
+                className="h-px min-w-[6px] flex-1 rounded-full"
+                style={{ background: done ? `${accent}80` : 'rgba(255,255,255,0.07)' }}
               />
             )}
           </li>
@@ -91,50 +133,49 @@ function AuditStepper({ auditState, tone }: { auditState: string; tone: Tone }) 
   );
 }
 
-function Counter({ icon: Icon, label, value, tone }: { icon: React.ElementType; label: string; value: number; tone: 'rose' | 'amber' | 'emerald' }) {
-  const color = { rose: 'text-rose-300', amber: 'text-amber-300', emerald: 'text-emerald-300' }[tone];
+function MetaChip({
+  icon: Icon, label, value,
+}: {
+  icon: React.ElementType; label: string; value: string;
+}) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5">
-      <Icon className={`h-3.5 w-3.5 ${color}`} />
-      <span className={`font-mono text-sm font-bold tabular-nums ${color}`}>{value}</span>
-      <span className="text-[11px] font-medium text-slate-500">{label}</span>
-    </div>
-  );
-}
-
-function Meta({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2" title={label}>
-      <Icon className="h-3.5 w-3.5 text-slate-500" />
+    <div
+      className="flex items-center gap-2 rounded-xl border px-3 py-1.5"
+      style={{
+        borderColor: 'rgba(255,255,255,0.07)',
+        background: 'rgba(255,255,255,0.025)',
+      }}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
       <div className="leading-tight">
-        <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-slate-600">{label}</p>
-        <p className="text-xs font-medium text-slate-200">{value}</p>
+        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-600">{label}</p>
+        <p className="text-[11.5px] font-semibold text-slate-200">{value}</p>
       </div>
     </div>
   );
 }
 
 export function StatusBanner({
-  data,
-  isAuditInProgress,
-  onOpenWizard,
-  refreshing,
-  managerMode = false,
+  data, isAuditInProgress, onOpenWizard, refreshing, managerMode = false,
 }: StatusBannerProps) {
   const { data: session } = useSession();
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const isReady = data.summary.blockers === 0 && data.canStartAudit && !isAuditInProgress;
   const auditRecord = data.activeAudit || data.currentAudit;
-  const lastCompleted = data.lastCompletedAudit || (['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.currentAudit?.status || '') ? data.currentAudit : null);
+  const lastCompleted =
+    data.lastCompletedAudit ||
+    (['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.currentAudit?.status || '')
+      ? data.currentAudit
+      : null);
   const owner = auditRecord?.runByStaff;
   const currentUserName = session?.user?.name || session?.user?.email || '';
   const ownerName = owner
     ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim()
     : auditRecord?.runBy
-      ? currentUserName || 'Assigned auditor'
-      : ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(auditRecord?.status || '')
-        ? 'System'
-        : currentUserName || 'Current auditor';
+    ? currentUserName || 'Assigned auditor'
+    : ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(auditRecord?.status || '')
+    ? 'System'
+    : currentUserName || 'Current auditor';
 
   let tone: Tone = 'amber';
   let statusText = 'Pending';
@@ -145,9 +186,9 @@ export function StatusBanner({
   if (data.auditState === 'COMPLETED') {
     tone = 'emerald'; statusText = 'Closed'; statusSub = 'Business day closed'; StatusIcon = CheckCircle2;
   } else if (data.auditState === 'COMPLETED_WITH_EXCEPTIONS') {
-    tone = 'amber'; statusText = 'Closed with exceptions'; statusSub = 'Review reconciliation before handover'; StatusIcon = ShieldAlert;
+    tone = 'amber'; statusText = 'Closed w/ exceptions'; statusSub = 'Review reconciliation'; StatusIcon = ShieldAlert;
   } else if (isAuditInProgress) {
-    tone = 'sky'; statusText = 'In progress'; statusSub = 'Posting charges'; StatusIcon = Loader2; pulse = true;
+    tone = 'sky'; statusText = 'In Progress'; statusSub = 'Posting charges…'; StatusIcon = Loader2; pulse = true;
   } else if (data.auditState === 'OVERDUE') {
     tone = 'rose'; statusText = 'Overdue'; statusSub = 'Close immediately'; StatusIcon = AlertTriangle; pulse = true;
   } else if (isReady) {
@@ -155,81 +196,188 @@ export function StatusBanner({
   }
 
   const ctaLabel =
-    isAuditInProgress ? 'Resume audit' :
-    ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.auditState) ? 'View report' :
-    data.auditState === 'OVERDUE' ? 'Run audit now' :
-    'Begin audit';
+    isAuditInProgress ? 'Resume Audit' :
+    ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.auditState) ? 'View Report' :
+    data.auditState === 'OVERDUE' ? 'Run Audit Now' :
+    'Begin Audit';
   const startDisabled = !(data.canStartAudit || data.canResumeAudit) || refreshing;
-
   const t = TONE[tone];
 
   return (
     <section
       aria-labelledby="night-audit-heading"
-      className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0b111e]/90 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_12px_32px_-12px_rgba(0,0,0,0.6)] backdrop-blur"
+      className="relative overflow-hidden rounded-2xl border"
+      style={{
+        background: `${t.aura}, linear-gradient(135deg, #030712 0%, #070F1E 100%)`,
+        backdropFilter: 'blur(20px)',
+        borderColor: `${t.accent}25`,
+        boxShadow: `0 0 0 1px rgba(255,255,255,0.03) inset, 0 24px 64px -16px rgba(0,0,0,0.75), 0 0 80px -30px ${t.accent}30`,
+      }}
     >
-      {/* State accent line */}
-      <span className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, ${t.accent}, ${t.accent}00 70%)` }} />
+      {/* Animated top accent line */}
+      <span
+        className="absolute inset-x-0 top-0 h-[2px]"
+        style={{ background: `linear-gradient(90deg, ${t.accent}00, ${t.accent}, ${t.accent}70, ${t.accent}00)` }}
+      />
 
-      {/* Tier 1 — identity, status, meta, action */}
-      <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-gradient-to-br from-indigo-500/20 to-violet-500/10 text-indigo-200">
-            <MoonStar className="h-[18px] w-[18px]" />
-          </span>
-          <div className="min-w-0">
+      {/* Grid texture overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.015]"
+        style={{
+          backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.5) 0px, rgba(255,255,255,0.5) 1px, transparent 1px, transparent 24px), repeating-linear-gradient(90deg, rgba(255,255,255,0.5) 0px, rgba(255,255,255,0.5) 1px, transparent 1px, transparent 24px)',
+        }}
+      />
+
+      {/* ── Main content ─────────────────────────────────────────────────── */}
+      <div className="relative flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+
+        {/* LEFT: Identity */}
+        <div className="flex items-start gap-4">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border"
+            style={{
+              borderColor: `${t.accent}30`,
+              background: `${t.accent}12`,
+              boxShadow: `0 0 24px -8px ${t.accent}50`,
+            }}
+          >
+            <MoonStar className="h-5 w-5" style={{ color: t.accent }} />
+          </div>
+          <div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 id="night-audit-heading" className="text-[17px] font-semibold tracking-tight text-white">
+              <h1
+                id="night-audit-heading"
+                className="text-[18px] font-bold tracking-tight text-white"
+              >
                 Night Audit
               </h1>
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${t.pill}`}>
-                <span className="relative flex h-1.5 w-1.5">
-                  {pulse && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${t.dot}`} />}
-                  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${t.dot}`} />
-                </span>
-                <StatusIcon className={`h-3 w-3 ${isAuditInProgress ? 'animate-spin' : ''}`} />
-                {statusText}
-              </span>
+              <PulsingBadge
+                tone={
+                  tone === 'emerald' ? 'emerald' :
+                  tone === 'rose'    ? 'rose'    :
+                  tone === 'sky'     ? 'sky'     :
+                  tone === 'indigo'  ? 'indigo'  :
+                  'amber'
+                }
+                label={statusText}
+                animate={pulse}
+              />
             </div>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
-              <CalendarDays className="h-3 w-3 text-slate-500" />
-              <span className="font-medium text-slate-200">{format(businessDate, 'EEE, dd MMM yyyy')}</span>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-slate-400">
+              <CalendarDays className="h-3.5 w-3.5 text-slate-500" />
+              <span className="font-semibold text-slate-200">
+                {format(businessDate, 'EEEE, dd MMM yyyy')}
+              </span>
               <span className="text-slate-600">·</span>
               <span className="truncate">{data.property.name || 'Property'}</span>
               <span className="text-slate-600">·</span>
-              <span className={tone === 'rose' ? 'text-rose-300' : 'text-slate-500'}>{statusSub}</span>
+              <span style={{ color: tone === 'rose' ? TONE_HEX.rose : '#64748b' }}>
+                {statusSub}
+              </span>
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <div className="hidden items-center gap-5 border-r border-white/[0.06] pr-6 xl:flex">
-            <Meta icon={UserRound} label="Auditor" value={ownerName} />
-            <Meta icon={Timer} label="Started" value={auditRecord?.startedAt ? format(new Date(auditRecord.startedAt), 'dd MMM, HH:mm') : 'Not started'} />
-            <Meta icon={History} label="Last closed" value={lastCompleted?.completedAt ? format(new Date(lastCompleted.completedAt), 'dd MMM, HH:mm') : '—'} />
+        {/* RIGHT: Meta + CTA */}
+        <div className="flex flex-col gap-3 lg:items-end">
+          {/* Meta chips */}
+          <div className="hidden items-center gap-2 xl:flex">
+            <MetaChip icon={UserRound} label="Auditor" value={ownerName} />
+            <MetaChip
+              icon={Timer}
+              label="Started"
+              value={
+                auditRecord?.startedAt
+                  ? format(new Date(auditRecord.startedAt), 'dd MMM, HH:mm')
+                  : 'Not started'
+              }
+            />
+            <MetaChip
+              icon={History}
+              label="Last Closed"
+              value={
+                lastCompleted?.completedAt
+                  ? format(new Date(lastCompleted.completedAt), 'dd MMM, HH:mm')
+                  : '—'
+              }
+            />
           </div>
+
+          {/* CTA */}
           {!managerMode && (
-            <button
-              id="night-audit-primary-cta"
+            <GlowButton
               onClick={onOpenWizard}
               disabled={startDisabled}
-              title={data.auditStartBlockedReason || undefined}
-              className={`group inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold shadow-sm transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:cursor-not-allowed disabled:opacity-50 ${t.btn}`}
+              variant={
+                tone === 'rose'   ? 'danger'  :
+                tone === 'emerald'? 'success' :
+                tone === 'amber'  ? 'warning' :
+                'primary'
+              }
+              size="md"
             >
-              <Play className="h-3.5 w-3.5 fill-current" />
+              {isAuditInProgress ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5 fill-current" />
+              )}
               {ctaLabel}
-              <ChevronRight className="h-3.5 w-3.5 opacity-70 transition-transform group-hover:translate-x-0.5" />
-            </button>
+              <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+            </GlowButton>
           )}
         </div>
       </div>
 
-      {/* Tier 2 — progress + readiness counters */}
-      <div className="flex flex-col gap-3 border-t border-white/[0.05] bg-white/[0.015] px-5 py-2.5 md:flex-row md:items-center md:gap-6">
+      {/* ── Bottom tier: stepper + counters ──────────────────────────────── */}
+      <div
+        className="relative flex flex-col gap-3 border-t px-5 py-3 md:flex-row md:items-center md:gap-6"
+        style={{
+          borderColor: 'rgba(255,255,255,0.05)',
+          background: 'rgba(0,0,0,0.20)',
+        }}
+      >
         <AuditStepper auditState={data.auditState} tone={tone} />
         <div className="flex shrink-0 items-center gap-2">
-          <Counter icon={ShieldAlert} label="Blockers" value={data.summary.blockers} tone={data.summary.blockers > 0 ? 'rose' : 'emerald'} />
-          <Counter icon={AlertTriangle} label="Warnings" value={data.summary.warnings} tone={data.summary.warnings > 0 ? 'amber' : 'emerald'} />
+          {/* Blockers chip */}
+          <div
+            className="flex items-center gap-2 rounded-xl border px-3 py-1.5"
+            style={{
+              borderColor: data.summary.blockers > 0 ? 'rgba(244,63,94,0.3)' : 'rgba(52,211,153,0.2)',
+              background: data.summary.blockers > 0 ? 'rgba(244,63,94,0.07)' : 'rgba(52,211,153,0.05)',
+            }}
+          >
+            <ShieldAlert
+              className="h-3.5 w-3.5"
+              style={{ color: data.summary.blockers > 0 ? TONE_HEX.rose : TONE_HEX.emerald }}
+            />
+            <span
+              className="font-mono text-sm font-bold tabular-nums"
+              style={{ color: data.summary.blockers > 0 ? TONE_HEX.rose : TONE_HEX.emerald }}
+            >
+              {data.summary.blockers}
+            </span>
+            <span className="text-[11px] font-medium text-slate-500">Blockers</span>
+          </div>
+          {/* Warnings chip */}
+          <div
+            className="flex items-center gap-2 rounded-xl border px-3 py-1.5"
+            style={{
+              borderColor: data.summary.warnings > 0 ? 'rgba(251,191,36,0.3)' : 'rgba(52,211,153,0.2)',
+              background: data.summary.warnings > 0 ? 'rgba(251,191,36,0.07)' : 'rgba(52,211,153,0.05)',
+            }}
+          >
+            <AlertTriangle
+              className="h-3.5 w-3.5"
+              style={{ color: data.summary.warnings > 0 ? TONE_HEX.amber : TONE_HEX.emerald }}
+            />
+            <span
+              className="font-mono text-sm font-bold tabular-nums"
+              style={{ color: data.summary.warnings > 0 ? TONE_HEX.amber : TONE_HEX.emerald }}
+            >
+              {data.summary.warnings}
+            </span>
+            <span className="text-[11px] font-medium text-slate-500">Warnings</span>
+          </div>
         </div>
       </div>
     </section>

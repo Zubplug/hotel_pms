@@ -5,15 +5,15 @@ import { NightAuditData } from '@/types/night-audit';
 import { Panel, PanelHeader, Badge, cx, TONE_HEX, money } from './ui';
 
 const STATUS_DEF: Record<string, { label: string; tone: 'emerald' | 'amber' | 'rose' | 'indigo' | 'sky' }> = {
-  READY: { label: 'Ready', tone: 'indigo' },
-  BLOCKED: { label: 'Blocked', tone: 'rose' },
-  CANNOT_CLOSE: { label: 'Cannot close', tone: 'rose' },
-  HAS_VARIANCE: { label: 'Variance', tone: 'amber' },
-  HAS_UNRESOLVED_EXCEPTIONS: { label: 'Exceptions', tone: 'amber' },
-  IN_PROGRESS: { label: 'In progress', tone: 'sky' },
-  COMPLETED: { label: 'Completed', tone: 'emerald' },
-  COMPLETED_WITH_EXCEPTIONS: { label: 'Closed w/ exceptions', tone: 'amber' },
-  FAILED: { label: 'Failed', tone: 'rose' },
+  READY:                       { label: 'Ready',                tone: 'indigo' },
+  BLOCKED:                     { label: 'Blocked',              tone: 'rose' },
+  CANNOT_CLOSE:                { label: 'Cannot close',         tone: 'rose' },
+  HAS_VARIANCE:                { label: 'Variance',             tone: 'amber' },
+  HAS_UNRESOLVED_EXCEPTIONS:   { label: 'Exceptions',           tone: 'amber' },
+  IN_PROGRESS:                 { label: 'In progress',          tone: 'sky' },
+  COMPLETED:                   { label: 'Completed',            tone: 'emerald' },
+  COMPLETED_WITH_EXCEPTIONS:   { label: 'Closed w/ exceptions', tone: 'amber' },
+  FAILED:                      { label: 'Failed',               tone: 'rose' },
 };
 
 interface Row { label: string; value: string; sub: string; ok: boolean; icon: React.ElementType }
@@ -57,10 +57,11 @@ export function CloseControl({ data }: { data: NightAuditData }) {
   const journal_diff = Number(journal?.difference ?? 0);
   const postedEntries = journal?.postedEntryCount || 0;
   const expectedEntries = Math.max(postedEntries, Number((journal as any)?.expectedEntryCount || 0));
+  const isBalanced = Math.abs(journal_diff) < 1;
 
   return (
-    <div className="space-y-4">
-      {/* Close control panel */}
+    <div className="space-y-3">
+      {/* ── Close control panel ──────────────────────────────────────────── */}
       <Panel>
         <PanelHeader
           icon={LockKeyhole}
@@ -70,37 +71,83 @@ export function CloseControl({ data }: { data: NightAuditData }) {
           actions={<Badge tone={statusDef.tone}>{statusDef.label}</Badge>}
         />
 
-        {/* Ledger summary */}
+        {/* GL Ledger Summary — 3 glass tiles */}
         {(journal_debit > 0 || journal_credit > 0) && (
-          <div className="grid grid-cols-3 gap-px border-b border-white/[0.05] bg-white/[0.04]">
+          <div
+            className="grid grid-cols-3 gap-px border-b"
+            style={{
+              borderColor: 'rgba(255,255,255,0.05)',
+              background: 'rgba(255,255,255,0.03)',
+            }}
+          >
             {[
-              { label: 'Debit', value: money(journal_debit, cur, true), color: TONE_HEX.indigo },
-              { label: 'Credit', value: money(journal_credit, cur, true), color: TONE_HEX.emerald },
-              { label: 'Difference', value: money(Math.abs(journal_diff), cur, true), color: Math.abs(journal_diff) < 1 ? TONE_HEX.emerald : TONE_HEX.rose },
+              { label: 'Debit',      value: money(journal_debit, cur, true),          color: TONE_HEX.indigo },
+              { label: 'Credit',     value: money(journal_credit, cur, true),         color: TONE_HEX.emerald },
+              {
+                label: 'Difference',
+                value: money(Math.abs(journal_diff), cur, true),
+                color: isBalanced ? TONE_HEX.emerald : TONE_HEX.rose,
+              },
             ].map((col) => (
-              <div key={col.label} className="bg-[#0b111e] px-3 py-2 text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">{col.label}</p>
-                <p className="mt-0.5 font-mono text-[13px] font-bold tabular-nums" style={{ color: col.color }}>{col.value}</p>
+              <div
+                key={col.label}
+                className="relative flex flex-col items-center justify-center py-3 text-center"
+                style={{ background: 'rgba(7,15,30,0.9)' }}
+              >
+                {/* Ambient glow */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background: `radial-gradient(ellipse 70% 70% at 50% 80%, ${col.color}12, transparent)`,
+                  }}
+                />
+                <p className="relative text-[9.5px] font-bold uppercase tracking-[0.14em] text-slate-600">
+                  {col.label}
+                </p>
+                <p
+                  className="relative mt-1 font-mono text-[16px] font-bold tabular-nums"
+                  style={{
+                    color: col.color,
+                    textShadow: `0 0 20px ${col.color}60`,
+                  }}
+                >
+                  {col.value}
+                </p>
               </div>
             ))}
           </div>
         )}
 
-        {/* Control rows */}
-        <ul className="divide-y divide-white/[0.04]">
+        {/* Control checklist */}
+        <ul className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
           {rows.map((r) => {
             const Icon = r.icon;
             const color = r.ok ? TONE_HEX.emerald : TONE_HEX.amber;
             const StatusIcon = r.ok ? CheckCircle2 : AlertTriangle;
             return (
-              <li key={r.label} className="flex items-center gap-3 px-4 py-2.5">
-                <Icon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <li
+                key={r.label}
+                className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-white/[0.015]"
+                style={{ borderLeft: `3px solid ${color}30` }}
+              >
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border"
+                  style={{ borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)' }}
+                >
+                  <Icon className="h-3.5 w-3.5 text-slate-500" />
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-semibold text-slate-400">{r.label}</p>
-                  <p className="truncate text-[12.5px] font-bold text-white">{r.value}</p>
+                  <p className="truncate text-[13px] font-bold text-white">{r.value}</p>
                 </div>
-                <div className="flex items-center gap-1 text-[11px]">
-                  <StatusIcon className="h-3.5 w-3.5" style={{ color }} />
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <StatusIcon
+                    className="h-3.5 w-3.5"
+                    style={{
+                      color,
+                      filter: r.ok ? `drop-shadow(0 0 4px ${color}70)` : undefined,
+                    }}
+                  />
                   <span className="text-slate-500">{r.sub}</span>
                 </div>
               </li>
@@ -110,55 +157,100 @@ export function CloseControl({ data }: { data: NightAuditData }) {
 
         {/* GL coverage bar */}
         {expectedEntries > 0 && (
-          <div className="border-t border-white/[0.05] px-4 py-2.5">
-            <div className="flex items-center justify-between">
+          <div className="border-t px-4 py-2.5" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+            <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10.5px] font-semibold text-slate-600">GL journal coverage</span>
-              <span className="font-mono text-[11px] font-semibold text-slate-300">{postedEntries} / {expectedEntries}</span>
+              <span className="font-mono text-[11px] font-semibold text-slate-300">
+                {postedEntries} / {expectedEntries}
+              </span>
             </div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.05]">
-              <div className="h-full rounded-full bg-sky-400 transition-all duration-700"
-                style={{ width: `${Math.min(100, (postedEntries / expectedEntries) * 100)}%` }} />
+            <div className="h-1.5 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${Math.min(100, (postedEntries / expectedEntries) * 100)}%`,
+                  background: TONE_HEX.cyan,
+                  boxShadow: `0 0 8px ${TONE_HEX.cyan}50`,
+                }}
+              />
             </div>
           </div>
         )}
 
-        {/* Balance proof line */}
-        <div className={cx(
-          'flex items-center gap-2 border-t border-white/[0.05] px-4 py-2.5 text-[11.5px]',
-          close?.hasOpeningClosingBalance ? 'text-emerald-300' : 'text-amber-300',
-        )}>
+        {/* Balance proof strip */}
+        <div
+          className={cx(
+            'flex items-center gap-2 border-t px-4 py-2.5 text-[11.5px] font-semibold',
+          )}
+          style={{
+            borderColor: 'rgba(255,255,255,0.05)',
+            color: close?.hasOpeningClosingBalance ? TONE_HEX.emerald : TONE_HEX.amber,
+            background: close?.hasOpeningClosingBalance
+              ? 'rgba(16,185,129,0.06)'
+              : 'rgba(245,158,11,0.06)',
+          }}
+        >
           {close?.hasOpeningClosingBalance
-            ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ filter: `drop-shadow(0 0 4px ${TONE_HEX.emerald}70)` }} />
             : <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
-          <span>{close?.hasOpeningClosingBalance
-            ? 'Opening, activity, and closing balances agree for all dated ledgers.'
-            : 'Balance proof incomplete. Review before closing the business date.'}</span>
+          <span>
+            {close?.hasOpeningClosingBalance
+              ? 'Opening, activity, and closing balances agree for all dated ledgers.'
+              : 'Balance proof incomplete. Review before closing the business date.'}
+          </span>
         </div>
       </Panel>
 
-      {/* Smart Signals */}
+      {/* ── Audit Intelligence (Smart Signals) ───────────────────────────── */}
       <Panel>
-        <PanelHeader icon={Zap} title="Smart Signals" subtitle="Deterministic audit insights" tone="violet" />
-        <div className="space-y-1 p-3">
+        <PanelHeader
+          icon={Zap}
+          title="Audit Intelligence"
+          subtitle="Smart signals · deterministic insights"
+          tone="violet"
+        />
+        <div className="space-y-1.5 p-3">
           {insights.length === 0 ? (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-2.5 text-[12px] font-medium text-emerald-300">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-              No abnormal signals detected
-            </div>
-          ) : insights.map((ins: any) => (
             <div
-              key={`${ins.title}-${ins.metric}`}
-              className={cx('flex items-start gap-2.5 rounded-lg border-l-[2px] bg-white/[0.02] px-3 py-2', ins.severity === 'HIGH' ? 'border-rose-400' : 'border-amber-400')}
+              className="flex items-center gap-2 rounded-xl border px-3 py-3 text-[12px] font-medium text-emerald-300"
+              style={{
+                borderColor: 'rgba(52,211,153,0.2)',
+                background: 'rgba(52,211,153,0.06)',
+              }}
             >
-              {ins.severity === 'HIGH'
-                ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
-                : <FileWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />}
-              <div>
-                <p className="text-[12.5px] font-semibold text-white">{ins.title}</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{ins.detail}</p>
-              </div>
+              <ShieldCheck
+                className="h-4 w-4 shrink-0"
+                style={{ filter: `drop-shadow(0 0 6px ${TONE_HEX.emerald}80)` }}
+              />
+              No abnormal signals detected — all systems nominal.
             </div>
-          ))}
+          ) : (
+            insights.map((ins: any) => {
+              const isHigh = ins.severity === 'HIGH';
+              const color = isHigh ? TONE_HEX.rose : TONE_HEX.amber;
+              return (
+                <div
+                  key={`${ins.title}-${ins.metric}`}
+                  className="flex items-start gap-2.5 rounded-xl px-3 py-2.5"
+                  style={{
+                    borderLeft: `3px solid ${color}`,
+                    background: `${color}07`,
+                    border: `1px solid ${color}18`,
+                    borderLeftColor: color,
+                    borderLeftWidth: '3px',
+                  }}
+                >
+                  {isHigh
+                    ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
+                    : <FileWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                  <div>
+                    <p className="text-[12.5px] font-semibold text-white">{ins.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{ins.detail}</p>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </Panel>
     </div>
