@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  Hotel, Menu, MoonStar, Clock, FileText, LogOut, ChevronDown,
+  Hotel, Menu, MoonStar, Clock, FileText, LogOut, ChevronDown, Activity,
   ShieldCheck, BedDouble, Scale, Wallet, Banknote,
   X, ChevronRight, Radio, Zap, Utensils, PanelLeftClose, PanelLeftOpen,
   Search, Bell, Settings, User, ChevronLeft
@@ -30,11 +30,25 @@ const NIGHT_AUDIT_NAV = [
     description: 'Main night audit dashboard',
   },
   {
+    name: 'Attention Queue',
+    href: '/night-audit/attention',
+    icon: ShieldCheck,
+    group: 'Workspace',
+    description: 'Resolve blockers and warnings',
+  },
+  {
     name: 'Audit History',
     href: '/night-audit/history',
     icon: Clock,
     group: 'Workspace',
     description: 'View past audit records',
+  },
+  {
+    name: 'Activity Intelligence',
+    href: '/night-audit/activity',
+    icon: Activity,
+    group: 'Workspace',
+    description: 'Review operational activity and evidence',
   },
   {
     name: 'Revenue Reconciliation',

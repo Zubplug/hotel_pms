@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useProperty } from '@/components/PropertyProvider';
 import { NightAuditData } from '@/types/night-audit';
 import {
@@ -10,12 +11,8 @@ import {
 import { format } from 'date-fns';
 
 import { StatusBanner } from '@/components/night-audit/dashboard/status-banner';
-import { AttentionQueue } from '@/components/night-audit/dashboard/attention-queue';
 import { AuditReadiness } from '@/components/night-audit/dashboard/audit-readiness';
 import { OccupancyChart } from '@/components/night-audit/dashboard/occupancy-chart';
-import { GuestAmenityControl } from '@/components/night-audit/dashboard/guest-amenity-control';
-import { CloseControl } from '@/components/night-audit/dashboard/close-control';
-import { ActivityFeed } from '@/components/night-audit/dashboard/activity-feed';
 import { MetricCards } from '@/components/night-audit/dashboard/metric-cards';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
@@ -420,21 +417,26 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
             {/* Main column: attention queue, financial summary, and close control */}
             <div className="min-w-0 space-y-4">
-              <div className="min-h-[320px]">
-                <AttentionQueue
-                  data={data}
-                  onResolveItem={managerMode ? undefined : handleQueueResolve}
-                />
-              </div>
+              <Link
+                href="/night-audit/attention"
+                className="group flex items-center justify-between rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] px-5 py-4 transition-colors hover:border-rose-300/40 hover:bg-rose-400/[0.09]"
+              >
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-300/75">Attention Queue</p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {data.summary.blockers > 0 ? `${data.summary.blockers} blocker${data.summary.blockers === 1 ? '' : 's'} require resolution` : 'No blocking items'}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{data.summary.warnings} warning{data.summary.warnings === 1 ? '' : 's'} · Open the full operational queue</p>
+                </div>
+                <span className="rounded-xl border border-rose-300/25 px-3 py-2 text-xs font-bold text-rose-200 transition-transform group-hover:translate-x-0.5">Review queue →</span>
+              </Link>
               <MetricCards data={data} accountingDepartments={accountingDepartments} />
-              <CloseControl data={data} />
             </div>
 
             {/* Right command rail: readiness and operational context */}
             <div className="flex flex-col gap-4">
               <AuditReadiness data={data} />
               <OccupancyChart rooms={data.analytics.rooms} />
-              {data.financial.guestAmenity && <GuestAmenityControl data={data} />}
             </div>
           </div>
         ) : (
@@ -443,17 +445,12 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
             <div className="min-w-0 space-y-4">
               {flashData && <ManagersFlash flashData={flashData} data={data} />}
               <MetricCards data={data} accountingDepartments={accountingDepartments} />
-              <CloseControl data={data} />
             </div>
             <div className="flex flex-col gap-4">
               <OccupancyChart rooms={data.analytics.rooms} />
-              {data.financial.guestAmenity && <GuestAmenityControl data={data} />}
             </div>
           </div>
         )}
-
-        {/* ── 3. Activity Timeline (compact drawer) ────────────────────────── */}
-        <ActivityFeed data={data} />
 
         {/* ── Freshness footer ─────────────────────────────────────────────── */}
         <div
