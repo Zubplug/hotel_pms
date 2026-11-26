@@ -79,6 +79,8 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
 
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const blockers = data.summary?.blockers || 0;
+  const auditIsRunning = data.auditState === 'IN_PROGRESS' || data.auditState === 'POSTING';
+  const recoveryAvailable = Boolean(data.auditRecoveryAvailable);
   const systemOrderIds = new Set((data.system.openPosOrders || []).map((order: any) => order.id));
   const systemSessionIds = new Set((data.system.openPosSessions || []).map((session: any) => session.id));
   const additionalFnbOpenOrders = (data.fnb?.exceptions?.openOrders || []).filter((order: any) => !systemOrderIds.has(order.id));
@@ -258,14 +260,14 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                 </table>
                 {!proposedCharges.length && <p className="p-8 text-center text-sm text-slate-500">No new room charges are proposed. The audit will still complete its other close controls.</p>}
               </div>
-              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button onClick={() => setConfirmExecution(false)} disabled={executing} className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Back to review</button><button onClick={onExecute} disabled={executing} className="rounded-xl bg-emerald-500 px-6 py-3 text-sm font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-60">{executing ? 'Posting and closing…' : 'Confirm and Execute Night Audit'}</button></div>
+              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button onClick={() => setConfirmExecution(false)} disabled={executing} className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Back to review</button><button onClick={onExecute} disabled={executing || (auditIsRunning && !recoveryAvailable)} className="rounded-xl bg-emerald-500 px-6 py-3 text-sm font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-60">{executing ? 'Posting and closing…' : recoveryAvailable ? 'Recover and Retry Audit' : 'Confirm and Execute Night Audit'}</button></div>
               <p className="mt-3 text-center text-[11px] text-slate-600">By confirming, you approve the listed gross charges, discounts, and net folio postings.</p>
             </div>
           ) : (
             <div className="mt-8 w-full max-w-sm">
               <button
                 onClick={() => setConfirmExecution(true)}
-                disabled={executing}
+                disabled={executing || (auditIsRunning && !recoveryAvailable)}
                 className="relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-8 py-4 text-base font-bold text-white transition-all hover:opacity-90 disabled:opacity-60"
                 style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #6366f1 100%)', boxShadow: '0 0 32px rgba(99,102,241,0.35)' }}
               >
@@ -273,7 +275,11 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                 <Zap className="h-5 w-5" />
                 Review Charges & Continue
               </button>
-              <p className="mt-3 text-[11px] text-slate-600">This action is logged against your auditor session and cannot be undone.</p>
+              <p className="mt-3 text-center text-[11px] text-slate-600">
+                {auditIsRunning && !recoveryAvailable
+                  ? 'This audit is still running. You can monitor it here; retry becomes available automatically if the run becomes stale.'
+                  : 'This action is logged against your auditor session and cannot be undone.'}
+              </p>
             </div>
           )}
         </div>

@@ -129,6 +129,7 @@ export interface NightAuditData {
   auditState: AuditState;
   canStartAudit: boolean;
   canResumeAudit: boolean;
+  auditRecoveryAvailable?: boolean;
   auditStartBlockedReason?: string | null;
   auditPhase: string;
   auditInProgress: boolean;

@@ -196,11 +196,14 @@ export function StatusBanner({
   }
 
   const ctaLabel =
-    isAuditInProgress ? 'Resume Audit' :
+    isAuditInProgress ? (data.auditRecoveryAvailable ? 'Recover & Retry' : 'View Audit Progress') :
     ['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS'].includes(data.auditState) ? 'View Report' :
     data.auditState === 'OVERDUE' ? 'Run Audit Now' :
     'Begin Audit';
-  const startDisabled = !(data.canStartAudit || data.canResumeAudit) || refreshing;
+  // Refreshing the status must not hide the recovery entry point. A live audit
+  // is safe to inspect, while the execute endpoint still prevents duplicate
+  // posting. Only the absence of a valid start/resume capability disables it.
+  const startDisabled = !(data.canStartAudit || data.canResumeAudit);
   const t = TONE[tone];
 
   return (

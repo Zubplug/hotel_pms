@@ -10,7 +10,6 @@ import {
 import { format } from 'date-fns';
 
 import { StatusBanner } from '@/components/night-audit/dashboard/status-banner';
-import { KpiStrip } from '@/components/night-audit/dashboard/kpi-strip';
 import { AttentionQueue } from '@/components/night-audit/dashboard/attention-queue';
 import { AuditReadiness } from '@/components/night-audit/dashboard/audit-readiness';
 import { OccupancyChart } from '@/components/night-audit/dashboard/occupancy-chart';
@@ -406,40 +405,44 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           managerMode={managerMode}
         />
 
-        {/* ── 2. Vitals Command Row (7 KPI tiles) ──────────────────────────── */}
-        <KpiStrip data={data} />
-
-        {/* ── 3. Work area ─────────────────────────────────────────────────── */}
+        {/* ── 2. Work area ─────────────────────────────────────────────────── */}
         {!isCompleted ? (
-          <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
-            {/* Main column: Attention queue + Close control */}
-            <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+            {/* Main column: attention queue, financial summary, and close control */}
+            <div className="min-w-0 space-y-4">
               <div className="min-h-[320px]">
                 <AttentionQueue
                   data={data}
                   onResolveItem={managerMode ? undefined : handleQueueResolve}
                 />
               </div>
+              <MetricCards data={data} accountingDepartments={accountingDepartments} />
               <CloseControl data={data} />
             </div>
 
-            {/* Right command rail */}
+            {/* Right command rail: readiness and operational context */}
             <div className="flex flex-col gap-4">
               <AuditReadiness data={data} />
               <OccupancyChart rooms={data.analytics.rooms} />
               {data.financial.guestAmenity && <GuestAmenityControl data={data} />}
-              <MetricCards data={data} accountingDepartments={accountingDepartments} />
             </div>
           </div>
         ) : (
           /* ── Completed state ─────────────────────────────────────────────── */
-          <div className="space-y-4">
-            {flashData && <ManagersFlash flashData={flashData} data={data} />}
-            <CloseControl data={data} />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+            <div className="min-w-0 space-y-4">
+              {flashData && <ManagersFlash flashData={flashData} data={data} />}
+              <MetricCards data={data} accountingDepartments={accountingDepartments} />
+              <CloseControl data={data} />
+            </div>
+            <div className="flex flex-col gap-4">
+              <OccupancyChart rooms={data.analytics.rooms} />
+              {data.financial.guestAmenity && <GuestAmenityControl data={data} />}
+            </div>
           </div>
         )}
 
-        {/* ── 4. Activity Timeline (compact drawer) ────────────────────────── */}
+        {/* ── 3. Activity Timeline (compact drawer) ────────────────────────── */}
         <ActivityFeed data={data} />
 
         {/* ── Freshness footer ─────────────────────────────────────────────── */}
