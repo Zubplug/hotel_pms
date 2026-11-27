@@ -15,7 +15,7 @@
  *   6. The order reaches the POS only after the online payment is verified.
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { Prisma } from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
@@ -25,6 +25,21 @@ import { hasPublicCommerceAccess } from '@/lib/commerce/public-access';
 import { getPropertyPaymentAccount } from '@/lib/payment-providers/property-account';
 
 type Params = { params: Promise<{ slug: string }> };
+
+// Public storefronts are hosted on separate hotel domains. Keep the
+// preflight explicit because checkout sends the idempotency key as a custom
+// header before placing an order.
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Idempotency-Key',
+      'Access-Control-Max-Age': '600',
+    },
+  });
+}
 
 const orderItemSchema = z.object({
   productId: z.string().uuid(),
