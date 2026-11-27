@@ -135,18 +135,14 @@ export function CommerceSetupClient() {
       {/* Payment */}
       {activeTab === 'payment' && (
         <div className="setup-section">
-          <Field label="Preferred Gateway">
-            <select className="setup-input" value={merged.preferredGateway ?? 'PAYSTACK'} onChange={(e) => patch('preferredGateway', e.target.value)}>
-              <option value="PAYSTACK">Paystack</option>
-              <option value="FLUTTERWAVE">Flutterwave</option>
-            </select>
-          </Field>
-          <Field label="Paystack Secret Key" hint={merged.hasPaystackKey ? '✅ Key saved — enter a new value to replace it' : 'Enter your Paystack secret key (sk_live_…)'}>
-            <input className="setup-input" type="password" placeholder={merged.hasPaystackKey ? '••••••••••••' : 'sk_live_…'} onChange={(e) => patch('paystackSecretKey', e.target.value)} autoComplete="off" />
-          </Field>
-          <Field label="Flutterwave Secret Key" hint={merged.hasFlutterwaveKey ? '✅ Key saved — enter a new value to replace it' : 'Enter your Flutterwave secret key (FLWSECK_…)'}>
-            <input className="setup-input" type="password" placeholder={merged.hasFlutterwaveKey ? '••••••••••••' : 'FLWSECK_…'} onChange={(e) => patch('flutterwaveSecretKey', e.target.value)} autoComplete="off" />
-          </Field>
+          <div style={{ padding: 16, borderRadius: 10, background: '#f5f3ff', border: '1px solid #ddd6fe' }}>
+            <strong style={{ display: 'block', color: '#312e81', marginBottom: 6 }}>Property payment account</strong>
+            <span style={{ display: 'block', color: '#4b5563', fontSize: 13, lineHeight: 1.5 }}>
+              {merged.paymentAccountConfigured
+                ? `Online payments use the property account (${merged.paymentProvider}). This is shared with reservations and corporate payments.`
+                : 'No active property payment account is configured yet. Configure it in Property Settings before publishing online payments.'}
+            </span>
+          </div>
           <Field label="Minimum Order Amount (₦)">
             <input className="setup-input" type="number" min={0} value={merged.minimumOrderAmount ?? 0} onChange={(e) => patch('minimumOrderAmount', parseFloat(e.target.value))} />
           </Field>

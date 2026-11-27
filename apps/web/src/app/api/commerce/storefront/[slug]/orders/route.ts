@@ -11,9 +11,8 @@
  *   2. Resolve/create CommerceCustomer by phone number.
  *   3. Build order with price snapshot from current product prices.
  *   4. Create CommerceOrder (status: PENDING_PAYMENT) + CommercePayment.
- *   5. For PAY_ON_DELIVERY/PICKUP: immediately move to AWAITING_RESTAURANT
- *      and enqueue CommerceSyncEvent for POS.
- *   6. For ONLINE: return Paystack/Flutterwave payment initiation URL.
+ *   5. Create a payment-pending order with a finite payment window.
+ *   6. The order reaches the POS only after the online payment is verified.
  */
 
 import { NextRequest } from 'next/server';
@@ -22,9 +21,8 @@ import { Prisma } from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { z } from 'zod';
 import { generateOrderRef, generateTrackingToken } from '@/lib/commerce/order-utils';
-import { enqueueCommerceSyncEvent } from '@/lib/commerce/sync';
-import { sendOrderNotification } from '@/lib/commerce/notifications';
 import { hasPublicCommerceAccess } from '@/lib/commerce/public-access';
+import { getPropertyPaymentAccount } from '@/lib/payment-providers/property-account';
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -63,7 +61,7 @@ const placeOrderSchema = z.object({
     .optional(),
   deliveryNotes: z.string().max(500).optional(),
   items: z.array(orderItemSchema).min(1).max(50),
-  paymentMethod: z.enum(['ONLINE', 'PAY_ON_DELIVERY', 'PAY_ON_PICKUP']),
+  paymentMethod: z.literal('ONLINE'),
   promotionCode: z.string().optional(),
   specialInstructions: z.string().max(1000).optional(),
   groupOrderSessionId: z.string().uuid().optional(),
@@ -86,7 +84,6 @@ export async function POST(req: NextRequest, { params }: Params) {
       select: {
         id: true,
         organizationId: true,
-        targetOutletId: true,
         propertyId: true,
         status: true,
         currency: true,
@@ -97,13 +94,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         freeDeliveryAbove: true,
         minimumOrderAmount: true,
         allowOnlinePayment: true,
-        allowPayOnDelivery: true,
-        allowPayOnPickup: true,
-        preferredGateway: true,
-        paystackPublicKey: true,
-        flutterwavePublicKey: true,
-        notifySmsEnabled: true,
-        notifyEmailEnabled: true,
       },
     });
 
@@ -135,18 +125,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (data.orderType === 'PICKUP' && !store.pickupEnabled) {
       return errorResponse('PICKUP_UNAVAILABLE', 'Pickup is not available for this store.', 422);
     }
-    if (data.paymentMethod === 'ONLINE' && !store.allowOnlinePayment) {
+    if (!store.allowOnlinePayment) {
       return errorResponse('PAYMENT_METHOD_UNAVAILABLE', 'Online payment is not available for this store.', 422);
-    }
-    if (data.paymentMethod === 'PAY_ON_DELIVERY' && !store.allowPayOnDelivery) {
-      return errorResponse('PAYMENT_METHOD_UNAVAILABLE', 'Pay on delivery is not available for this store.', 422);
-    }
-    if (data.paymentMethod === 'PAY_ON_PICKUP' && !store.allowPayOnPickup) {
-      return errorResponse('PAYMENT_METHOD_UNAVAILABLE', 'Pay on pickup is not available for this store.', 422);
     }
     if (data.orderType === 'DELIVERY' && !data.deliveryAddress) {
       return errorResponse('MISSING_DELIVERY_ADDRESS', 'A delivery address is required for delivery orders.', 422);
     }
+
+    const paymentAccount = store.propertyId
+      ? await getPropertyPaymentAccount(store.propertyId)
+      : null;
+    if (!paymentAccount) {
+      return errorResponse('GATEWAY_NOT_CONFIGURED', 'Online ordering is not configured for this property.', 503);
+    }
+    const orderCurrency = paymentAccount?.currency || store.currency;
 
     // Resolve products + validate they belong to this store
     const productIds = data.items.map((i) => i.productId);
@@ -266,7 +258,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (subtotal - discountAmount < Number(store.minimumOrderAmount)) {
       return errorResponse(
         'BELOW_MINIMUM',
-        `Minimum order amount is ${store.currency} ${Number(store.minimumOrderAmount).toLocaleString()}.`,
+        `Minimum order amount is ${orderCurrency} ${Number(store.minimumOrderAmount).toLocaleString()}.`,
         422,
       );
     }
@@ -310,11 +302,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
     });
 
-    const isPayLater =
-      data.paymentMethod === 'PAY_ON_DELIVERY' ||
-      data.paymentMethod === 'PAY_ON_PICKUP';
-
     // Create order in a transaction
+    const paymentExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.commerceOrder.create({
         data: {
@@ -323,7 +313,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           orderRef,
           clientIdempotencyKey: idempotencyKey,
           trackingToken,
-          status: isPayLater ? 'AWAITING_RESTAURANT' : 'PENDING_PAYMENT',
+          status: 'PENDING_PAYMENT',
           orderType: data.orderType,
           fulfillmentType: data.fulfillmentType,
           scheduledFor: data.scheduledFor ? new Date(data.scheduledFor) : null,
@@ -334,9 +324,10 @@ export async function POST(req: NextRequest, { params }: Params) {
           discountAmount,
           taxAmount: 0,
           totalAmount,
-          currency: store.currency,
+          currency: orderCurrency,
           paymentMethod: data.paymentMethod,
-          paymentStatus: isPayLater ? 'PENDING' : 'PENDING',
+          paymentStatus: 'PENDING',
+          paymentExpiresAt,
           specialInstructions: data.specialInstructions,
           promotionId: promotionId ?? null,
           groupOrderSessionId: data.groupOrderSessionId ?? null,
@@ -347,9 +338,9 @@ export async function POST(req: NextRequest, { params }: Params) {
           payment: {
             create: {
               storeId: store.id,
-              provider: isPayLater ? data.paymentMethod : store.preferredGateway,
+              provider: paymentAccount.provider,
               amount: totalAmount,
-              currency: store.currency,
+              currency: orderCurrency,
               status: 'PENDING',
             },
           },
@@ -387,31 +378,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         where: { id: customer.id },
         data: {
           orderCount: { increment: 1 },
-          totalSpend: { increment: isPayLater ? totalAmount : 0 },
+          totalSpend: { increment: 0 },
           deliveryAddress: data.deliveryAddress ?? undefined,
         },
       });
 
       return newOrder;
     });
-
-    // For pay-later orders: enqueue CommerceSyncEvent immediately
-    if (isPayLater && store.targetOutletId) {
-      await enqueueCommerceSyncEvent({
-        order,
-        store,
-        idempotencyKey: idempotencyKey ?? `order-${order.id}`,
-      });
-
-      // Notify customer
-      await sendOrderNotification({
-        orderId: order.id,
-        storeId: store.id,
-        event: 'ORDER_PLACED',
-        customer: { name: customer.name, phone: customer.phone, email: customer.email ?? undefined },
-        store: { notifySmsEnabled: store.notifySmsEnabled, notifyEmailEnabled: store.notifyEmailEnabled },
-      });
-    }
 
     const responsePayload = {
       orderRef: order.orderRef,
@@ -420,9 +393,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       totalAmount: order.totalAmount,
       currency: order.currency,
       paymentMethod: order.paymentMethod,
+      paymentExpiresAt: order.paymentExpiresAt?.toISOString() ?? null,
       // For online payments, the payment initiation URL is fetched separately
       // via POST /payment/initiate after this response
-      nextStep: isPayLater ? 'ORDER_CONFIRMED' : 'INITIATE_PAYMENT',
+      nextStep: 'INITIATE_PAYMENT',
     };
 
     return successResponse(responsePayload, 201);

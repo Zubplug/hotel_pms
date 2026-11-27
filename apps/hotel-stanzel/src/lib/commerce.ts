@@ -96,6 +96,7 @@ export interface CommercePromotionSummary {
 export interface PlaceOrderRequest {
   customer: { name: string; phone: string; email?: string; consentToWhatsapp?: boolean };
   orderType: 'PICKUP' | 'DELIVERY';
+  paymentMethod: 'ONLINE';
   fulfillmentType?: 'NOW' | 'SCHEDULED';
   deliveryAddress?: { street: string; city: string; state?: string; notes?: string };
   deliveryNotes?: string;
@@ -112,6 +113,7 @@ export interface PlaceOrderResponse {
   totalAmount: number;
   currency: string;
   paymentMethod: string;
+  paymentExpiresAt: string | null;
   nextStep: string;
 }
 

@@ -80,6 +80,7 @@ export function CheckoutClient() {
       const order = await placeOrder({
         customer: { name: form.name, phone: form.phone, email: form.email || undefined },
         orderType: effectiveOrderType as 'PICKUP' | 'DELIVERY',
+        paymentMethod: 'ONLINE',
         deliveryAddress: effectiveOrderType === 'DELIVERY' ? { street: form.deliveryAddress, city: 'Abuja', notes: form.serviceArea || undefined } : undefined,
         deliveryNotes: effectiveOrderType === 'DELIVERY' ? form.notes || undefined : undefined,
         specialInstructions: form.notes || undefined,

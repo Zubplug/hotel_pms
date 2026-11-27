@@ -10091,7 +10091,8 @@ model CommerceStore {
   allowPayOnDelivery Boolean @default(true)
   allowPayOnPickup   Boolean @default(true)
 
-  /// Per-store gateway credentials (secrets encrypted at rest)
+  /// Legacy fields retained for backward-compatible reads/migrations only.
+  /// New payment flows use the property's BookingPaymentAccount instead.
   paystackPublicKey    String?
   paystackSecretKey    String?
   flutterwavePublicKey String?
@@ -10338,6 +10339,9 @@ model CommerceOrder {
   paymentMethod String
   /// PENDING | PAID | REFUNDED | FAILED
   paymentStatus String @default("PENDING")
+  /// Deadline for completing an online payment. Null for pay-later orders and
+  /// legacy orders created before payment expiry was introduced.
+  paymentExpiresAt DateTime? @db.Timestamptz
 
   specialInstructions String?
 
@@ -10383,6 +10387,7 @@ model CommerceOrder {
   @@index([orderRef])
   @@index([storeId, createdAt])
   @@index([storeId, posSyncStatus])
+  @@index([status, paymentStatus, paymentExpiresAt])
 }
 
 model CommerceOrderItem {
@@ -10425,7 +10430,7 @@ model CommercePayment {
   amount            Decimal @db.Decimal(18, 4)
   currency          String
 
-  /// PENDING | VERIFIED | FAILED | REFUNDED
+  /// PENDING | VERIFIED | EXPIRED | REFUND_PENDING | REFUND_FAILED | REFUNDED
   status     String    @default("PENDING")
   verifiedAt DateTime? @db.Timestamptz
   refundedAt DateTime? @db.Timestamptz

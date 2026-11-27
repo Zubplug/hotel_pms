@@ -9,7 +9,7 @@ import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
-import { encryptPaymentCredential } from '@/lib/payment-providers/credentials';
+import { getPropertyPaymentAccount } from '@/lib/payment-providers/property-account';
 import { z } from 'zod';
 
 type Params = { params: Promise<{ storeId: string }> };
@@ -25,9 +25,6 @@ const patchSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   description: z.string().max(500).nullish(),
   status: z.enum(['DRAFT', 'ACTIVE', 'SUSPENDED', 'CLOSED']).optional(),
-  preferredGateway: z.enum(['PAYSTACK', 'FLUTTERWAVE']).optional(),
-  paystackSecretKey: z.string().optional(),
-  flutterwaveSecretKey: z.string().optional(),
   deliveryEnabled: z.boolean().optional(),
   pickupEnabled: z.boolean().optional(),
   minimumOrderAmount: z.number().min(0).optional(),
@@ -66,12 +63,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     if (!store) return errorResponse('NOT_FOUND', 'Store not found', 404);
 
-    // Strip encrypted keys from response
+    const paymentAccount = store.propertyId ? await getPropertyPaymentAccount(store.propertyId) : null;
+    // Strip legacy encrypted keys from response. New payments use the
+    // property's shared BookingPaymentAccount instead.
     const { paystackSecretKey, flutterwaveSecretKey, ...safeStore } = store as typeof store & { paystackSecretKey: string | null; flutterwaveSecretKey: string | null };
     return successResponse({
       ...safeStore,
-      hasPaystackKey: !!paystackSecretKey,
-      hasFlutterwaveKey: !!flutterwaveSecretKey,
+      hasPaystackKey: paymentAccount?.provider === 'PAYSTACK',
+      hasFlutterwaveKey: paymentAccount?.provider === 'FLUTTERWAVE',
+      paymentAccountConfigured: Boolean(paymentAccount),
+      paymentProvider: paymentAccount?.provider ?? null,
     });
   } catch (err) {
     console.error('[commerce/manage/stores/[storeId] GET]', err);
@@ -97,30 +98,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
     const data = parsed.data;
 
+    // Payment credentials are property-scoped; the store cannot create a
+    // second gateway source of truth.
     const updateData: Record<string, unknown> = { ...data };
-
-    // Encrypt payment keys if provided
-    if (data.paystackSecretKey) {
-      updateData.paystackSecretKey = encryptPaymentCredential(data.paystackSecretKey);
-    } else {
-      delete updateData.paystackSecretKey;
-    }
-    if (data.flutterwaveSecretKey) {
-      updateData.flutterwaveSecretKey = encryptPaymentCredential(data.flutterwaveSecretKey);
-    } else {
-      delete updateData.flutterwaveSecretKey;
-    }
 
     const updated = await prisma.commerceStore.update({
       where: { id: storeId },
       data: updateData,
     });
 
+    const paymentAccount = updated.propertyId ? await getPropertyPaymentAccount(updated.propertyId) : null;
     const { paystackSecretKey, flutterwaveSecretKey, ...safe } = updated as typeof updated & { paystackSecretKey: string | null; flutterwaveSecretKey: string | null };
     return successResponse({
       ...safe,
-      hasPaystackKey: !!paystackSecretKey,
-      hasFlutterwaveKey: !!flutterwaveSecretKey,
+      hasPaystackKey: paymentAccount?.provider === 'PAYSTACK',
+      hasFlutterwaveKey: paymentAccount?.provider === 'FLUTTERWAVE',
+      paymentAccountConfigured: Boolean(paymentAccount),
+      paymentProvider: paymentAccount?.provider ?? null,
     });
   } catch (err) {
     console.error('[commerce/manage/stores/[storeId] PATCH]', err);

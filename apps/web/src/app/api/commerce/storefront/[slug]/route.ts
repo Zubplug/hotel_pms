@@ -12,6 +12,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { hasPublicCommerceAccess } from '@/lib/commerce/public-access';
+import { getPropertyPaymentAccount } from '@/lib/payment-providers/property-account';
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -47,10 +48,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
         allowOnlinePayment: true,
         allowPayOnDelivery: true,
         allowPayOnPickup: true,
-        preferredGateway: true,
-        // Strip secret keys — never expose these
-        paystackPublicKey: true,
-        flutterwavePublicKey: true,
         announcementBanner: true,
         metaTitle: true,
         metaDescription: true,
@@ -90,7 +87,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
       return errorResponse('STORE_NOT_PUBLISHED', 'This store is not yet open for orders.', 404);
     }
 
-    return successResponse(store);
+    const paymentAccount = store.propertyId ? await getPropertyPaymentAccount(store.propertyId) : null;
+    return successResponse({
+      ...store,
+      currency: paymentAccount?.currency || store.currency,
+      allowOnlinePayment: store.allowOnlinePayment && Boolean(paymentAccount),
+      allowPayOnDelivery: false,
+      allowPayOnPickup: false,
+      paymentProvider: paymentAccount?.provider ?? null,
+    });
   } catch {
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
   }

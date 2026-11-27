@@ -11,7 +11,7 @@ import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
-import { encryptPaymentCredential } from '@/lib/payment-providers/credentials';
+import { getPropertyPaymentAccount } from '@/lib/payment-providers/property-account';
 import { z } from 'zod';
 
 const createStoreSchema = z.object({
@@ -21,9 +21,6 @@ const createStoreSchema = z.object({
   targetOutletId: z.string().optional(),
   description: z.string().max(500).optional(),
   currency: z.string().default('NGN'),
-  preferredGateway: z.enum(['PAYSTACK', 'FLUTTERWAVE']).default('PAYSTACK'),
-  paystackSecretKey: z.string().optional(),
-  flutterwaveSecretKey: z.string().optional(),
   deliveryEnabled: z.boolean().default(false),
   pickupEnabled: z.boolean().default(true),
   minimumOrderAmount: z.number().min(0).default(0),
@@ -44,7 +41,6 @@ export async function GET(req: NextRequest) {
         name: true,
         slug: true,
         status: true,
-        preferredGateway: true,
         deliveryEnabled: true,
         pickupEnabled: true,
         currency: true,
@@ -60,7 +56,16 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'asc' },
     });
 
-    return successResponse(stores);
+    const storesWithPayment = await Promise.all(stores.map(async (store) => {
+      const account = store.property?.id ? await getPropertyPaymentAccount(store.property.id) : null;
+      return {
+        ...store,
+        paymentAccountConfigured: Boolean(account),
+        paymentProvider: account?.provider ?? null,
+      };
+    }));
+
+    return successResponse(storesWithPayment);
   } catch (err) {
     console.error('[commerce/manage/stores GET]', err);
     if (err instanceof Error && err.message.includes('entitlement')) {
@@ -95,14 +100,6 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.commerceStore.findUnique({ where: { slug: data.slug } });
     if (existing) return errorResponse('CONFLICT', 'A store with this slug already exists', 409);
 
-    // Encrypt payment credentials before storing
-    const paystackKey = data.paystackSecretKey
-      ? encryptPaymentCredential(data.paystackSecretKey)
-      : null;
-    const flutterwaveKey = data.flutterwaveSecretKey
-      ? encryptPaymentCredential(data.flutterwaveSecretKey)
-      : null;
-
     const store = await prisma.commerceStore.create({
       data: {
         organizationId: ctx.organizationId,
@@ -112,9 +109,6 @@ export async function POST(req: NextRequest) {
         slug: data.slug,
         description: data.description,
         currency: data.currency,
-        preferredGateway: data.preferredGateway,
-        paystackSecretKey: paystackKey,
-        flutterwaveSecretKey: flutterwaveKey,
         deliveryEnabled: data.deliveryEnabled,
         pickupEnabled: data.pickupEnabled,
         minimumOrderAmount: data.minimumOrderAmount,
@@ -122,7 +116,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return successResponse(store, 201);
+    const paymentAccount = await getPropertyPaymentAccount(property.id);
+    return successResponse({
+      ...store,
+      paymentAccountConfigured: Boolean(paymentAccount),
+      paymentProvider: paymentAccount?.provider ?? null,
+    }, 201);
   } catch (err) {
     console.error('[commerce/manage/stores POST]', err);
     if (err instanceof Error && err.message.includes('entitlement')) {

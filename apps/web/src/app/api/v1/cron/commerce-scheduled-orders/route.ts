@@ -11,6 +11,7 @@
  *             → FAILED  (after too many failed attempts)
  *
  * This cron:
+ *  0. Expires abandoned online checkouts whose payment window has elapsed.
  *  1. Re-queues stale DELIVERED events so a lost desktop acknowledgement can
  *     be recovered safely by the idempotent local bridge.
  *  2. Marks events FAILED after maxAttempts.
@@ -36,6 +37,43 @@ export async function GET(req: NextRequest) {
 
   const now = new Date();
   const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+
+  const expiredCandidates = await prisma.commerceOrder.findMany({
+    where: {
+      status: 'PENDING_PAYMENT',
+      paymentStatus: 'PENDING',
+      paymentExpiresAt: { lte: now },
+    },
+    select: { id: true },
+    orderBy: { paymentExpiresAt: 'asc' },
+    take: 100,
+  });
+
+  let expiredOrders = 0;
+  for (const candidate of expiredCandidates) {
+    const expired = await prisma.$transaction(async (tx) => {
+      const result = await tx.commerceOrder.updateMany({
+        where: {
+          id: candidate.id,
+          status: 'PENDING_PAYMENT',
+          paymentStatus: 'PENDING',
+          paymentExpiresAt: { lte: now },
+        },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'EXPIRED',
+          posSyncStatus: 'FAILED',
+        },
+      });
+      if (result.count !== 1) return false;
+      await tx.commercePayment.updateMany({
+        where: { orderId: candidate.id, status: 'PENDING' },
+        data: { status: 'EXPIRED' },
+      });
+      return true;
+    });
+    if (expired) expiredOrders += 1;
+  }
 
   const redelivered = await prisma.commerceSyncEvent.updateMany({
     where: {
@@ -68,6 +106,7 @@ export async function GET(req: NextRequest) {
   });
 
   return successResponse({
+    expiredOrders,
     markedFailed: failed.count,
     requeuedDelivered: redelivered.count,
     currentlyQueued: queuedCount,

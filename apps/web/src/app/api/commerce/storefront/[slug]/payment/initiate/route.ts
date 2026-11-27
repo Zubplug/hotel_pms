@@ -9,8 +9,8 @@
  *   - FlutterwaveProvider → @/lib/payment-providers/flutterwave.ts
  *   - decryptPaymentCredential → @/lib/payment-providers/credentials.ts
  *
- * Per-store gateway keys are stored encrypted in CommerceStore.
- * They are decrypted here at request time — never sent to the client.
+ * Gateway credentials come from the property's BookingPaymentAccount, which
+ * is shared by reservations, corporate payments, and Commerce.
  */
 
 import { NextRequest } from 'next/server';
@@ -19,7 +19,7 @@ import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { CommerceFlutterwaveProvider } from '@/lib/payment-providers/commerce-flutterwave';
-import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
+import { getPropertyPaymentAccount, resolvePropertySecret } from '@/lib/payment-providers/property-account';
 import { z } from 'zod';
 import { hasPublicCommerceAccess } from '@/lib/commerce/public-access';
 
@@ -44,9 +44,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         organizationId: true,
         propertyId: true,
         status: true,
-        preferredGateway: true,
-        paystackSecretKey: true,
-        flutterwaveSecretKey: true,
         currency: true,
         name: true,
       },
@@ -61,7 +58,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const order = await prisma.commerceOrder.findFirst({
       where: { storeId: store.id, orderRef, trackingToken },
-      include: {
+      select: {
+        id: true,
+        orderRef: true,
+        trackingToken: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        paymentExpiresAt: true,
         customer: { select: { name: true, phone: true, email: true } },
         payment: { select: { id: true, status: true } },
       },
@@ -71,11 +75,33 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (order.status !== 'PENDING_PAYMENT') {
       return errorResponse('ALREADY_PROCESSED', 'This order has already been processed.', 409);
     }
+    if (order.paymentExpiresAt && order.paymentExpiresAt <= new Date()) {
+      await prisma.$transaction(async (tx) => {
+        const expired = await tx.commerceOrder.updateMany({
+          where: {
+            id: order.id,
+            status: 'PENDING_PAYMENT',
+            paymentStatus: 'PENDING',
+            paymentExpiresAt: { lte: new Date() },
+          },
+          data: { status: 'CANCELLED', paymentStatus: 'EXPIRED', posSyncStatus: 'FAILED' },
+        });
+        if (expired.count === 1) {
+          await tx.commercePayment.updateMany({
+            where: { orderId: order.id, status: 'PENDING' },
+            data: { status: 'EXPIRED' },
+          });
+        }
+      });
+      return errorResponse('PAYMENT_WINDOW_EXPIRED', 'This payment window has expired. Please place a new order.', 410);
+    }
     if (!order.payment) return errorResponse('NO_PAYMENT', 'No payment record found.', 500);
 
-    const gateway = store.preferredGateway;
+    const account = store.propertyId ? await getPropertyPaymentAccount(store.propertyId) : null;
+    if (!account) return errorResponse('GATEWAY_NOT_CONFIGURED', 'Configure the property payment account before accepting online orders.', 503);
+    const gateway = account.provider;
     const amount = Number(order.totalAmount);
-    const currency = store.currency;
+    const currency = account.currency || store.currency;
     const email = order.customer?.email ?? `${order.customer?.phone ?? 'guest'}@commerce.lodgecore.app`;
 
     // Unique reference — same pattern as existing payment init route
@@ -85,15 +111,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     let resolvedRef: string = providerRef;
 
     if (gateway === 'PAYSTACK') {
-      if (!store.paystackSecretKey) {
-        return errorResponse('GATEWAY_NOT_CONFIGURED', 'Paystack is not configured for this store.', 503);
-      }
-      // Decrypt stored key (may be plain-text in dev, encrypted in prod)
       let secretKey: string;
       try {
-        secretKey = store.paystackSecretKey.startsWith('v1.')
-          ? decryptPaymentCredential(store.paystackSecretKey)
-          : store.paystackSecretKey;
+        secretKey = resolvePropertySecret(account.secret, account.secretRef, 'PAYSTACK_SECRET_KEY');
       } catch {
         return errorResponse('GATEWAY_NOT_CONFIGURED', 'Gateway credentials are invalid.', 503);
       }
@@ -113,14 +133,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       resolvedRef = initResult.providerRef;
 
     } else if (gateway === 'FLUTTERWAVE') {
-      if (!store.flutterwaveSecretKey) {
-        return errorResponse('GATEWAY_NOT_CONFIGURED', 'Flutterwave is not configured for this store.', 503);
-      }
       let secretKey: string;
       try {
-        secretKey = store.flutterwaveSecretKey.startsWith('v1.')
-          ? decryptPaymentCredential(store.flutterwaveSecretKey)
-          : store.flutterwaveSecretKey;
+        secretKey = resolvePropertySecret(account.secret, account.secretRef, 'FLW_SECRET_KEY');
       } catch {
         return errorResponse('GATEWAY_NOT_CONFIGURED', 'Gateway credentials are invalid.', 503);
       }
