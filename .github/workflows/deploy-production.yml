@@ -83,6 +83,22 @@ jobs:
           export STANZEL_IMAGE="$ECR_REGISTRY/lodgecore-stanzel:$IMAGE_TAG"
           PREVIOUS_TAG="$(sudo cat deploy/.last-successful-image-tag 2>/dev/null || true)"
 
+          # The deploy host is a long-lived self-hosted runner. Remove only
+          # old release images before pulling the next immutable release. Keep
+          # the current and previous release so rollback remains available;
+          # running containers and volumes are preserved.
+          sudo docker container prune --force
+          for repository in lodgecore-pms lodgecore-website lodgecore-stanzel; do
+            while read -r image_tag; do
+              [[ -z "$image_tag" || "$image_tag" == '<none>' ]] && continue
+              [[ "$image_tag" == "$IMAGE_TAG" || ( -n "$PREVIOUS_TAG" && "$image_tag" == "$PREVIOUS_TAG" ) ]] && continue
+              sudo docker image rm "$ECR_REGISTRY/$repository:$image_tag" || true
+            done < <(sudo docker image ls "$ECR_REGISTRY/$repository" --format '{{.Tag}}')
+          done
+          sudo docker image prune --force
+          sudo docker builder prune --all --force --filter 'until=168h' || true
+          sudo journalctl --vacuum-size=500M || true
+
           compose() {
             sudo env \
               PMS_IMAGE="$PMS_IMAGE" \
