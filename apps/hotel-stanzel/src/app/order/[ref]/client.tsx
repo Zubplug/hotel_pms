@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { trackOrder } from '@/lib/commerce';
 import type { OrderTrackStatus } from '@/lib/commerce';
 
@@ -117,6 +118,17 @@ export function OrderTrackClient({ orderRef }: { orderRef: string }) {
           <h2 className="track-card__title">Items Ordered</h2>
           {order.items.map((item, i) => (
             <div key={i} className="track-item">
+              <div className="track-item__image" aria-hidden={!item.productImageUrl}>
+                {item.productImageUrl ? (
+                  <Image
+                    src={item.productImageUrl}
+                    alt=""
+                    fill
+                    sizes="64px"
+                    style={{ objectFit: 'contain' }}
+                  />
+                ) : <span aria-hidden>🍽</span>}
+              </div>
               <span className="track-item__qty">{item.quantity}×</span>
               <span className="track-item__name">{item.productName}</span>
               <span className="track-item__price">{fmt(item.unitPrice * item.quantity, order.currency)}</span>
@@ -169,8 +181,10 @@ export function OrderTrackClient({ orderRef }: { orderRef: string }) {
 
         /* Items */
         .track-items-card {}
-        .track-item { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+        .track-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
         .track-item:last-of-type { border-bottom: none; }
+        .track-item__image { position: relative; width: 64px; height: 64px; flex: 0 0 64px; display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-lg); background: #f7f4ee; color: var(--color-green); font-size: 1.25rem; }
+        .track-item__image img { width: 100%; height: 100%; }
         .track-item__qty { font-weight: 700; color: var(--color-green); min-width: 24px; font-size: var(--text-sm); }
         .track-item__name { flex: 1; font-size: var(--text-sm); }
         .track-item__price { font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
@@ -181,6 +195,13 @@ export function OrderTrackClient({ orderRef }: { orderRef: string }) {
         .track-summary__row.total { font-size: var(--text-base); font-weight: 800; color: var(--color-green); border-top: 1px solid var(--color-border); padding-top: var(--space-3); margin-top: var(--space-2); }
 
         .track-actions { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+        @media (max-width: 520px) {
+          .track-card { padding: var(--space-5); }
+          .track-item { gap: var(--space-2); }
+          .track-item__image { width: 56px; height: 56px; flex-basis: 56px; }
+          .track-item__qty { min-width: 20px; }
+          .track-item__name { min-width: 0; }
+        }
       `}</style>
     </div>
   );

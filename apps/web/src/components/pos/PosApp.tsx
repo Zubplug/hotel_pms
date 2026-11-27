@@ -92,6 +92,11 @@ function getNotificationMetadata(notification: any): any {
   return {};
 }
 
+function isAutomaticPosRecovery(notification: any): boolean {
+  if (String(notification?.notificationType || '').toUpperCase() !== 'POS_SYNC_RECOVERY_REQUIRED') return false;
+  return String(getNotificationMetadata(notification)?.recoveryState || 'AUTOMATIC_RETRY').toUpperCase() !== 'ACTION_REQUIRED';
+}
+
 function escapePrintHtml(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({
     '&': '&amp;',
@@ -2492,8 +2497,8 @@ export default function PosApp() {
 
       {offlineBookingNotification && (
         <div
-          role="alert"
-          aria-live="assertive"
+          role={isAutomaticPosRecovery(offlineBookingNotification) ? 'status' : 'alert'}
+          aria-live={isAutomaticPosRecovery(offlineBookingNotification) ? 'polite' : 'assertive'}
           className="pointer-events-auto fixed right-5 top-5 z-[260] w-[min(390px,calc(100vw-2rem))] animate-in slide-in-from-right-5 fade-in duration-300"
         >
           <div className="overflow-hidden rounded-2xl border border-indigo-400/30 bg-slate-950 shadow-2xl shadow-black/50 ring-1 ring-white/10">
@@ -2510,16 +2515,18 @@ export default function PosApp() {
               <p className="whitespace-pre-line rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs leading-5 text-slate-300">
                 {offlineBookingNotification.body || 'A new booking or payment update is ready for your review.'}
               </p>
-              <div className="flex items-center gap-2 rounded-xl bg-amber-400/10 px-3 py-2 text-[11px] font-semibold text-amber-300">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
-                {String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED'
-                  ? 'Action required · Open an approved POS shift'
-                  : 'Action required · Please review and acknowledge'}
+              <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold ${isAutomaticPosRecovery(offlineBookingNotification) ? 'bg-sky-400/10 text-sky-300' : 'bg-amber-400/10 text-amber-300'}`}>
+                <span className={`h-2 w-2 rounded-full ${isAutomaticPosRecovery(offlineBookingNotification) ? 'bg-sky-400' : 'bg-amber-400'}`} />
+                {isAutomaticPosRecovery(offlineBookingNotification)
+                  ? 'Automatic retry in progress · No action needed'
+                  : String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED'
+                    ? 'Action required · Review sync recovery'
+                    : 'Action required · Please review and acknowledge'}
               </div>
               <button
                 onClick={() => {
                   void unlockAudio();
-                  if (String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED') {
+                  if (String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED' && !isAutomaticPosRecovery(offlineBookingNotification)) {
                     startPosShiftRecovery();
                   } else {
                     void acknowledgeOfflineBookingNotification();
@@ -2527,8 +2534,8 @@ export default function PosApp() {
                 }}
                 className="w-full rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-400"
               >
-                {String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED'
-                  ? 'Open shift & retry payment'
+                {String(offlineBookingNotification.notificationType).toUpperCase() === 'POS_SYNC_RECOVERY_REQUIRED' && !isAutomaticPosRecovery(offlineBookingNotification)
+                  ? 'Review recovery'
                   : 'Acknowledge'}
               </button>
             </div>

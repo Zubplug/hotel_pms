@@ -202,9 +202,8 @@ function FloatingCart({ currency }: { currency: string }) {
                       <Image
                         src={item.imageUrl}
                         alt=""
-                        width={64}
-                        height={64}
-                        sizes="64px"
+                        fill
+                        sizes="88px"
                         style={{ objectFit: 'contain' }}
                       />
                     ) : (
@@ -1550,7 +1549,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           padding: var(--space-3) 0; border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         .os-cart-item__image {
-          width: 64px; height: 64px; flex: 0 0 64px;
+          position: relative; width: 80px; height: 80px; flex: 0 0 80px;
           display: grid; place-items: center; overflow: hidden;
           border-radius: var(--radius-lg);
           background: rgba(250,248,244,0.96);
@@ -1569,6 +1568,13 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center;
         }
         .os-cart-item__price { font-size: var(--text-sm); font-weight: 700; color: var(--color-gold); white-space: nowrap; }
+        @media (max-width: 600px) {
+          .os-cart-item__image { width: 68px; height: 68px; flex-basis: 68px; }
+          .os-cart-item { align-items: flex-start; flex-wrap: wrap; }
+          .os-cart-item__info { min-width: 0; }
+          .os-cart-item__ctrl { margin-left: 68px; }
+          .os-cart-item__price { margin-left: auto; }
+        }
 
         .os-cart-total {
           display: flex; justify-content: space-between; align-items: center;

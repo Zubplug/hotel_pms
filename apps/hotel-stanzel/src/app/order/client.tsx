@@ -229,7 +229,7 @@ export function CheckoutClient() {
                   <div key={item.id} className="review-item">
                     <div className="review-item__image">
                       {item.imageUrl ? (
-                        <Image src={item.imageUrl} alt="" width={64} height={64} sizes="64px" style={{ objectFit: 'contain' }} />
+                        <Image src={item.imageUrl} alt="" fill sizes="88px" style={{ objectFit: 'contain' }} />
                       ) : <span aria-hidden>🍽</span>}
                     </div>
                     <div className="review-item__info">
@@ -378,7 +378,7 @@ export function CheckoutClient() {
 
         .review-items { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-6); }
         .review-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid rgba(255,255,255,0.09); }
-        .review-item__image { width: 64px; height: 64px; flex: 0 0 64px; display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-lg); background: rgba(250,248,244,0.96); color: #0d2b22; font-size: 1.35rem; }
+        .review-item__image { position: relative; width: 80px; height: 80px; flex: 0 0 80px; display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-lg); background: rgba(250,248,244,0.96); color: #0d2b22; font-size: 1.35rem; }
         .review-item__image img { width: 100%; height: 100%; }
         .review-item__info { flex: 1; }
         .review-item__name { font-weight: 600; font-size: var(--text-sm); }
@@ -411,6 +411,13 @@ export function CheckoutClient() {
         .summary-item__name { flex: 1; font-size: var(--text-sm); color: rgba(250,248,244,0.78); }
         .summary-item__price { font-size: var(--text-sm); font-weight: 600; color: var(--color-gold); white-space: nowrap; }
         .summary-divider { border-top: 1px solid rgba(201,169,110,0.18); margin: var(--space-4) 0; }
+        @media (max-width: 600px) {
+          .review-item { align-items: flex-start; flex-wrap: wrap; }
+          .review-item__image { width: 72px; height: 72px; flex-basis: 72px; }
+          .review-item__info { min-width: 0; }
+          .review-item__controls { margin-left: 72px; }
+          .review-item__price { margin-left: auto; }
+        }
       `}</style>
     </div>
   );

@@ -121,7 +121,13 @@ export interface OrderTrackStatus {
   orderRef: string;
   status: string;
   orderType: string;
-  items: { productName: string; quantity: number; unitPrice: number }[];
+  items: {
+    productName: string;
+    productImageUrl: string | null;
+    quantity: number;
+    unitPrice: number;
+    totalPrice?: number;
+  }[];
   subtotal: number;
   deliveryFee: number;
   discount: number;

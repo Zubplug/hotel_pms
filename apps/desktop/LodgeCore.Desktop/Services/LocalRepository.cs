@@ -831,14 +831,82 @@ public class LocalRepository
                     Id = notificationId,
                     PropertyId = propertyId,
                     NotificationType = "POS_SYNC_RECOVERY_REQUIRED",
-                    Subject = "Payment needs shift recovery",
-                    Body = $"Order {order.OrderNumber} was preserved locally, but its original POS shift is closed. Open an approved shift to retry the original payment. Do not charge the guest again.",
+                    Subject = "Payment recovery in progress",
+                    Body = $"Order {order.OrderNumber} is safely queued and will retry automatically after shift recovery. Do not charge the guest again.",
                     Category = "POS",
-                    Priority = "HIGH",
-                    MetadataJson = JsonSerializer.Serialize(new { shiftType = "POS", recoveryType = "SHIFT_LOCKED", orderId, orderNumber = order.OrderNumber, operationId = syncEvent.OperationId, operatorId = ownerId }),
+                    Priority = "NORMAL",
+                    MetadataJson = JsonSerializer.Serialize(new { shiftType = "POS", recoveryType = "SHIFT_LOCKED", recoveryState = "AUTOMATIC_RETRY", orderId, orderNumber = order.OrderNumber, operationId = syncEvent.OperationId, operatorId = ownerId }),
                     CreatedAt = syncEvent.CreatedAt,
                     Acknowledged = false,
                 });
+            }
+
+            // Keep the alert honest as the outbox moves through recovery. A
+            // locked shift is transient; only a dead-lettered or otherwise
+            // permanently rejected event requires operator action. Remove the
+            // local alert once every related event has reached the cloud.
+            foreach (var notification in notifications
+                .Where(n => string.Equals(n.NotificationType, "POS_SYNC_RECOVERY_REQUIRED", StringComparison.OrdinalIgnoreCase))
+                .ToList())
+            {
+                string? orderId = null;
+                var orderLabel = "the affected order";
+                try
+                {
+                    var notificationMetadata = JsonNode.Parse(notification.MetadataJson)?.AsObject();
+                    orderId = notificationMetadata?["orderId"]?.ToString();
+                    orderLabel = notificationMetadata?["orderNumber"]?.ToString() ?? orderLabel;
+                }
+                catch (Exception) { }
+                if (string.IsNullOrWhiteSpace(orderId)) continue;
+
+                var relatedEvents = await _dbContext.SyncEvents
+                    .Where(e => e.Status != "SYNCED" &&
+                        (e.EntityId == orderId || e.PayloadJson.Contains(orderId)))
+                    .ToListAsync();
+                if (relatedEvents.Count == 0)
+                {
+                    notifications.Remove(notification);
+                    continue;
+                }
+
+                var requiresAction = relatedEvents.Any(e =>
+                {
+                    if (e.Status == "DEAD_LETTER") return true;
+                    var hasError = !string.IsNullOrWhiteSpace(e.ErrorCode) || !string.IsNullOrWhiteSpace(e.ErrorMessage);
+                    if (!hasError) return false; // Pending/processing events are still retrying.
+                    var isTransientRecovery =
+                        string.Equals(e.ErrorCode, "SHIFT_LOCKED", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(e.ErrorCode, "SHIFT_REOPEN_PENDING", StringComparison.OrdinalIgnoreCase) ||
+                        (e.ErrorMessage?.Contains("SHIFT_LOCKED", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (e.ErrorMessage?.Contains("RETRYABLE_SHIFT_REOPEN", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (e.ErrorMessage?.Contains("RETRYABLE_CLOUD_APPROVAL", StringComparison.OrdinalIgnoreCase) ?? false);
+                    return !isTransientRecovery;
+                });
+
+                try
+                {
+                    var notificationMetadata = JsonNode.Parse(notification.MetadataJson)?.AsObject();
+                    if (notificationMetadata != null)
+                    {
+                        notificationMetadata["recoveryState"] = requiresAction ? "ACTION_REQUIRED" : "AUTOMATIC_RETRY";
+                        notification.MetadataJson = notificationMetadata.ToJsonString();
+                    }
+                }
+                catch (Exception) { }
+
+                if (requiresAction)
+                {
+                    notification.Subject = "Payment recovery needs attention";
+                    notification.Body = $"Order {orderLabel} could not be recovered automatically. Review the sync details before taking action. Do not charge the guest again.";
+                    notification.Priority = "HIGH";
+                }
+                else
+                {
+                    notification.Subject = "Payment recovery in progress";
+                    notification.Body = $"Order {orderLabel} is safely queued and will retry automatically after shift recovery. Do not charge the guest again.";
+                    notification.Priority = "NORMAL";
+                }
             }
             metadata.OfflineNotificationsJson = JsonSerializer.Serialize(notifications);
             await _dbContext.SaveChangesAsync();
