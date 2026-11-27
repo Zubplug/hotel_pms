@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Stanzel Grand Resort — Outdoor & Poolside Food & Beverage Ordering
+ * Stanzel Grand Resort — Food & Beverage Ordering
  *
  * Design language: "Golden Hour Luxury"
  * ─ Dark emerald canvas (#0d2b22) with radial warm-gold ambient glow
@@ -93,7 +93,7 @@ function ProductSheet({
           <div className="os-sheet__img-gradient" />
           <button className="os-sheet__close" onClick={onClose} aria-label="Close">✕</button>
           <div className="os-sheet__img-label">
-            <span className="os-sheet__badge">Outdoor Service</span>
+            <span className="os-sheet__badge">Food &amp; Beverage</span>
           </div>
         </div>
 
@@ -335,7 +335,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
       <section className="os-promo-hero" aria-labelledby="outdoor-order-title">
         <div className="os-promo-hero__copy">
           <div className="os-promo-hero__topline">
-            <span className="os-promo-hero__eyebrow">Stanzel Outdoor Service</span>
+            <span className="os-promo-hero__eyebrow">Stanzel Food &amp; Beverage</span>
             <span className={`os-promo-hero__status${store?.status === 'ACTIVE' ? ' is-active' : ''}`}>
               <span /> {store?.status === 'ACTIVE' ? 'Taking orders' : 'Temporarily closed'}
             </span>
@@ -347,7 +347,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           <p className="os-promo-hero__description">
             {heroPromo
               ? `Enjoy a little more from Stanzel. Use code ${heroPromo.code} at checkout${heroPromo.minimumOrderAmount ? ` on orders from ${fmt(heroPromo.minimumOrderAmount, currency)}` : ''}.`
-              : heroProduct?.description ?? 'Fresh food, chilled drinks and thoughtful service delivered to your outdoor table.'}
+              : heroProduct?.description ?? 'Freshly prepared dishes, chilled drinks and thoughtful service, ready when you are.'}
           </p>
           <div className="os-promo-hero__actions">
             <button
@@ -383,7 +383,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
             <span className="os-promos__spark">✦</span>
             <div>
               <p className="os-promos__eyebrow">Today at Stanzel</p>
-              <h2 className="os-promos__title">Offers made for the open air</h2>
+              <h2 className="os-promos__title">Offers worth savouring</h2>
             </div>
           </div>
           <div className="os-promos__list">
@@ -599,9 +599,9 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           <div className="os-how__steps">
             {[
               { n: '01', icon: '🛒', title: 'Browse & Order', desc: 'Choose from our full menu — food, drinks, and bar favourites.' },
-              { n: '02', icon: '📍', title: 'Tell Us Where You Are', desc: 'Enter your cabana number, pool table or location at checkout.' },
+              { n: '02', icon: '📍', title: 'Confirm your destination', desc: 'Enter the delivery address or service details at checkout.' },
               { n: '03', icon: '👨‍🍳', title: 'We Prepare Fresh', desc: 'Our kitchen and bar teams prepare your order.' },
-              { n: '04', icon: '🍽', title: 'Delivered to You', desc: 'A member of staff brings it straight to your outdoor spot.' },
+              { n: '04', icon: '🍽', title: 'Enjoy your order', desc: 'Our team prepares and delivers your order with care.' },
             ].map(step => (
               <div key={step.n} className="os-step">
                 <div className="os-step__circle">

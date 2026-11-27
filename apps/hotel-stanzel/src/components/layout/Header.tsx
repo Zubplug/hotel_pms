@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 const NAV_LINKS = [
   { label: 'Rooms & Suites', href: '/rooms' },
   { label: 'Dining', href: '/dining' },
-  { label: 'Outdoor Service', href: '/outdoor-service' },
+  { label: 'Order Online', href: '/outdoor-service' },
   { label: 'Facilities', href: '/facilities' },
   { label: 'Gallery', href: '/gallery' },
   { label: 'About', href: '/about' },
@@ -95,26 +95,40 @@ export function Header() {
           {/* Desktop nav */}
           <nav aria-label="Main navigation" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-8)' }}
             className="desktop-nav">
-            {NAV_LINKS.map(({ label, href }) => (
-              <Link
-                key={href}
-                href={href}
-                style={{
-                  fontFamily: 'var(--font-sans)',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 500,
-                  letterSpacing: '0.04em',
-                  color: transparent ? 'rgba(250,248,244,0.9)' : 'rgba(250,248,244,0.8)',
-                  transition: 'color var(--duration-sm) var(--ease)',
-                  borderBottom: pathname === href ? '1px solid var(--color-gold)' : '1px solid transparent',
-                  paddingBottom: 2,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-gold)')}
-                onMouseLeave={e => (e.currentTarget.style.color = transparent ? 'rgba(250,248,244,0.9)' : 'rgba(250,248,244,0.8)')}
-              >
-                {label}
-              </Link>
-            ))}
+            {NAV_LINKS.map(({ label, href }) => {
+              const isOrderLink = href === '/outdoor-service';
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                    fontWeight: isOrderLink ? 700 : 500,
+                    letterSpacing: isOrderLink ? '0.08em' : '0.04em',
+                    textTransform: isOrderLink ? 'uppercase' : 'none',
+                    color: isOrderLink ? 'var(--color-green)' : transparent ? 'rgba(250,248,244,0.9)' : 'rgba(250,248,244,0.8)',
+                    background: isOrderLink ? 'var(--color-gold)' : 'transparent',
+                    border: isOrderLink ? '1px solid rgba(250,248,244,0.18)' : '1px solid transparent',
+                    borderRadius: isOrderLink ? 999 : 0,
+                    padding: isOrderLink ? '10px 16px' : '0 0 2px',
+                    boxShadow: isOrderLink ? '0 8px 20px rgba(0,0,0,0.14)' : 'none',
+                    transition: 'color var(--duration-sm) var(--ease), background-color var(--duration-sm) var(--ease), transform var(--duration-sm) var(--ease)',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.color = isOrderLink ? 'var(--color-green)' : 'var(--color-gold)';
+                    if (isOrderLink) e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.color = isOrderLink ? 'var(--color-green)' : transparent ? 'rgba(250,248,244,0.9)' : 'rgba(250,248,244,0.8)';
+                    if (isOrderLink) e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  {isOrderLink && <span aria-hidden style={{ fontSize: 12 }}>✦</span>}
+                  {label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Book CTA + burger */}
@@ -187,24 +201,30 @@ export function Header() {
         <div style={{ marginBottom: 'var(--space-8)', marginTop: 'calc(var(--nav-height) + var(--space-4))' }}>
           <p className="eyebrow" style={{ marginBottom: 'var(--space-2)' }}>Navigation</p>
         </div>
-        {NAV_LINKS.map(({ label, href }) => (
-          <Link
-            key={href}
-            href={href}
-            onClick={() => setMenuOpen(false)}
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 400,
-              color: pathname === href ? 'var(--color-gold)' : 'var(--color-ivory)',
-              padding: 'var(--space-3) 0',
-              borderBottom: '1px solid rgba(250,248,244,0.1)',
-              transition: 'color var(--duration-sm) var(--ease)',
-            }}
-          >
-            {label}
-          </Link>
-        ))}
+        {NAV_LINKS.map(({ label, href }) => {
+          const isOrderLink = href === '/outdoor-service';
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setMenuOpen(false)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                fontFamily: 'var(--font-serif)', fontSize: 'var(--text-2xl)',
+                fontWeight: isOrderLink ? 600 : 400,
+                color: isOrderLink ? 'var(--color-green)' : pathname === href ? 'var(--color-gold)' : 'var(--color-ivory)',
+                background: isOrderLink ? 'var(--color-gold)' : 'transparent',
+                borderRadius: isOrderLink ? 12 : 0,
+                padding: isOrderLink ? '12px 16px' : 'var(--space-3) 0',
+                borderBottom: isOrderLink ? 'none' : '1px solid rgba(250,248,244,0.1)',
+                transition: 'color var(--duration-sm) var(--ease), background-color var(--duration-sm) var(--ease)',
+              }}
+            >
+              {isOrderLink && <span aria-hidden style={{ fontSize: 14 }}>✦</span>}
+              {label}
+            </Link>
+          );
+        })}
         <Link href="/booking" onClick={() => setMenuOpen(false)}
           className="btn btn-primary" style={{ marginTop: 'var(--space-6)' }}>
           Book Your Stay

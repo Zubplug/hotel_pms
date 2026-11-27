@@ -121,7 +121,7 @@ export function CheckoutClient() {
       <div className="checkout-hero">
         <div className="container checkout-hero__inner">
           <div>
-            <p className="checkout-hero__eyebrow">Stanzel Grand Resort · {isOutdoor ? 'Outdoor Service' : 'Food & Beverage'}</p>
+            <p className="checkout-hero__eyebrow">Stanzel Grand Resort · Food &amp; Beverage</p>
             <h1>Complete your order</h1>
             <p>Review your selections, share where to serve you, and continue securely.</p>
           </div>
@@ -157,8 +157,8 @@ export function CheckoutClient() {
                 <div className="outdoor-checkout-notice">
                   <span className="outdoor-checkout-notice__icon" aria-hidden>✦</span>
                   <div>
-                    <strong>Outdoor service delivery</strong>
-                    <p>Your order will be prepared by the team and delivered to the service address below.</p>
+                    <strong>Delivery service</strong>
+                    <p>Your order will be prepared by the team and delivered to the address below.</p>
                   </div>
                 </div>
               ) : (
@@ -191,13 +191,13 @@ export function CheckoutClient() {
                 {form.orderType === 'DELIVERY' && (
                   <>
                     <label className="form-label" style={{ gridColumn: '1 / -1' }}>
-                      {isOutdoor ? 'Poolside / outdoor service address *' : 'Delivery Address *'}
-                      <input className="form-input" value={form.deliveryAddress} onChange={e => setForm(f => ({ ...f, deliveryAddress: e.target.value }))} placeholder={isOutdoor ? 'Pool deck, cabana 2, or your exact service point' : 'Room 203, Stanzel Grand Resort or street address'} />
+                      Delivery Address *
+                      <input className="form-input" value={form.deliveryAddress} onChange={e => setForm(f => ({ ...f, deliveryAddress: e.target.value }))} placeholder="Room, building, street address or service location" />
                     </label>
                     {isOutdoor && (
                       <label className="form-label" style={{ gridColumn: '1 / -1' }}>
-                        Area details (optional)
-                        <input className="form-input" value={form.serviceArea} onChange={e => setForm(f => ({ ...f, serviceArea: e.target.value }))} placeholder="Poolside, terrace, cabana, table or lounger" />
+                        Additional location details (optional)
+                        <input className="form-input" value={form.serviceArea} onChange={e => setForm(f => ({ ...f, serviceArea: e.target.value }))} placeholder="Building, floor, room, table or other helpful detail" />
                       </label>
                     )}
                   </>
@@ -286,7 +286,7 @@ export function CheckoutClient() {
         <aside className="checkout-summary">
           <div className="checkout-card">
             <h3 className="summary-title">Your Order</h3>
-            <p className="summary-type">{isOutdoor ? '✦ Outdoor service' : form.orderType === 'DELIVERY' ? '🚗 Delivery' : '🏃 Pickup'}</p>
+            <p className="summary-type">{form.orderType === 'DELIVERY' ? '🚗 Delivery' : '🏃 Pickup'}</p>
             {state.items.map(i => (
               <div key={i.id} className="summary-item">
                 <span className="summary-item__qty">{i.quantity}×</span>

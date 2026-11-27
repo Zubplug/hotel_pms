@@ -91,7 +91,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       );
     }
 
-    let finalStatus = status;
+    // A successful gateway refund moves the order to REFUNDED, which is a
+    // terminal accounting state even though it is not a normal fulfillment
+    // transition exposed by the request schema.
+    let finalStatus: string = status;
     if (status === 'CANCELLED' && order.payment && ['VERIFIED', 'REFUND_FAILED'].includes(order.payment.status)) {
       const refundResult = await CommerceRefundService.refundOrder({
         orderId: order.id,

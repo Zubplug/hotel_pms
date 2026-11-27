@@ -349,7 +349,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       const property = store.propertyId
         ? await tx.property.findUnique({ where: { id: store.propertyId }, select: { businessDate: true } })
         : null;
-      if (!property || !store.propertyId) {
+      if (!property || !store.propertyId || !property.businessDate) {
         throw new Error('Commerce payment property is not configured for accounting.');
       }
       await CommercePaymentAccountingService.processPaymentAccounting({

@@ -129,7 +129,7 @@ export class CommerceRefundService {
         select: { accountingStatus: true, accountingJournalId: true, refundAccountingStatus: true, refundAccountingJournalId: true },
       });
       const property = await tx.property.findUnique({ where: { id: order.store.propertyId! }, select: { businessDate: true, organizationId: true } });
-      if (!property) throw new Error('Commerce property not found for refund accounting.');
+      if (!property || !property.businessDate) throw new Error('Commerce property business date is not configured for refund accounting.');
 
       let refundJournalId = current?.refundAccountingJournalId ?? null;
       if (current?.accountingStatus === 'POSTED' && current.accountingJournalId && current.refundAccountingStatus !== 'POSTED') {
@@ -193,7 +193,7 @@ export class CommerceRefundService {
       const propertyId = payment.order.store.propertyId;
       if (!propertyId) throw new Error('Commerce store is not linked to a property.');
       const property = await tx.property.findUnique({ where: { id: propertyId }, select: { businessDate: true, organizationId: true } });
-      if (!property) throw new Error('Commerce property not found for refund accounting.');
+      if (!property || !property.businessDate) throw new Error('Commerce property business date is not configured for refund accounting.');
       const reversal = await GeneralLedgerService.reverseJournal({
         userId: input.actorId,
         propertyIds: [propertyId],

@@ -5,12 +5,12 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
 export const metadata: Metadata = {
-  title: 'Outdoor & Poolside Dining | Stanzel Grand Resort',
+  title: 'Order Online | Stanzel Grand Resort',
   description:
-    'Order fresh food and premium drinks to your poolside cabana, patio or outdoor table at Stanzel Grand Resort, Abuja. No app needed — delivered to where you are.',
+    'Explore the Stanzel Grand Resort food and beverage menu. Order freshly prepared dishes, drinks and signature selections for delivery or collection.',
   openGraph: {
-    title: 'Outdoor & Poolside Dining | Stanzel Grand Resort',
-    description: 'Luxury open-air dining delivered to your cabana.',
+    title: 'Order Online | Stanzel Grand Resort',
+    description: 'A considered selection of dishes and drinks, prepared to order and delivered with care.',
     images: [{ url: '/images/pool-evening.jpg', width: 1200, height: 630 }],
   },
 };

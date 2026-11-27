@@ -122,8 +122,8 @@ export class CommercePaymentAccountingService {
       where: { id: { in: posProductIds }, propertyId: input.propertyId },
       select: { id: true, itemCode: true, category: { select: { name: true, fnbClass: true } } },
     });
-    const commerceProductMap = new Map(commerceProducts.map((product: any) => [product.id, product]));
-    const posProductMap = new Map(posProducts.map((product: any) => [product.id, product]));
+    const commerceProductMap = new Map<string, any>(commerceProducts.map((product: any) => [product.id, product]));
+    const posProductMap = new Map<string, any>(posProducts.map((product: any) => [product.id, product]));
     const classTotals = new Map<string, number>();
     let itemTotal = 0;
 
