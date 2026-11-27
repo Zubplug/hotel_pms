@@ -59,6 +59,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
             name: true,
             deliveryFee: true,
             estimatedMinutes: true,
+            matchKeywords: true,
+            postalCodes: true,
           },
           orderBy: { deliveryFee: 'asc' },
         },

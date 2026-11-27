@@ -56,6 +56,8 @@ const placeOrderSchema = z.object({
       street: z.string().trim().min(3).max(300),
       city: z.string().trim().min(2).max(100),
       state: z.string().optional(),
+      zoneId: z.string().uuid().optional(),
+      postalCode: z.string().trim().max(20).optional(),
       notes: z.string().optional(),
     })
     .optional(),
@@ -94,6 +96,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         freeDeliveryAbove: true,
         minimumOrderAmount: true,
         allowOnlinePayment: true,
+        deliveryZones: {
+          where: { isActive: true },
+          select: { id: true, name: true, deliveryFee: true, estimatedMinutes: true, matchKeywords: true, postalCodes: true },
+        },
       },
     });
 
@@ -266,7 +272,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Calculate delivery fee
     let deliveryFee = 0;
     if (data.orderType === 'DELIVERY') {
-      deliveryFee = Number(store.deliveryFee);
+      if (store.deliveryFeeMode === 'ZONE') {
+        const address = data.deliveryAddress;
+        const normalizedAddress = `${address?.street ?? ''} ${address?.city ?? ''} ${address?.state ?? ''}`.toLowerCase();
+        const normalizedPostalCode = (address?.postalCode ?? '').toLowerCase();
+        const matchingZones = store.deliveryZones.filter((candidate) =>
+          candidate.postalCodes.some((code) => normalizedPostalCode === code.toLowerCase().trim()) ||
+          candidate.matchKeywords.some((keyword) => normalizedAddress.includes(keyword.toLowerCase().trim())),
+        );
+        const zoneId = address?.zoneId;
+        const zone = zoneId
+          ? store.deliveryZones.find((candidate) => candidate.id === zoneId)
+          : matchingZones.length === 1 ? matchingZones[0] : null;
+        if (!zone) {
+          return errorResponse('DELIVERY_ZONE_REQUIRED', matchingZones.length > 1 ? 'More than one delivery area matches this address. Select an area.' : 'We could not determine the delivery area. Select an area or add a more specific address.', 422);
+        }
+        deliveryFee = Number(zone.deliveryFee);
+      } else {
+        deliveryFee = Number(store.deliveryFee);
+      }
       if (store.freeDeliveryAbove && subtotal >= Number(store.freeDeliveryAbove)) {
         deliveryFee = 0;
       }

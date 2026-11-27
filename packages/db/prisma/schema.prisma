@@ -10564,6 +10564,9 @@ model CommerceDeliveryZone {
   radiusKm         Decimal? @db.Decimal(8, 2)
   /// GeoJSON polygon for irregular zones
   polygonCoords    Json?
+  /// Normalized area/postal tokens used for deterministic address matching.
+  matchKeywords    String[] @default([])
+  postalCodes      String[] @default([])
   estimatedMinutes Int?
   isActive         Boolean  @default(true)
 

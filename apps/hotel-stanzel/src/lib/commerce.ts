@@ -32,6 +32,9 @@ export interface CommerceStore {
   deliveryEnabled: boolean;
   pickupEnabled: boolean;
   deliveryFee: number;
+  deliveryFeeMode?: 'FLAT' | 'ZONE' | 'FREE_ABOVE_THRESHOLD' | string;
+  freeDeliveryAbove?: number | null;
+  deliveryZones?: { id: string; name: string; deliveryFee: number; estimatedMinutes: number | null; matchKeywords?: string[]; postalCodes?: string[] }[];
   minimumOrderAmount: number;
   announcementBanner?: string | null;
   status: string;
@@ -98,7 +101,7 @@ export interface PlaceOrderRequest {
   orderType: 'PICKUP' | 'DELIVERY';
   paymentMethod: 'ONLINE';
   fulfillmentType?: 'NOW' | 'SCHEDULED';
-  deliveryAddress?: { street: string; city: string; state?: string; notes?: string };
+  deliveryAddress?: { street: string; city: string; state?: string; zoneId?: string; postalCode?: string; notes?: string };
   deliveryNotes?: string;
   items: { productId: string; quantity: number; modifierOptionIds?: string[]; specialNote?: string }[];
   promotionCode?: string;

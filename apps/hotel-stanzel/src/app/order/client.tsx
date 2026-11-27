@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCart } from '@/lib/cart-context';
-import { placeOrder, initiatePayment, validatePromo, COMMERCE_SLUG } from '@/lib/commerce';
+import { getStorefront, placeOrder, initiatePayment, validatePromo, COMMERCE_SLUG, type CommerceStore } from '@/lib/commerce';
 
 function fmt(amount: number, currency = 'NGN') {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency, minimumFractionDigits: 0 }).format(Number(amount) || 0);
@@ -26,8 +26,9 @@ export function CheckoutClient() {
   const [form, setForm] = useState({
     name: '', phone: '', email: '',
     orderType: state.orderType as string,
-    deliveryAddress: '', serviceArea: '', notes: '',
+    deliveryAddress: '', serviceArea: '', postalCode: '', zoneId: '', notes: '',
   });
+  const [store, setStore] = useState<CommerceStore | null>(null);
   const [promoInput, setPromoInput] = useState('');
   const [promoMsg, setPromoMsg] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -39,8 +40,26 @@ export function CheckoutClient() {
     if (isOutdoor) setForm(current => ({ ...current, orderType: 'DELIVERY' }));
   }, [isOutdoor]);
 
-  const deliveryFee = form.orderType === 'DELIVERY' ? 1500 : 0;
+  useEffect(() => {
+    getStorefront().then(setStore).catch(() => setStore(null));
+  }, []);
+
+  const selectedZone = store?.deliveryZones?.find((zone) => zone.id === form.zoneId);
+  const deliveryFee = form.orderType === 'DELIVERY'
+    ? (store?.deliveryFeeMode === 'ZONE' ? Number(selectedZone?.deliveryFee ?? 0) : Number(store?.deliveryFee ?? 0))
+    : 0;
   const finalTotal = subtotal + deliveryFee - promoDiscount;
+
+  useEffect(() => {
+    if (!store || store.deliveryFeeMode !== 'ZONE' || form.zoneId) return;
+    const address = `${form.deliveryAddress} ${form.serviceArea}`.toLowerCase();
+    const postalCode = form.postalCode.trim().toLowerCase();
+    const matches = (store.deliveryZones ?? []).filter(zone =>
+      (zone.postalCodes ?? []).some(code => postalCode && postalCode === code.trim().toLowerCase()) ||
+      (zone.matchKeywords ?? []).some(keyword => address.includes(keyword.trim().toLowerCase())),
+    );
+    if (matches.length === 1) setForm(current => ({ ...current, zoneId: matches[0].id }));
+  }, [store, form.deliveryAddress, form.serviceArea, form.postalCode, form.zoneId]);
 
   // ── Empty cart guard ──
   if (itemCount === 0) {
@@ -81,7 +100,7 @@ export function CheckoutClient() {
         customer: { name: form.name, phone: form.phone, email: form.email || undefined },
         orderType: effectiveOrderType as 'PICKUP' | 'DELIVERY',
         paymentMethod: 'ONLINE',
-        deliveryAddress: effectiveOrderType === 'DELIVERY' ? { street: form.deliveryAddress, city: 'Abuja', notes: form.serviceArea || undefined } : undefined,
+        deliveryAddress: effectiveOrderType === 'DELIVERY' ? { street: form.deliveryAddress, city: 'Abuja', zoneId: form.zoneId || undefined, postalCode: form.postalCode || undefined, notes: form.serviceArea || undefined } : undefined,
         deliveryNotes: effectiveOrderType === 'DELIVERY' ? form.notes || undefined : undefined,
         specialInstructions: form.notes || undefined,
         promotionCode: state.promoCode || undefined,
@@ -194,6 +213,24 @@ export function CheckoutClient() {
                       Delivery Address *
                       <input className="form-input" value={form.deliveryAddress} onChange={e => setForm(f => ({ ...f, deliveryAddress: e.target.value }))} placeholder="Room, building, street address or service location" />
                     </label>
+                    <label className="form-label">
+                      Postal code (optional)
+                      <input className="form-input" value={form.postalCode} onChange={e => setForm(f => ({ ...f, postalCode: e.target.value }))} placeholder="e.g. 900001" />
+                    </label>
+                    {store?.deliveryFeeMode === 'ZONE' && (
+                      <label className="form-label" style={{ gridColumn: '1 / -1' }}>
+                        Delivery area *
+                        <select className="form-input" value={form.zoneId} onChange={e => setForm(f => ({ ...f, zoneId: e.target.value }))}>
+                          <option value="">Select your delivery area</option>
+                          {(store.deliveryZones ?? []).map(zone => (
+                            <option key={zone.id} value={zone.id}>
+                              {zone.name} · {fmt(zone.deliveryFee)}{zone.estimatedMinutes ? ` · ${zone.estimatedMinutes} min` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <small className="form-help">Your delivery fee is based on the selected service area.</small>
+                      </label>
+                    )}
                     {isOutdoor && (
                       <label className="form-label" style={{ gridColumn: '1 / -1' }}>
                         Additional location details (optional)
@@ -210,7 +247,7 @@ export function CheckoutClient() {
 
               <button
                 className="btn-checkout-next"
-                disabled={!form.name || !form.phone || (form.orderType === 'DELIVERY' && !form.deliveryAddress)}
+                disabled={!form.name || !form.phone || (form.orderType === 'DELIVERY' && (!form.deliveryAddress || (store?.deliveryFeeMode === 'ZONE' && !form.zoneId)))}
                 onClick={() => setStep('review')}
               >
                 Review Order →

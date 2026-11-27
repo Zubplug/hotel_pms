@@ -31,6 +31,8 @@ export function CommerceSetupClient() {
   const store = storeData?.data;
 
   const [form, setForm] = useState<Record<string, any>>({});
+  const [zoneForm, setZoneForm] = useState({ name: '', deliveryFee: '', estimatedMinutes: '', matchKeywords: '', postalCodes: '' });
+  const [zoneSaving, setZoneSaving] = useState(false);
   const merged = { ...store, ...form };
 
   function patch(key: string, value: any) {
@@ -53,6 +55,25 @@ export function CommerceSetupClient() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function addZone() {
+    if (!activeStoreId || !zoneForm.name || zoneForm.deliveryFee === '') return;
+    setZoneSaving(true);
+    try {
+      await fetch(`/api/commerce/manage/stores/${activeStoreId}/delivery-zones`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: zoneForm.name, deliveryFee: Number(zoneForm.deliveryFee), estimatedMinutes: zoneForm.estimatedMinutes ? Number(zoneForm.estimatedMinutes) : null, matchKeywords: zoneForm.matchKeywords.split(',').map(v => v.trim()).filter(Boolean), postalCodes: zoneForm.postalCodes.split(',').map(v => v.trim()).filter(Boolean) }),
+      });
+      setZoneForm({ name: '', deliveryFee: '', estimatedMinutes: '', matchKeywords: '', postalCodes: '' });
+      await mutate();
+    } finally { setZoneSaving(false); }
+  }
+
+  async function archiveZone(zoneId: string) {
+    if (!activeStoreId) return;
+    await fetch(`/api/commerce/manage/stores/${activeStoreId}/delivery-zones/${zoneId}`, { method: 'DELETE' });
+    await mutate();
   }
 
   if (!store && !storesData) {
@@ -161,6 +182,36 @@ export function CommerceSetupClient() {
           <Field label="Delivery Fee (₦)">
             <input className="setup-input" type="number" min={0} value={merged.deliveryFee ?? 0} onChange={(e) => patch('deliveryFee', parseFloat(e.target.value))} />
           </Field>
+          <Field label="Fee calculation">
+            <select className="setup-input" value={merged.deliveryFeeMode ?? 'FLAT'} onChange={(e) => patch('deliveryFeeMode', e.target.value)}>
+              <option value="FLAT">One fee for every delivery</option>
+              <option value="ZONE">Use configured delivery areas</option>
+              <option value="FREE_ABOVE_THRESHOLD">Free above order threshold</option>
+            </select>
+          </Field>
+          <Field label="Free delivery above (₦)" hint="Leave empty to disable the threshold.">
+            <input className="setup-input" type="number" min={0} value={merged.freeDeliveryAbove ?? ''} onChange={(e) => patch('freeDeliveryAbove', e.target.value === '' ? null : parseFloat(e.target.value))} />
+          </Field>
+          <div className="zone-manager">
+            <div>
+              <strong>Delivery areas</strong>
+              <p className="setup-hint">Customers select an area at checkout. The server applies the configured fee.</p>
+            </div>
+            {(store?.deliveryZones ?? []).filter((zone: any) => zone.isActive).map((zone: any) => (
+              <div className="zone-row" key={zone.id}>
+                <span><strong>{zone.name}</strong>{zone.estimatedMinutes ? ` · ${zone.estimatedMinutes} min` : ''}<small className="setup-hint">{zone.matchKeywords?.length || zone.postalCodes?.length ? ` · auto: ${(zone.matchKeywords ?? []).concat(zone.postalCodes ?? []).join(', ')}` : ' · manual selection'}</small></span>
+                <span>₦{Number(zone.deliveryFee).toLocaleString()} <button className="zone-remove" onClick={() => archiveZone(zone.id)}>Remove</button></span>
+              </div>
+            ))}
+            <div className="zone-add">
+              <input className="setup-input" placeholder="Area name" value={zoneForm.name} onChange={e => setZoneForm(z => ({ ...z, name: e.target.value }))} />
+              <input className="setup-input" type="number" min={0} placeholder="Fee" value={zoneForm.deliveryFee} onChange={e => setZoneForm(z => ({ ...z, deliveryFee: e.target.value }))} />
+              <input className="setup-input" type="number" min={1} placeholder="Minutes" value={zoneForm.estimatedMinutes} onChange={e => setZoneForm(z => ({ ...z, estimatedMinutes: e.target.value }))} />
+              <input className="setup-input" placeholder="Keywords, comma-separated" value={zoneForm.matchKeywords} onChange={e => setZoneForm(z => ({ ...z, matchKeywords: e.target.value }))} />
+              <input className="setup-input" placeholder="Postal codes, comma-separated" value={zoneForm.postalCodes} onChange={e => setZoneForm(z => ({ ...z, postalCodes: e.target.value }))} />
+              <button className="setup-save-btn" onClick={addZone} disabled={zoneSaving || !zoneForm.name || zoneForm.deliveryFee === ''}>{zoneSaving ? 'Adding…' : 'Add area'}</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -234,6 +285,11 @@ export function CommerceSetupClient() {
         .setup-checks { display: flex; gap: 20px; flex-wrap: wrap; }
         .setup-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: hsl(222 47% 11%); cursor: pointer; }
         .commerce-select { padding: 7px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 13px; background: white; color: hsl(222 47% 11%); cursor: pointer; }
+        .zone-manager { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; }
+        .zone-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid #e5e7eb; font-size: 13px; }
+        .zone-remove { border: 0; background: none; color: #b91c1c; cursor: pointer; margin-left: 8px; }
+        .zone-add { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.5fr 1.5fr auto; gap: 8px; align-items: center; }
+        @media (max-width: 700px) { .zone-add { grid-template-columns: 1fr 1fr; } .zone-add .setup-save-btn { grid-column: 1 / -1; } }
       `}</style>
     </div>
   );
