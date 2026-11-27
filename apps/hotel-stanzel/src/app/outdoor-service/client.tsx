@@ -29,7 +29,7 @@ import type {
 function fmt(n: number, cur = 'NGN') {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency', currency: cur, minimumFractionDigits: 0,
-  }).format(n);
+  }).format(Number(n) || 0);
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -73,9 +73,9 @@ function ProductSheet({
   const modifierPrice = product.modifierGroups
     .flatMap(g => g.options)
     .filter(o => Object.values(selectedMods).includes(o.id))
-    .reduce((s, o) => s + o.priceAdjustment, 0);
+    .reduce((s, o) => s + (Number(o.priceAdjustment) || 0), 0);
 
-  const lineTotal = (product.price + modifierPrice) * qty;
+  const lineTotal = ((Number(product.price) || 0) + modifierPrice) * qty;
 
   return (
     <div className="os-sheet-backdrop" onClick={onClose}>
@@ -197,6 +197,20 @@ function FloatingCart({ currency }: { currency: string }) {
             <div className="os-cart-items">
               {state.items.map(item => (
                 <div key={item.id} className="os-cart-item">
+                  <div className="os-cart-item__image" aria-hidden={!item.imageUrl}>
+                    {item.imageUrl ? (
+                      <Image
+                        src={item.imageUrl}
+                        alt=""
+                        width={64}
+                        height={64}
+                        sizes="64px"
+                        style={{ objectFit: 'contain' }}
+                      />
+                    ) : (
+                      <span>🍽</span>
+                    )}
+                  </div>
                   <div className="os-cart-item__info">
                     <p className="os-cart-item__name">{item.productName}</p>
                     {item.modifierLabels.length > 0 && (
@@ -449,7 +463,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
                 >
                   <div className="os-product-card__hex-wrap">
                     <div className="os-product-card__hex">
-                      {product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill style={{ objectFit: 'cover' }} sizes="260px" /> : (
+                      {product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill style={{ objectFit: 'contain' }} sizes="(max-width: 600px) 45vw, 260px" /> : (
                         <div className="os-product-card__hex-placeholder">{categoryIcon(productCategory?.name ?? '')}</div>
                       )}
                       {!product.isAvailable && <div className="os-product-card__sold-out">Sold Out</div>}
@@ -540,8 +554,8 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
                         {product.imageUrl ? (
                           <Image
                             src={product.imageUrl} alt={product.name}
-                            fill style={{ objectFit: 'cover' }}
-                            sizes="180px"
+                            fill style={{ objectFit: 'contain' }}
+                            sizes="(max-width: 600px) 45vw, 260px"
                           />
                         ) : (
                           <div className="os-product-card__hex-placeholder">
@@ -1153,38 +1167,37 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
         .os-product-card--unavailable { opacity: 0.4; cursor: default; }
         .os-product-card--unavailable:hover { transform: none; box-shadow: none; }
 
-        /* Hexagonal image */
+        /* Full-visibility product image panel */
         .os-product-card__hex-wrap {
           position: relative;
-          display: flex; justify-content: center;
-          padding-bottom: var(--space-2);
+          width: 100%;
+          aspect-ratio: 4 / 3;
+          overflow: hidden;
+          border-radius: var(--radius-xl);
+          background: rgba(250,248,244,0.96);
+          border: 1px solid rgba(201,169,110,0.24);
         }
         .os-product-card__hex {
-          width: 130px; height: 130px;
-          border-radius: 60% 40% 40% 60% / 50% 50% 50% 50%;
-          overflow: hidden; position: relative;
-          border: 2px solid rgba(201,169,110,0.3);
-          transition: border-color 0.3s, border-radius 0.4s;
-          flex-shrink: 0;
+          position: absolute; inset: 0;
+          overflow: hidden;
+          border-radius: inherit;
         }
         .os-product-card:hover .os-product-card__hex {
-          border-radius: 50%;
-          border-color: var(--color-gold);
+          border-radius: inherit;
         }
         .os-product-card__hex-placeholder {
           display: flex; align-items: center; justify-content: center;
           width: 100%; height: 100%;
-          background: rgba(201,169,110,0.1);
+          background: linear-gradient(135deg, rgba(201,169,110,0.16), rgba(13,43,34,0.12));
           font-size: 2.5rem;
         }
         .os-product-card__hex-glow {
-          position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
-          width: 80px; height: 20px;
-          background: radial-gradient(ellipse at center, rgba(201,169,110,0.35) 0%, transparent 70%);
-          transition: opacity 0.3s;
-          opacity: 0;
+          position: absolute; inset: 0;
+          box-shadow: inset 0 0 0 1px rgba(201,169,110,0.16);
+          pointer-events: none;
+          transition: box-shadow 0.3s;
         }
-        .os-product-card:hover .os-product-card__hex-glow { opacity: 1; }
+        .os-product-card:hover .os-product-card__hex-glow { box-shadow: inset 0 0 0 2px var(--color-gold); }
         .os-product-card__sold-out {
           position: absolute; inset: 0;
           background: rgba(0,0,0,0.65);
@@ -1513,6 +1526,15 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           display: flex; align-items: center; gap: var(--space-3);
           padding: var(--space-3) 0; border-bottom: 1px solid rgba(255,255,255,0.05);
         }
+        .os-cart-item__image {
+          width: 64px; height: 64px; flex: 0 0 64px;
+          display: grid; place-items: center; overflow: hidden;
+          border-radius: var(--radius-lg);
+          background: rgba(250,248,244,0.96);
+          border: 1px solid rgba(201,169,110,0.22);
+          color: #0d2b22; font-size: 1.35rem;
+        }
+        .os-cart-item__image img { width: 100%; height: 100%; }
         .os-cart-item__info { flex: 1; }
         .os-cart-item__name { font-size: var(--text-sm); font-weight: 600; color: var(--color-ivory); }
         .os-cart-item__mods { font-size: var(--text-xs); color: rgba(250,248,244,0.45); }

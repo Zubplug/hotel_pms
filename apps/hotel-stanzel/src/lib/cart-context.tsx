@@ -39,7 +39,9 @@ type CartAction =
   | { type: 'CLEAR' }
   | { type: 'HYDRATE'; state: CartState };
 
-const STORAGE_KEY = 'stanzel-commerce-cart';
+// v2 prevents carts created before Decimal values were normalised from
+// carrying forward concatenated prices such as "65000".
+const STORAGE_KEY = 'stanzel-commerce-cart-v2';
 
 const initial: CartState = {
   items: [],
@@ -125,7 +127,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const modifierIds = modifiers.map(m => m.id).sort();
     const id = `${product.id}__${modifierIds.join('-')}`;
-    const modifierPrice = modifiers.reduce((s, m) => s + m.priceAdjustment, 0);
+    const basePrice = Number(product.price) || 0;
+    const modifierPrice = modifiers.reduce((s, m) => s + (Number(m.priceAdjustment) || 0), 0);
 
     dispatch({
       type: 'ADD_ITEM',
@@ -135,7 +138,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         productName: product.name,
         imageUrl: product.imageUrl,
         quantity: qty,
-        unitPrice: product.price + modifierPrice,
+        unitPrice: basePrice + modifierPrice,
         modifierOptionIds: modifierIds,
         modifierLabels: modifiers.map(m => m.name),
         notes,
@@ -143,7 +146,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const subtotal = state.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const subtotal = state.items.reduce((s, i) => s + (Number(i.unitPrice) || 0) * i.quantity, 0);
   const itemCount = state.items.reduce((s, i) => s + i.quantity, 0);
 
   return (

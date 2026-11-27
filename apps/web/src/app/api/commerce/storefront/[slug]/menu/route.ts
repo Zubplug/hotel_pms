@@ -84,6 +84,19 @@ export async function GET(_req: NextRequest, { params }: Params) {
             // Mask out-of-stock Chef's Specials
             products: category.products.map((p) => ({
               ...p,
+              // Prisma Decimal values must be converted before crossing the
+              // public JSON boundary. Otherwise a client calculation such as
+              // "4000" + 0 becomes "40000" instead of 4000.
+              price: Number(p.price),
+              compareAtPrice: p.compareAtPrice === null ? null : Number(p.compareAtPrice),
+              taxRate: Number(p.taxRate),
+              modifierGroups: p.modifierGroups.map((group) => ({
+                ...group,
+                options: group.options.map((option) => ({
+                  ...option,
+                  priceAdjustment: Number(option.priceAdjustment),
+                })),
+              })),
               isAvailable:
                 p.availableQuantity === null || p.availableQuantity > 0,
             })),

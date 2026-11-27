@@ -17,7 +17,7 @@ interface Props {
 }
 
 function fmt(amount: number, currency = 'NGN') {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency, minimumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat('en-NG', { style: 'currency', currency, minimumFractionDigits: 0 }).format(Number(amount) || 0);
 }
 
 // ─── Product Detail Drawer ────────────────────────────────────────────────────
@@ -36,9 +36,9 @@ function ProductDrawer({
   const modifierPrice = product.modifierGroups
     .flatMap(g => g.options)
     .filter(o => Object.values(selectedMods).includes(o.id))
-    .reduce((s, o) => s + o.priceAdjustment, 0);
+    .reduce((s, o) => s + (Number(o.priceAdjustment) || 0), 0);
 
-  const totalPrice = (product.price + modifierPrice) * qty;
+  const totalPrice = ((Number(product.price) || 0) + modifierPrice) * qty;
 
   function toggleMod(groupId: string, optId: string) {
     setSelectedMods(prev => ({ ...prev, [groupId]: optId }));
