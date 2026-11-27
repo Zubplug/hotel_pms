@@ -543,7 +543,7 @@ export async function POST(req: NextRequest) {
           // deliberately left open for normal cashier cash declaration and
           // approval; only non-tender charge operations are auto-submitted.
           const recoveryStaff = await prisma.staff.findFirst({
-            where: { OR: [{ id: actorId }, { userId: actorId }], propertyId, isActive: true },
+            where: { OR: [{ id: actorId }, { userId: actorId }], propertyAccess: { has: propertyId }, isActive: true },
             select: { id: true },
           });
           if (!recoveryStaff) throw new Error("FRONTDESK_STAFF_REQUIRED: Cannot recover financial event without the original staff member.");
@@ -587,7 +587,7 @@ export async function POST(req: NextRequest) {
             where: { id: frontdeskSessionId },
           });
           const frontdeskStaff = await prisma.staff.findFirst({
-            where: { OR: [{ id: actorId }, { userId: actorId }], propertyId },
+            where: { OR: [{ id: actorId }, { userId: actorId }], propertyAccess: { has: propertyId } },
             select: { id: true },
           });
           if (
@@ -4338,11 +4338,12 @@ export async function POST(req: NextRequest) {
                   activeRoom?.roomTypeId || "Room extension",
                   null,
                 );
-                const extensionLines: Array<{ type: string; revenueCategory: "ROOM" | "FNB" | "TAX" | "OTHER"; revenueClass: string; amount: number; description: string; operationId: string }> = [
+                type ExtensionLine = { type: string; revenueCategory: "ROOM" | "FNB" | "TAX" | "OTHER"; revenueClass: string; amount: number; description: string; operationId: string };
+                const extensionLines: ExtensionLine[] = [
                   { type: "CHARGE", revenueCategory: "ROOM", revenueClass: "ROOM", amount: breakdown.netAccommodation, description: `Late net accommodation posting for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:ROOM` },
-                  ...(breakdown.complimentaryFoodAmount > 0 ? [{ type: "CHARGE", revenueCategory: "FNB", revenueClass: "FOOD", amount: breakdown.complimentaryFoodAmount, description: `${breakdown.complimentaryAllocationName} for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:FNB` }] : []),
-                  ...(breakdown.vatAmount > 0 ? [{ type: "TAX", revenueCategory: "TAX", revenueClass: "VAT", amount: breakdown.vatAmount, description: `VAT for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:VAT` }] : []),
-                  ...(breakdown.serviceChargeAmount > 0 ? [{ type: "CHARGE", revenueCategory: "OTHER", revenueClass: "SERVICE_CHARGE", amount: breakdown.serviceChargeAmount, description: `Service Charge for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:SC` }] : []),
+                  ...(breakdown.complimentaryFoodAmount > 0 ? [{ type: "CHARGE", revenueCategory: "FNB", revenueClass: "FOOD", amount: breakdown.complimentaryFoodAmount, description: `${breakdown.complimentaryAllocationName} for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:FNB` } as ExtensionLine] : []),
+                  ...(breakdown.vatAmount > 0 ? [{ type: "TAX", revenueCategory: "TAX", revenueClass: "VAT", amount: breakdown.vatAmount, description: `VAT for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:VAT` } as ExtensionLine] : []),
+                  ...(breakdown.serviceChargeAmount > 0 ? [{ type: "CHARGE", revenueCategory: "OTHER", revenueClass: "SERVICE_CHARGE", amount: breakdown.serviceChargeAmount, description: `Service Charge for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:SC` } as ExtensionLine] : []),
                 ];
                 for (const line of extensionLines) {
                   await tx.folioItem.create({

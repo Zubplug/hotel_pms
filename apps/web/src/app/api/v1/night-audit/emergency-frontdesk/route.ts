@@ -5,6 +5,7 @@ import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/rbac';
 import { lockOrchestrator } from '@/lib/locks/orchestrator';
+import type { RoomStatus } from '@/lib/room-state-machine';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -109,7 +110,11 @@ export async function POST(req: NextRequest) {
       }
       if (operation.operationType === 'CHECK_IN') {
         await tx.reservation.updateMany({ where: { id: operation.reservationId, status: 'CHECKED_IN' }, data: { status: 'CONFIRMED' } });
-        await tx.room.updateMany({ where: { id: String((operation.metadata as any)?.roomId || ''), status: 'OCCUPIED' }, data: { status: String((operation.metadata as any)?.previousRoomStatus || 'RESERVED') } });
+        const previousRoomStatus = String((operation.metadata as any)?.previousRoomStatus || 'RESERVED');
+        const restoredRoomStatus: RoomStatus = ['AVAILABLE', 'RESERVED', 'OCCUPIED', 'DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED', 'OUT_OF_ORDER', 'OUT_OF_SERVICE', 'MAINTENANCE', 'BLOCKED'].includes(previousRoomStatus)
+          ? previousRoomStatus as RoomStatus
+          : 'RESERVED';
+        await tx.room.updateMany({ where: { id: String((operation.metadata as any)?.roomId || ''), status: 'OCCUPIED' }, data: { status: restoredRoomStatus } });
         await tx.lockOperation.updateMany({ where: { id: String((operation.metadata as any)?.lockOperationId || ''), status: { in: ['WAITING_FOR_AUDIT_APPROVAL', 'WAITING_FOR_CARD'] } }, data: { status: 'CANCELLED', metadata: { ...(operation.metadata as any), rejectedByNightAudit: session.user.id, rejectedAt: now, rejectionReason: reason } } });
         await tx.lockCredential.updateMany({ where: { issueOperationId: String((operation.metadata as any)?.lockOperationId || ''), status: 'PENDING' }, data: { status: 'CANCELLED', metadata: { source: 'ONLINE_FRONTDESK_EMERGENCY', rejectedByNightAudit: session.user.id, rejectionReason: reason } } });
       }
