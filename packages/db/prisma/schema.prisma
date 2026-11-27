@@ -4628,6 +4628,7 @@ enum PosOrderType {
   ROOM_SERVICE
   TAKEAWAY
   BAR
+  ONLINE_WEB
 }
 
 model PosOrder {

@@ -739,7 +739,7 @@ export async function POST(req: NextRequest) {
                  });
                  const authoritativeBusinessDate = linkedSession?.businessDate ?? propertyDate?.businessDate ?? new Date();
                  const requestedOrderType = String(payload.OrderType || payload.orderType || 'TABLE').toUpperCase();
-                 const cloudOrderType: PosOrderType = ['TABLE', 'WALK_IN', 'ROOM_SERVICE', 'TAKEAWAY', 'BAR'].includes(requestedOrderType)
+                 const cloudOrderType: PosOrderType = ['TABLE', 'WALK_IN', 'ROOM_SERVICE', 'TAKEAWAY', 'BAR', 'ONLINE_WEB'].includes(requestedOrderType)
                    ? requestedOrderType as PosOrderType
                    : 'TAKEAWAY';
                  const createdOrder = await tx.posOrder.create({
@@ -753,9 +753,9 @@ export async function POST(req: NextRequest) {
                          subtotal: payload.Subtotal || 0,
                          taxAmount: payload.TaxAmount || 0,
                          total: payload.Total || 0,
-                         // ONLINE_WEB belongs to the local desktop model. Keep
-                         // the cloud enum valid and retain the immutable marker
-                         // in notes for reconciliation and notifications.
+                         // ONLINE_WEB is a first-class cloud type as well as the
+                         // local desktop marker, so reconciliation and reporting
+                         // can identify online orders without overloading TAKEAWAY.
                          orderType: cloudOrderType,
                          notes: payload.Notes || payload.notes || (requestedOrderType === 'ONLINE_WEB' ? '[Online Order]' : null),
                          tableId: tableId,
