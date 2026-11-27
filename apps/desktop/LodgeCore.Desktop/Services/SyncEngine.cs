@@ -248,6 +248,49 @@ public class SyncEngine : BackgroundService
             && auditStatus.ValueKind != JsonValueKind.Null)
             property.AuditStatus = auditStatus.GetString() ?? property.AuditStatus;
 
+        // The control-state endpoint also carries only the POS shift
+        // projection for this terminal's outlet. Hydrate it without waiting
+        // for the full desktop pull so an automatically recovered shift can
+        // be resumed immediately at login.
+        if (document.RootElement.TryGetProperty("posSessions", out var posSessions)
+            && posSessions.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var sessionEl in posSessions.EnumerateArray())
+            {
+                if (!sessionEl.TryGetProperty("id", out var sessionIdEl)) continue;
+                var sessionId = sessionIdEl.GetString();
+                if (string.IsNullOrWhiteSpace(sessionId)) continue;
+
+                var session = await dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
+                if (session == null)
+                {
+                    session = new LodgeCore.Desktop.Data.Entities.LocalPosSession { Id = sessionId };
+                    dbContext.PosSessions.Add(session);
+                }
+
+                session.PropertyId = identity.PropertyId;
+                session.OutletId = sessionEl.TryGetProperty("outletId", out var outlet) ? outlet.GetString() ?? session.OutletId : session.OutletId;
+                session.DeviceId = sessionEl.TryGetProperty("deviceId", out var device) && device.ValueKind != JsonValueKind.Null ? device.GetString() : session.DeviceId;
+                session.BankingModel = sessionEl.TryGetProperty("bankingModel", out var bankingModel) ? bankingModel.GetString() ?? session.BankingModel : session.BankingModel;
+                session.BankType = sessionEl.TryGetProperty("bankType", out var bankType) ? bankType.GetString() ?? session.BankType : session.BankType;
+                session.PrimaryOperatorId = sessionEl.TryGetProperty("primaryOperatorId", out var primaryOperator) && primaryOperator.ValueKind != JsonValueKind.Null ? primaryOperator.GetString() : session.PrimaryOperatorId;
+                session.OpenedBy = sessionEl.TryGetProperty("openedBy", out var openedBy) && openedBy.ValueKind != JsonValueKind.Null ? openedBy.GetString() : session.OpenedBy;
+                session.Status = sessionEl.TryGetProperty("status", out var status) ? status.GetString() ?? session.Status : session.Status;
+                session.ControlStatus = sessionEl.TryGetProperty("controlStatus", out var controlStatus) ? controlStatus.GetString() ?? session.ControlStatus : session.ControlStatus;
+                session.ApprovalDecision = sessionEl.TryGetProperty("approvalDecision", out var approval) && approval.ValueKind != JsonValueKind.Null ? approval.GetString() : session.ApprovalDecision;
+                session.ApprovalNotes = sessionEl.TryGetProperty("approvalNotes", out var approvalNotes) && approvalNotes.ValueKind != JsonValueKind.Null ? approvalNotes.GetString() : session.ApprovalNotes;
+                session.Reason = sessionEl.TryGetProperty("reason", out var reason) && reason.ValueKind != JsonValueKind.Null ? reason.GetString() : session.Reason;
+                if (sessionEl.TryGetProperty("businessDate", out var businessDateEl) && DateTime.TryParse(businessDateEl.GetString(), out var businessDateValue)) session.BusinessDate = businessDateValue;
+                if (sessionEl.TryGetProperty("openedAt", out var openedAtEl) && DateTime.TryParse(openedAtEl.GetString(), out var openedAtValue)) session.OpenedAt = openedAtValue;
+                if (sessionEl.TryGetProperty("closedAt", out var closedAtEl) && closedAtEl.ValueKind != JsonValueKind.Null && DateTime.TryParse(closedAtEl.GetString(), out var closedAtValue)) session.ClosedAt = closedAtValue;
+                if (sessionEl.TryGetProperty("updatedAt", out var updatedAtEl) && DateTime.TryParse(updatedAtEl.GetString(), out var updatedAtValue)) session.UpdatedAt = updatedAtValue;
+                if (sessionEl.TryGetProperty("openingCash", out var openingCash) && openingCash.TryGetDecimal(out var openingCashValue)) session.OpeningCash = openingCashValue;
+                if (sessionEl.TryGetProperty("expectedCash", out var expectedCash) && expectedCash.TryGetDecimal(out var expectedCashValue)) session.ExpectedCash = expectedCashValue;
+                if (sessionEl.TryGetProperty("actualCash", out var actualCash) && actualCash.ValueKind != JsonValueKind.Null && actualCash.TryGetDecimal(out var actualCashValue)) session.ActualCash = actualCashValue;
+                if (sessionEl.TryGetProperty("variance", out var variance) && variance.ValueKind != JsonValueKind.Null && variance.TryGetDecimal(out var varianceValue)) session.Variance = varianceValue;
+            }
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -644,6 +687,31 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             return;
         }
 
+        // Older builds classified SHIFT_LOCKED as a permanent conflict. It
+        // is recoverable: the cloud can open/reuse the next approved shift
+        // after rollover and Night Audit. Requeue only this exact conflict;
+        // all other conflict types remain protected for manual review.
+        var recoverableLockedEvents = await dbContext.SyncEvents
+            .Where(e => e.Status == "CONFLICT"
+                && e.ErrorCode == "SHIFT_LOCKED"
+                && (e.EntityType == "POS_ORDER"
+                    || e.EntityType == "POS_PAYMENT"
+                    || e.EntityType == "POS_ORDER_ITEM"
+                    || e.EntityType == "POS_KOT"))
+            .ToListAsync(stoppingToken);
+        if (recoverableLockedEvents.Any())
+        {
+            foreach (var evt in recoverableLockedEvents)
+            {
+                evt.Status = "FAILED";
+                evt.ErrorCode = "SHIFT_REOPEN_PENDING";
+                evt.ErrorMessage = "TRANSIENT: Waiting for approved POS shift recovery";
+                evt.NextAttemptAt = DateTime.UtcNow;
+            }
+            await dbContext.SaveChangesAsync(stoppingToken);
+            _logger.LogInformation("[PUSH-POS] Requeued {EventCount} recoverable SHIFT_LOCKED event(s) for automatic shift recovery.", recoverableLockedEvents.Count);
+        }
+
         var deadEvents = await dbContext.SyncEvents
             .Where(e => (e.Status == "PENDING" || e.Status == "FAILED") && e.AttemptCount >= 5
                 && (e.ErrorMessage == null || !e.ErrorMessage.StartsWith("TRANSIENT:")))
@@ -797,15 +865,29 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         {
                             var rejectionError = result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Error
                                 ?? "Rejected by cloud validation";
-                            if (rejectionError.Contains("SHIFT_LOCKED", StringComparison.OrdinalIgnoreCase))
+                            if (rejectionError.Contains("RETRYABLE_SHIFT_REOPEN", StringComparison.OrdinalIgnoreCase))
                             {
-                                // The shift was closed before this offline
-                                // transaction arrived. Retrying cannot fix a
-                                // business-state conflict; preserve it for a
-                                // controlled reconciliation workflow.
-                                evt.Status = "CONFLICT";
-                                evt.ErrorCode = "SHIFT_LOCKED";
-                                evt.ErrorMessage = rejectionError;
+                                // The cloud has not yet confirmed that the
+                                // business date, Night Audit, and previous
+                                // shift approval allow automatic recovery.
+                                // Keep the event in the outbox and retry after
+                                // the next control-state refresh.
+                                evt.Status = "FAILED";
+                                evt.ErrorCode = "SHIFT_REOPEN_PENDING";
+                                evt.ErrorMessage = $"TRANSIENT: {rejectionError}";
+                                evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(30);
+                            }
+                            else if (rejectionError.Contains("SHIFT_LOCKED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // A locked shift is recoverable by the cloud
+                                // shift-reopen protocol. Keep the original
+                                // event and payment idempotency keys intact;
+                                // the next retry will rebind it to the new
+                                // approved shift when controls allow it.
+                                evt.Status = "FAILED";
+                                evt.ErrorCode = "SHIFT_REOPEN_PENDING";
+                                evt.ErrorMessage = $"TRANSIENT: {rejectionError}";
+                                evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(30);
                             }
                             else
                             {

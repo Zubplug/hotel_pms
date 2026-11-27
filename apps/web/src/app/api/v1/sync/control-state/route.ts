@@ -34,9 +34,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
+    // POS login only needs the shift control projection. Keep this endpoint
+    // intentionally small: it must not pull reservations, inventory, folios,
+    // or the general desktop sync feed before a cashier can sign in.
+    const terminal = authResult.isDevice && authResult.deviceId
+      ? await prisma.posTerminal.findUnique({ where: { id: authResult.deviceId }, select: { outletId: true } })
+      : null;
+    const outletId = terminal?.outletId;
+    const sessions = outletId
+      ? await prisma.posSession.findMany({
+          where: { propertyId, outletId },
+          orderBy: { updatedAt: 'desc' },
+          take: 12,
+          select: {
+            id: true, outletId: true, deviceId: true, businessDate: true,
+            bankingModel: true, bankType: true, primaryOperatorId: true,
+            status: true, controlStatus: true, approvalDecision: true,
+            approvalNotes: true, reason: true, openingCash: true,
+            expectedCash: true, actualCash: true, variance: true,
+            openedBy: true, openedAt: true, closedAt: true, updatedAt: true,
+          },
+        })
+      : [];
+
     return NextResponse.json({
       success: true,
       property,
+      posSessions: sessions,
       syncedAt: new Date().toISOString(),
     });
   } catch (error) {

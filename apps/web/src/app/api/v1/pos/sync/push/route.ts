@@ -108,6 +108,116 @@ function isUuid(value: unknown): value is string {
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+/**
+ * Recover a queued offline POS event whose original shift was closed before
+ * the terminal reconnected. This is deliberately a shift-only recovery:
+ * the event idempotency key, order id, payment id, and amount are never
+ * changed. A new shift is created only after the cloud control plane confirms
+ * that the property has rolled over, Night Audit is complete, and the
+ * operator's previous shift was approved.
+ */
+async function recoverLockedPosShift(tx: any, input: {
+  terminal: any;
+  event: any;
+  payload: any;
+  incomingSessionId?: string | null;
+  operatorId?: string | null;
+  propertyId: string;
+}) {
+  const { terminal, event, payload, propertyId } = input;
+  const operatorId = input.operatorId || (isUuid(event.operatorId) ? event.operatorId : null);
+  const localSessionId = input.incomingSessionId || null;
+  if (!operatorId || !localSessionId) {
+    throw new Error('RETRYABLE_SHIFT_REOPEN:operator and original POS shift are required for automatic recovery');
+  }
+
+  const property = await tx.property.findUnique({
+    where: { id: propertyId },
+    select: { id: true, businessDate: true, timezone: true, auditStatus: true, settings: true },
+  });
+  if (!property?.businessDate) {
+    throw new Error('RETRYABLE_SHIFT_REOPEN:property business date is not available');
+  }
+
+  // The push route already blocks an active cutover. Keep the explicit checks
+  // here as well because this function may be reached after a retry and must
+  // never create a shift during an incomplete rollover.
+  const auditStatus = String(property.auditStatus || 'OPEN').toUpperCase();
+  if (['IN_PROGRESS', 'POSTING', 'FAILED', 'PENDING', 'OVERDUE'].includes(auditStatus)) {
+    throw new Error(`RETRYABLE_SHIFT_REOPEN:Night Audit is not complete (${auditStatus})`);
+  }
+  const currentPropertyDate = getPropertyBusinessDate(property.timezone || 'UTC');
+  if (property.businessDate.toISOString().slice(0, 10) < currentPropertyDate.toISOString().slice(0, 10)) {
+    throw new Error(`RETRYABLE_SHIFT_REOPEN:business date has not rolled over to ${currentPropertyDate.toISOString().slice(0, 10)}`);
+  }
+
+  const bankingModel = String((property.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER').toUpperCase();
+  const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
+  const outletId = terminal.outletId;
+  const dayStart = new Date(property.businessDate);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+  const previous = await tx.posSession.findFirst({
+    where: {
+      propertyId,
+      outletId,
+      bankType,
+      ...(bankType === 'SERVER'
+        ? { primaryOperatorId: operatorId }
+        : { bankingModel: 'CENTRAL_CASHIER' }),
+      status: { not: 'OPEN' },
+    },
+    orderBy: { openedAt: 'desc' },
+    select: { id: true, approvalDecision: true, status: true, controlStatus: true },
+  });
+  if (previous && !['APPROVED', 'APPROVED_WITH_VARIANCE'].includes(String(previous.approvalDecision || '').toUpperCase())) {
+    throw new Error('RETRYABLE_SHIFT_REOPEN:previous POS shift is awaiting approval');
+  }
+
+  let session = await tx.posSession.findFirst({
+    where: bankType === 'SERVER'
+      ? { propertyId, outletId, primaryOperatorId: operatorId, bankType: 'SERVER', businessDate: { gte: dayStart, lt: dayEnd }, status: 'OPEN', controlStatus: 'OPEN' }
+      : { propertyId, outletId, bankType: 'CENTRAL', bankingModel: 'CENTRAL_CASHIER', businessDate: { gte: dayStart, lt: dayEnd }, status: 'OPEN', controlStatus: 'OPEN' },
+    orderBy: { openedAt: 'asc' },
+  });
+
+  if (!session) {
+    session = await tx.posSession.create({
+      data: {
+        propertyId,
+        outletId,
+        // PosTerminal and PosDevice are separate control-plane records. Do
+        // not put the terminal UUID into the PosSession.deviceId FK; the
+        // session remains valid without a device link during recovery.
+        deviceId: null,
+        businessDate: property.businessDate,
+        openingCash: 0,
+        expectedCash: 0,
+        openedBy: operatorId,
+        primaryOperatorId: bankType === 'SERVER' ? operatorId : null,
+        bankingModel,
+        bankType,
+        status: 'OPEN',
+        controlStatus: 'OPEN',
+        reason: `Automatic offline recovery for queued POS event ${event.idempotencyKey}`,
+      },
+    });
+  }
+
+  await tx.posSessionAlias.upsert({
+    where: { localSessionId },
+    create: { localSessionId, canonicalSessionId: session.id, propertyId, terminalId: terminal.id, operatorId },
+    update: { canonicalSessionId: session.id, terminalId: terminal.id, operatorId },
+  });
+
+  payload.SessionId = session.id;
+  payload.sessionId = session.id;
+  event.sessionId = session.id;
+  return session;
+}
+
 // Handle POS Sync Push supporting both Legacy SyncEvents and new HotelEvents
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
@@ -287,7 +397,7 @@ export async function POST(req: NextRequest) {
           // A terminal may have created a local shift while another terminal
           // already owned the active server shift. Resolve the local ID before
           // validating or materializing later offline orders.
-          const incomingSessionId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId || event.sessionId;
+          let incomingSessionId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId || event.sessionId;
           if (incomingSessionId && event.eventType !== 'POS_SESSION_STARTED') {
             const alias = await tx.posSessionAlias.findUnique({ where: { localSessionId: incomingSessionId } });
             if (alias) {
@@ -320,11 +430,49 @@ export async function POST(req: NextRequest) {
               const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { sessionId: true } });
               sessionId = order?.sessionId;
             }
+
+            let currentSession = sessionId
+              ? await tx.posSession.findUnique({
+                  where: { id: sessionId },
+                  select: { id: true, status: true, controlStatus: true },
+                })
+              : null;
+
+            const shiftIsUnavailable = !currentSession
+              || currentSession.status !== 'OPEN'
+              || currentSession.controlStatus !== 'OPEN';
+
+            if (shiftIsUnavailable) {
+              // Ordinary offline POS transactions are allowed to remain in
+              // the local ledger while disconnected. Once they reconnect,
+              // recover them onto a fresh cloud-approved shift instead of
+              // sending them to permanent manual review. The helper performs
+              // the authoritative business-date, Night Audit, and previous
+              // shift-approval checks inside this same transaction.
+              // The alias key is a UUID. When a legacy event has no session,
+              // use its stable order aggregate so all child events for that
+              // order recover onto the same canonical shift.
+              const recoverySessionId = sessionId
+                || (isUuid(orderId) ? orderId : null)
+                || (isUuid(event.aggregateId) ? event.aggregateId : null)
+                || randomUUID();
+              const recovered = await recoverLockedPosShift(tx, {
+                terminal,
+                event,
+                payload,
+                incomingSessionId: recoverySessionId,
+                operatorId: operatorId
+                  || (isUuid(payload.OperatorId) ? payload.OperatorId : null)
+                  || (isUuid(payload.operatorId) ? payload.operatorId : null)
+                  || (isUuid(payload.CreatedBy) ? payload.CreatedBy : null)
+                  || (isUuid(payload.createdBy) ? payload.createdBy : null),
+                propertyId,
+              });
+              sessionId = recovered.id;
+              incomingSessionId = recovered.id;
+              currentSession = recovered;
+            }
             if (!sessionId) throw new Error('SHIFT_LOCKED: offline transaction has no POS shift');
-            const currentSession = await tx.posSession.findUnique({
-              where: { id: sessionId },
-              select: { status: true, controlStatus: true },
-            });
             if (currentSession?.status === 'OPEN' && currentSession.controlStatus === 'PENDING_CLOUD_APPROVAL') {
               throw new Error('RETRYABLE_CLOUD_APPROVAL: POS shift is waiting for Cloud Night Audit approval');
             }
