@@ -1555,6 +1555,7 @@ public class LocalRepository
 
         var previousCheckOut = res.CheckOutDate;
         var activeFrontdeskSession = await GetActiveFrontdeskSessionAsync(res.PropertyId, userId);
+        var localProperty = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == res.PropertyId);
         res.CheckOutDate = newCheckOut;
         var reservationRoom = res.Rooms.FirstOrDefault();
         if (reservationRoom != null) reservationRoom.CheckOutDate = newCheckOut;
@@ -1579,7 +1580,7 @@ public class LocalRepository
                 previousCheckOutDate = previousCheckOut.ToString("o"),
                 newCheckOutDate = newCheckOut.ToString("o"),
                 frontdeskSessionId = activeFrontdeskSession?.Id,
-                businessDate = activeFrontdeskSession?.BusinessDate ?? res.BusinessDate,
+                businessDate = activeFrontdeskSession?.BusinessDate ?? localProperty?.BusinessDate ?? DateTime.UtcNow.Date,
                 roomId = res.RoomId,
                 additionalNights,
                 additionalCharge
