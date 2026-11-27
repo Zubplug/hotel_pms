@@ -10439,10 +10439,25 @@ model CommercePayment {
   refundRef  String?
   metadata   Json?
 
+  /// Accounting is posted once at payment verification. POS sync must never
+  /// create a second journal for the same Commerce payment.
+  accountingStatus       String    @default("PENDING")
+  accountingJournalId    String?   @db.Uuid
+  accountingPostedAt     DateTime? @db.Timestamptz
+  accountingFailureReason String?
+
+  /// Refund accounting is posted only after the gateway confirms completion.
+  refundAccountingStatus       String    @default("NONE")
+  refundAccountingJournalId    String?   @db.Uuid
+  refundAccountingPostedAt     DateTime? @db.Timestamptz
+  refundAccountingFailureReason String?
+
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([storeId, status])
+  @@index([accountingStatus])
+  @@index([refundAccountingStatus])
   @@index([providerReference])
 }
 

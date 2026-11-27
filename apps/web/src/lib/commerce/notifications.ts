@@ -30,6 +30,7 @@ export type CommerceNotificationEvent =
   | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
   | 'CANCELLED'
+  | 'REFUNDED'
   | 'SYNC_DELAYED';
 
 interface NotificationInput {
@@ -58,6 +59,7 @@ const EVENT_MESSAGES: Record<CommerceNotificationEvent, (name: string) => string
   OUT_FOR_DELIVERY:   (n) => `Hi ${n}, your order is on its way! Our driver is heading to you.`,
   DELIVERED:          (n) => `Hi ${n}, your order has been delivered. Enjoy your meal! 🍽️`,
   CANCELLED:          (n) => `Hi ${n}, your order has been cancelled. Contact the restaurant for assistance.`,
+  REFUNDED:           (n) => `Hi ${n}, your cancelled order has been refunded to the original payment method.`,
   SYNC_DELAYED:       (n) => `Hi ${n}, we're experiencing a brief delay. We'll update you shortly.`,
 };
 
@@ -70,6 +72,7 @@ const EVENT_SUBJECTS: Record<CommerceNotificationEvent, string> = {
   OUT_FOR_DELIVERY:  'Your order is on its way',
   DELIVERED:         'Order delivered — enjoy!',
   CANCELLED:         'Order cancelled',
+  REFUNDED:          'Order refunded',
   SYNC_DELAYED:      'Order update',
 };
 

@@ -30,6 +30,10 @@ const dirsToHide = [
   // The kitchen display uses a server-authenticated layout and cannot be
   // prerendered as part of the desktop static export.
   { src: path.join(process.cwd(), 'src/app/fnb/kitchen'), dest: path.join(process.cwd(), 'src/app/_fnb_kitchen') },
+  // Food Commerce management is a web-only authenticated workspace. The POS
+  // desktop uses its local Online Orders workspace instead and must not try to
+  // prerender this route, whose layout reads request headers/session state.
+  { src: path.join(process.cwd(), 'src/app/fnb/commerce'), dest: path.join(process.cwd(), 'src/app/_fnb_commerce') },
   // The housekeeping manager owns its own authenticated shell and must not be
   // prerendered into the desktop static shell.
   { src: path.join(process.cwd(), 'src/app/housekeeping-manager'), dest: path.join(process.cwd(), 'src/app/_housekeeping-manager') },

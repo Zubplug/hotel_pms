@@ -12,6 +12,7 @@ import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { requireFoodCommerceEntitlement } from '@/lib/commerce/public-access';
 import { sendOrderNotification, type CommerceNotificationEvent } from '@/lib/commerce/notifications';
+import { CommerceRefundService } from '@/lib/services/commerce-refund-service';
 import { z } from 'zod';
 
 type Params = { params: Promise<{ storeId: string; orderId: string }> };
@@ -24,7 +25,10 @@ const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   READY_FOR_PICKUP:    ['DELIVERED', 'CANCELLED'],
   OUT_FOR_DELIVERY:    ['DELIVERED', 'CANCELLED'],
   DELIVERED:           [],
-  CANCELLED:           [],
+  // A cancelled order may be submitted again by a manager while a gateway
+  // refund is still pending or has failed. The refund service remains
+  // idempotent and will never issue a second refund for a completed one.
+  CANCELLED:           ['CANCELLED'],
 };
 
 const STATUS_TO_EVENT: Record<string, CommerceNotificationEvent> = {
@@ -65,6 +69,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       where: { id: orderId, storeId },
       include: {
         customer: { select: { id: true, name: true, phone: true, email: true } },
+        payment: true,
       },
     });
     if (!order) return errorResponse('NOT_FOUND', 'Order not found', 404);
@@ -86,17 +91,27 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       );
     }
 
+    let finalStatus = status;
+    if (status === 'CANCELLED' && order.payment && ['VERIFIED', 'REFUND_FAILED'].includes(order.payment.status)) {
+      const refundResult = await CommerceRefundService.refundOrder({
+        orderId: order.id,
+        actorId: session.user.id,
+        reason: note || 'Commerce order cancelled by the F&B manager',
+      });
+      finalStatus = refundResult === 'COMPLETED' || refundResult === 'ALREADY_PROCESSED' ? 'REFUNDED' : 'CANCELLED';
+    }
+
     const updated = await prisma.commerceOrder.update({
       where: { id: orderId },
       data: {
-        status,
-        ...(note ? { staffNote: note } : {}),
-        ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}),
+        status: finalStatus,
+        ...(note ? { deliveryNotes: note } : {}),
+        ...(finalStatus === 'DELIVERED' ? { deliveredAt: new Date() } : {}),
       },
     });
 
     // Fire customer notification — reuses Commerce notification service
-    const notificationEvent = STATUS_TO_EVENT[status];
+    const notificationEvent = finalStatus === 'REFUNDED' ? 'REFUNDED' : STATUS_TO_EVENT[status];
     if (notificationEvent && order.customer) {
       await sendOrderNotification({
         orderId: order.id,

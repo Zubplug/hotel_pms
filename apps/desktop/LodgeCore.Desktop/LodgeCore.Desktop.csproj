@@ -20,8 +20,8 @@
 		<!-- App Identifier -->
 		<ApplicationId>com.lodgecore.frontdesk</ApplicationId>
 		<!-- Versions -->
-		<ApplicationDisplayVersion>1.2.51</ApplicationDisplayVersion>
-		<ApplicationVersion>51</ApplicationVersion>
+		<ApplicationDisplayVersion>1.2.52</ApplicationDisplayVersion>
+		<ApplicationVersion>52</ApplicationVersion>
 
 		<!-- MSIX Auto Update & Signing Configuration -->
 		<GenerateAppInstallerFile>True</GenerateAppInstallerFile>

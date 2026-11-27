@@ -898,6 +898,9 @@ export async function POST(req: NextRequest) {
                          sessionId: linkedSession?.id || sessionId,
                          orderNumber: payload.OrderNumber || `ORD-${event.aggregateId.split('-')[0].toUpperCase()}`,
                          status: payload.Status || 'SUBMITTED',
+                         paymentStatus: ['UNPAID', 'PARTIALLY_PAID', 'PAID', 'REFUNDED'].includes(String(payload.PaymentStatus || payload.paymentStatus || '').toUpperCase())
+                           ? String(payload.PaymentStatus || payload.paymentStatus).toUpperCase()
+                           : 'UNPAID',
                          subtotal: payload.Subtotal || 0,
                          taxAmount: payload.TaxAmount || 0,
                          total: payload.Total || 0,
@@ -1169,7 +1172,23 @@ export async function POST(req: NextRequest) {
               });
 
               // Safely construct double-entry GL inside the exact same sync transaction boundary
-              if (orderWithRelations && !paymentPendingApproval) {
+              let commerceAccountingAlreadyPosted = false;
+              if (orderWithRelations && isOnlineCommerceOrder(orderWithRelations)) {
+                const onlineCommerceOrder = await tx.commerceOrder.findFirst({
+                  where: {
+                    OR: [
+                      { reportedPosOrderId: orderId },
+                      ...(orderWithRelations.notes?.match(/\[Online Order\]\s+([^|\s]+)/i)?.[1]
+                        ? [{ orderRef: orderWithRelations.notes.match(/\[Online Order\]\s+([^|\s]+)/i)![1] }]
+                        : []),
+                    ],
+                  },
+                  select: { payment: { select: { accountingStatus: true } } },
+                });
+                commerceAccountingAlreadyPosted = onlineCommerceOrder?.payment?.accountingStatus === 'POSTED';
+              }
+
+              if (orderWithRelations && !paymentPendingApproval && !commerceAccountingAlreadyPosted) {
                 await PosPaymentAccountingService.processPaymentAccounting(
                   tx,
                   payment,

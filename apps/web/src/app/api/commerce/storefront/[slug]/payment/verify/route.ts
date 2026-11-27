@@ -25,10 +25,66 @@ import { getPropertyPaymentAccount, resolvePropertySecret } from '@/lib/payment-
 import { enqueueCommerceSyncEvent } from '@/lib/commerce/sync';
 import { sendOrderNotification } from '@/lib/commerce/notifications';
 import { hasPublicCommerceAccess } from '@/lib/commerce/public-access';
+import { CommercePaymentAccountingService } from '@/lib/services/commerce-payment-accounting-service';
+import { CommerceRefundService } from '@/lib/services/commerce-refund-service';
 
 type Params = { params: Promise<{ slug: string }> };
 
 type LateRefundResult = 'COMPLETED' | 'PROCESSING' | 'FAILED';
+
+async function handleCommerceRefundWebhook(input: {
+  storeId: string;
+  payload: any;
+  completed: boolean;
+}) {
+  const data = input.payload?.data ?? {};
+  const reference = data.reference ?? data.transaction_reference ?? data.tx_ref;
+  const providerTransactionId = data.transaction_id ?? data.transactionId ?? data.id;
+  const payment = await prisma.commercePayment.findFirst({
+    where: {
+      storeId: input.storeId,
+      OR: [
+        ...(reference ? [{ providerReference: String(reference) }] : []),
+        ...(providerTransactionId ? [{ metadata: { path: ['providerTransactionId'], equals: String(providerTransactionId) } }] : []),
+      ],
+    },
+    include: { order: true },
+  });
+  if (!payment) return successResponse({ received: true });
+
+  if (input.completed) {
+    await prisma.$transaction([
+      prisma.commercePayment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'REFUNDED',
+          refundedAt: payment.refundedAt ?? new Date(),
+          refundRef: data.id ? String(data.id) : undefined,
+          metadata: {
+            ...((payment.metadata as Record<string, unknown> | null) ?? {}),
+            refundStatus: 'COMPLETED',
+            providerTransactionId: providerTransactionId ? String(providerTransactionId) : undefined,
+          },
+        },
+      }),
+      prisma.commerceOrder.update({ where: { id: payment.orderId }, data: { status: 'REFUNDED', paymentStatus: 'REFUNDED' } }),
+    ]);
+    await CommerceRefundService.finalizeCompletedRefund({
+      paymentId: payment.id,
+      actorId: payment.id,
+      reason: 'Commerce gateway refund confirmed',
+    });
+  } else {
+    await prisma.$transaction([
+      prisma.commercePayment.update({
+        where: { id: payment.id },
+        data: { status: 'REFUND_FAILED', metadata: { ...((payment.metadata as Record<string, unknown> | null) ?? {}), refundStatus: 'FAILED', refundFailureReason: 'GATEWAY_REFUND_FAILED' } },
+      }),
+      prisma.commerceOrder.update({ where: { id: payment.orderId }, data: { status: 'CANCELLED', paymentStatus: 'REFUND_FAILED' } }),
+    ]);
+  }
+  return successResponse({ received: true, refund: input.completed ? 'COMPLETED' : 'FAILED' });
+}
 
 async function refundLateCommercePayment(input: {
   account: { provider: string; secret: string | null; secretRef: string | null; currency: string };
@@ -102,6 +158,13 @@ async function refundLateCommercePayment(input: {
         data: { paymentStatus: nextStatus === 'COMPLETED' ? 'REFUNDED' : nextStatus === 'PROCESSING' ? 'REFUND_PENDING' : 'REFUND_FAILED' },
       }),
     ]);
+    if (nextStatus === 'COMPLETED') {
+      await CommerceRefundService.finalizeCompletedRefund({
+        paymentId: input.payment.id,
+        actorId: input.payment.id,
+        reason: 'Late Commerce payment refunded after checkout expiry',
+      });
+    }
     return nextStatus;
   } catch (error) {
     await prisma.commercePayment.update({
@@ -169,6 +232,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       eventType = webhookPayload.event;
       providerReference = webhookPayload.data?.reference ?? null;
 
+      if (eventType === 'refund.processed') {
+        return handleCommerceRefundWebhook({ storeId: store.id, payload: webhookPayload, completed: true });
+      }
+      if (eventType === 'refund.failed') {
+        return handleCommerceRefundWebhook({ storeId: store.id, payload: webhookPayload, completed: false });
+      }
       if (eventType !== 'charge.success') {
         return successResponse({ received: true });
       }
@@ -193,6 +262,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       eventType = webhookPayload.event;
       providerReference = webhookPayload.data?.tx_ref ?? null;
 
+      if (eventType === 'refund.completed' || eventType === 'refund.processed') {
+        return handleCommerceRefundWebhook({ storeId: store.id, payload: webhookPayload, completed: true });
+      }
+      if (eventType === 'refund.failed' || eventType === 'refund.cancelled') {
+        return handleCommerceRefundWebhook({ storeId: store.id, payload: webhookPayload, completed: false });
+      }
       if (eventType !== 'charge.completed') {
         return successResponse({ received: true });
       }
@@ -257,8 +332,38 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       await tx.commercePayment.updateMany({
         where: { id: payment.id, status: 'PENDING' },
-        data: { status: 'VERIFIED', verifiedAt: now },
+        data: {
+          status: 'VERIFIED',
+          verifiedAt: now,
+          metadata: {
+            ...((payment.metadata as Record<string, unknown> | null) ?? {}),
+            providerTransactionId: String(webhookPayload?.data?.id ?? providerReference),
+            verifiedProviderReference: providerReference,
+          },
+        },
       });
+
+      // Post the online settlement inside the same transaction as payment
+      // verification. If chart-of-accounts configuration is incomplete, the
+      // whole verification rolls back and the gateway can retry safely.
+      const property = store.propertyId
+        ? await tx.property.findUnique({ where: { id: store.propertyId }, select: { businessDate: true } })
+        : null;
+      if (!property || !store.propertyId) {
+        throw new Error('Commerce payment property is not configured for accounting.');
+      }
+      await CommercePaymentAccountingService.processPaymentAccounting({
+        tx,
+        paymentId: payment.id,
+        orderId: order.id,
+        propertyId: store.propertyId,
+        organizationId: store.organizationId,
+        targetOutletId: store.targetOutletId,
+        paymentMethod: 'PAYMENT_GATEWAY',
+        amount: Number(payment.amount),
+        businessDate: property.businessDate,
+      });
+
       if (order.customerId) {
         await tx.commerceCustomer.update({
           where: { id: order.customerId },
