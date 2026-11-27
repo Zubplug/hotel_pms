@@ -385,20 +385,6 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
         </section>
       )}
 
-      {/* ═══ MARQUEE STRIP ══════════════════════════════════════════════════ */}
-      <div className="os-marquee" aria-hidden>
-        <div className="os-marquee__track">
-          {['Poolside Service', 'Cabana Delivery', 'Garden Terrace', 'No App Required',
-            'Nigerian & Continental', 'Premium Bar Service', 'Poolside Service',
-            'Cabana Delivery', 'Garden Terrace', 'No App Required',
-            'Nigerian & Continental', 'Premium Bar Service'].map((t, i) => (
-            <span key={i} className="os-marquee__item">
-              <span className="os-marquee__dot">✦</span> {t}
-            </span>
-          ))}
-        </div>
-      </div>
-
       {/* ═══ FEATURED DISHES ════════════════════════════════════════════════ */}
       {featuredProducts.length > 0 && (
         <section className="os-featured">
@@ -879,31 +865,6 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           .os-bestsellers__header { align-items: flex-start; flex-direction: column; }
           .os-bestsellers__grid { grid-template-columns: 1fr; }
         }
-
-        /* ── Marquee ── */
-        .os-marquee {
-          background: var(--color-gold);
-          overflow: hidden;
-          padding: var(--space-3) 0;
-          border-top: 1px solid rgba(201,169,110,0.4);
-          border-bottom: 1px solid rgba(201,169,110,0.4);
-        }
-        .os-marquee__track {
-          display: flex; gap: var(--space-8);
-          animation: marquee 25s linear infinite;
-          width: max-content;
-        }
-        @keyframes marquee {
-          from { transform: translateX(0); }
-          to { transform: translateX(-50%); }
-        }
-        .os-marquee__item {
-          display: flex; align-items: center; gap: var(--space-3);
-          font-size: var(--text-sm); font-weight: 700;
-          color: #0d2b22; white-space: nowrap; letter-spacing: 0.06em;
-          text-transform: uppercase;
-        }
-        .os-marquee__dot { color: rgba(13,43,34,0.5); }
 
         /* ── Featured ── */
         .os-featured {
