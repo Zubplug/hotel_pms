@@ -114,12 +114,18 @@ public class LocalRepository
 
     /// <summary>
     /// Repairs an order left on a stale local shift after a terminal reinstall.
-    /// The repair is deliberately narrow: the replacement shift must be open,
-    /// belong to the same property/outlet and have the same business date.
+    /// The repair is deliberately narrow: the replacement shift must be open
+    /// and belong to the same property/outlet. Normal manual rebinding still
+    /// requires the same business date; the automatic locked-shift recovery
+    /// path may move the order to the recovered shift's current business date.
     /// Pending sync envelopes are moved with the order so the cloud receives
     /// the repaired shift ID as well.
     /// </summary>
-    public async Task<bool> RebindOrderToOpenSessionAsync(string orderId, string? targetSessionId, bool triggerSync = true)
+    public async Task<bool> RebindOrderToOpenSessionAsync(
+        string orderId,
+        string? targetSessionId,
+        bool triggerSync = true,
+        bool allowBusinessDateRecovery = false)
     {
         if (string.IsNullOrWhiteSpace(targetSessionId)) return false;
 
@@ -140,11 +146,53 @@ public class LocalRepository
             !string.Equals(order.OutletId, target.OutletId, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The order and selected POS shift belong to different outlets.");
 
-        if (order.BusinessDate.Date != target.BusinessDate.Date)
+        var businessDateChanged = order.BusinessDate.Date != target.BusinessDate.Date;
+        if (businessDateChanged && !allowBusinessDateRecovery)
             throw new InvalidOperationException("This order belongs to a different business date and cannot be moved to the current shift.");
 
         var oldSessionId = order.SessionId;
         order.SessionId = target.Id;
+        if (businessDateChanged)
+        {
+            // A recovered shift is the authoritative posting context for the
+            // still-unsynced transaction. Move only records belonging to this
+            // order; unrelated prior-day activity remains untouched locally.
+            var recoveredBusinessDate = target.BusinessDate.Date;
+            order.BusinessDate = recoveredBusinessDate;
+
+            var payments = await _dbContext.PosPayments
+                .Where(p => p.OrderId == orderId)
+                .ToListAsync();
+            foreach (var payment in payments)
+            {
+                payment.BusinessDate = recoveredBusinessDate;
+                payment.SessionId = target.Id;
+            }
+
+            var kots = await _dbContext.PosKots
+                .Where(k => k.OrderId == orderId)
+                .ToListAsync();
+            foreach (var kot in kots)
+                kot.BusinessDate = recoveredBusinessDate;
+
+            var checks = await _dbContext.PosChecks
+                .Where(c => c.OrderId == orderId)
+                .ToListAsync();
+            foreach (var check in checks)
+                check.BusinessDate = recoveredBusinessDate;
+
+            var voids = await _dbContext.PosVoids
+                .Where(v => v.OrderId == orderId)
+                .ToListAsync();
+            foreach (var posVoid in voids)
+                posVoid.BusinessDate = recoveredBusinessDate;
+
+            var discounts = await _dbContext.PosDiscounts
+                .Where(d => d.OrderId == orderId)
+                .ToListAsync();
+            foreach (var discount in discounts)
+                discount.BusinessDate = recoveredBusinessDate;
+        }
         order.UpdatedAt = DateTime.UtcNow;
 
         var pendingEvents = await _dbContext.SyncEvents
@@ -160,6 +208,8 @@ public class LocalRepository
             {
                 var payload = JsonNode.Parse(syncEvent.PayloadJson);
                 ReplaceSessionIds(payload, target.Id);
+                if (businessDateChanged)
+                    ReplaceBusinessDates(payload, target.BusinessDate.Date);
                 syncEvent.PayloadJson = payload?.ToJsonString() ?? syncEvent.PayloadJson;
                 var hashBytes = System.Security.Cryptography.SHA256.HashData(
                     System.Text.Encoding.UTF8.GetBytes(syncEvent.PayloadJson));
@@ -209,7 +259,15 @@ public class LocalRepository
         if (string.IsNullOrWhiteSpace(ownerId) || !string.Equals(ownerId, operatorId, StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("This failed payment belongs to another POS operator. Sign in as the original operator to recover it.");
 
-        await RebindOrderToOpenSessionAsync(orderId, targetSessionId, triggerSync: false);
+        // The cloud recovery flow has already verified rollover, night-audit,
+        // and the previous shift approval. Allow this controlled path to move
+        // the still-unsynced local transaction onto that recovered business
+        // date; ordinary manual rebinding remains same-date only.
+        await RebindOrderToOpenSessionAsync(
+            orderId,
+            targetSessionId,
+            triggerSync: false,
+            allowBusinessDateRecovery: true);
 
         var relatedEvents = await _dbContext.SyncEvents
             .Where(e => e.Status != "SYNCED" && (e.EntityId == orderId || e.PayloadJson.Contains(orderId)))
@@ -250,6 +308,28 @@ public class LocalRepository
         else if (node is JsonArray array)
         {
             foreach (var item in array) ReplaceSessionIds(item, sessionId);
+        }
+    }
+
+    private static void ReplaceBusinessDates(JsonNode? node, DateTime recoveredDate)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var property in obj.ToList())
+            {
+                if (property.Key.Equals("BusinessDate", StringComparison.OrdinalIgnoreCase))
+                {
+                    obj[property.Key] = recoveredDate.ToString("O");
+                }
+                else
+                {
+                    ReplaceBusinessDates(property.Value, recoveredDate);
+                }
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (var item in array) ReplaceBusinessDates(item, recoveredDate);
         }
     }
 
