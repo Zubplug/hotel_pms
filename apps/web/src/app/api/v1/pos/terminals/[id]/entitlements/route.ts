@@ -39,6 +39,15 @@ export async function POST(
       && (item.expiresAt === null || item.expiresAt > now),
     );
     const activeCodes = new Set(active.map((item) => item.productCode));
+    const onlineOrdersEnabled = Boolean(await prisma.commerceStore.findFirst({
+      where: {
+        organizationId: terminal.organisationId,
+        propertyId: terminal.propertyId,
+        targetOutletId: terminal.outletId,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    }));
 
     return NextResponse.json({
       data: {
@@ -50,6 +59,7 @@ export async function POST(
           .map((item) => item.productCode)
           .filter((code) => !NAVIGATION_MODULES.includes(code as typeof NAVIGATION_MODULES[number])),
         entitlements,
+        onlineOrdersEnabled,
       },
     });
   } catch (error: unknown) {

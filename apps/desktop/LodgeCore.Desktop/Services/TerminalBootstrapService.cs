@@ -88,6 +88,7 @@ public class TerminalBootstrapService
             enabledModules = DeserializeStringArray(terminal.EnabledModulesJson),
             entitlements = DeserializeEntitlements(terminal.EntitlementsJson),
             entitlementsCapturedAt = terminal.EntitlementsCapturedAt,
+            onlineOrdersEnabled = terminal.OnlineOrdersEnabled,
             bankingModel = bankingModel,
             outletId = terminal.OutletId,
             outletType = outletType,
@@ -167,6 +168,7 @@ public class TerminalBootstrapService
             EnabledModulesJson = JsonSerializer.Serialize(terminalInfo.EnabledModules ?? Array.Empty<string>()),
             EntitlementsJson = JsonSerializer.Serialize(terminalInfo.Entitlements ?? Array.Empty<EntitlementInfo>()),
             EntitlementsCapturedAt = terminalInfo.EntitlementsCapturedAt,
+            OnlineOrdersEnabled = terminalInfo.OnlineOrdersEnabled,
             ConfigurationVersion = terminalInfo.ConfigurationVersion,
             StaffVersion = terminalInfo.StaffVersion,
             MenuVersion = terminalInfo.MenuVersion,
@@ -276,6 +278,7 @@ public class TerminalIdentity
     public string[]? EnabledModules { get; set; }
     public EntitlementInfo[]? Entitlements { get; set; }
     public DateTime? EntitlementsCapturedAt { get; set; }
+    public bool OnlineOrdersEnabled { get; set; }
     public int ConfigurationVersion { get; set; }
     public int StaffVersion { get; set; }
     public int MenuVersion { get; set; }

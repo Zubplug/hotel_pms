@@ -43,7 +43,13 @@ const DataProviderContext = createContext<DataProviderContextValue>({
 
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
-  const [isDesktopMode, setIsDesktopMode] = useState(process.env.NEXT_PUBLIC_IS_DESKTOP === "true");
+  // Detect the MAUI WebView during the first render. Waiting until the effect
+  // runs can briefly expose OnlineDataProvider to desktop POS components,
+  // allowing an initial cloud request before the native provider is selected.
+  const [isDesktopMode, setIsDesktopMode] = useState(() =>
+    process.env.NEXT_PUBLIC_IS_DESKTOP === "true"
+    || (typeof window !== 'undefined' && !!(window as any).chrome?.webview),
+  );
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 

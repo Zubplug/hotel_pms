@@ -132,6 +132,15 @@ export async function POST(req: NextRequest) {
       && item.startsAt <= now
       && (item.expiresAt === null || item.expiresAt > now),
     );
+    const onlineOrdersEnabled = Boolean(await prisma.commerceStore.findFirst({
+      where: {
+        organizationId: adminStaff.organizationId,
+        propertyId,
+        targetOutletId: outletId,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    }));
 
     // 4. Return Snapshot
     return NextResponse.json({
@@ -153,6 +162,7 @@ export async function POST(req: NextRequest) {
             .filter((code) => ['MODULE_PMS', 'MODULE_OPERATIONS', 'MODULE_ENTERPRISE'].includes(code)),
           entitlements,
           entitlementsCapturedAt: now,
+          onlineOrdersEnabled,
           configurationVersion: terminal.configurationVersion,
           staffVersion: terminal.staffVersion,
           menuVersion: terminal.menuVersion,

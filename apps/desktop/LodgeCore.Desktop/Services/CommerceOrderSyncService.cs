@@ -104,6 +104,15 @@ public class CommerceOrderSyncService : BackgroundService
             return;
         }
 
+        // A terminal may be restaurant/bar capable without being assigned to
+        // the active CommerceStore. Keep the assignment decision in the cloud
+        // projection and do not pull or inject orders until it is enabled.
+        if (!terminal.OnlineOrdersEnabled)
+        {
+            _logger.LogDebug("CommerceOrderSyncService: terminal {TerminalId} is not assigned to an active CommerceStore outlet — skipping poll.", terminal.Id);
+            return;
+        }
+
         // 2. Gate: need an authenticated session token.
         var token = await _authManager.GetAuthTokenAsync();
         if (string.IsNullOrWhiteSpace(token)) return;

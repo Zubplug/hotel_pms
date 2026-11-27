@@ -3577,6 +3577,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 && DateTime.TryParse(capturedAt.GetString(), out var parsedCapturedAt)
                 ? parsedCapturedAt.ToUniversalTime()
                 : DateTime.UtcNow;
+            terminal.OnlineOrdersEnabled = data.TryGetProperty("onlineOrdersEnabled", out var onlineOrdersEnabled)
+                && onlineOrdersEnabled.ValueKind == JsonValueKind.True;
 
             await dbContext.SaveChangesAsync(stoppingToken);
         }

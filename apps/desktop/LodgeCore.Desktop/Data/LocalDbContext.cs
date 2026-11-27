@@ -252,7 +252,8 @@ public class LocalDbContext : DbContext
         {
             "ALTER TABLE PosTerminals ADD COLUMN EnabledModulesJson TEXT NOT NULL DEFAULT '[]'",
             "ALTER TABLE PosTerminals ADD COLUMN EntitlementsJson TEXT NOT NULL DEFAULT '[]'",
-            "ALTER TABLE PosTerminals ADD COLUMN EntitlementsCapturedAt TEXT"
+            "ALTER TABLE PosTerminals ADD COLUMN EntitlementsCapturedAt TEXT",
+            "ALTER TABLE PosTerminals ADD COLUMN OnlineOrdersEnabled INTEGER NOT NULL DEFAULT 0"
         };
         foreach (var sql in columns)
         {

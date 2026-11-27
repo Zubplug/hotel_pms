@@ -197,7 +197,10 @@ export default function PosApp() {
   const isPoolOutlet =
     ['POOL', 'RECREATION', 'SWIMMING_POOL', 'SWIMMING_POOL_OUTLET'].includes(outletType) ||
     terminalType === 'POOL_POS';
-  const isRestaurantTerminal = isDesktopMode && ['RESTAURANT_POS', 'BAR_POS'].includes(terminalType) && !isPoolOutlet;
+  const isRestaurantTerminal = isDesktopMode
+    && ['RESTAURANT_POS', 'BAR_POS'].includes(terminalType)
+    && !isPoolOutlet
+    && terminalStatus?.onlineOrdersEnabled === true;
 
   const lockOperator = useCallback(() => {
     operatorSwitchOverride.current = true;
@@ -534,9 +537,9 @@ export default function PosApp() {
   const { isExpired, isRevoked, restrictedMode } = useLicenseGuard({ sessionContext, terminalStatus });
 
   useEffect(() => {
-    if (!isDesktopMode || terminalStatus) return;
+    if (!isDesktopMode) return;
     let cancelled = false;
-    void (async () => {
+    const loadTerminalStatus = async () => {
       try {
         const status = await provider.system?.getTerminalStatus?.();
         if (!cancelled) {
@@ -546,9 +549,17 @@ export default function PosApp() {
       } catch {
         // The POS operator screen will remain available once terminal context is ready.
       }
-    })();
-    return () => { cancelled = true; };
-  }, [isDesktopMode, provider, terminalStatus]);
+    };
+
+    void loadTerminalStatus();
+    // Read the local terminal projection periodically so an assignment or
+    // removal made in the cloud takes effect without restarting the POS.
+    const interval = window.setInterval(() => void loadTerminalStatus(), 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [isDesktopMode, provider]);
 
 
   useEffect(() => {

@@ -605,6 +605,10 @@ public class LocalPosTerminal
     public string EnabledModulesJson { get; set; } = "[]";
     public string EntitlementsJson { get; set; } = "[]";
     public DateTime? EntitlementsCapturedAt { get; set; }
+    // Cloud assignment projection: true only when an ACTIVE CommerceStore
+    // targets this terminal's outlet. The POS UI uses this cached value so
+    // online orders remain an offline/local workflow.
+    public bool OnlineOrdersEnabled { get; set; } = false;
     
     public DateTime? LastSyncAt { get; set; }
     public DateTime? LastSeenAt { get; set; }
