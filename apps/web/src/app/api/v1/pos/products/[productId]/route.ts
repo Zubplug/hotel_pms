@@ -38,6 +38,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
   const updated = await prisma.$transaction(async (tx) => {
     const saved = await tx.posProduct.update({ where: { id: productId }, data });
 
+    // F&B menu images are the operational source of truth for products that
+    // are exposed through Food Commerce. Keep every linked store copy in sync
+    // without creating duplicate Commerce products. The property constraint
+    // prevents an identically-linked product from crossing properties.
+    if (Object.prototype.hasOwnProperty.call(body, 'image')) {
+      const imageUrl = saved.image?.trim() || null;
+      const linkedProducts = await tx.commerceProduct.findMany({
+        where: {
+          posProductId: saved.id,
+          store: { propertyId: saved.propertyId },
+        },
+        select: { id: true },
+      });
+
+      if (linkedProducts.length > 0) {
+        await tx.commerceProduct.updateMany({
+          where: { id: { in: linkedProducts.map((linked) => linked.id) } },
+          data: {
+            imageUrl,
+            imageUrls: imageUrl ? [imageUrl] : [],
+          },
+        });
+      }
+    }
+
     return saved;
   });
   return successResponse(updated);
