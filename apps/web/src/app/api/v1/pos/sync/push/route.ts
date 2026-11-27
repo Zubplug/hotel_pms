@@ -45,7 +45,7 @@ async function reconcileOnlineCommerceStatus(event: any, payload: any) {
     where: { id: event.aggregateId },
     select: { id: true, orderType: true, notes: true },
   });
-  if (!isOnlineCommerceOrder(order)) return;
+  if (!order || !isOnlineCommerceOrder(order)) return;
 
   // The acknowledgement normally stores reportedPosOrderId. During the
   // narrow race where staff updates an order before that acknowledgement is
