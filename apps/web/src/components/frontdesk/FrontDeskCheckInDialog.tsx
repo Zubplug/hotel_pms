@@ -25,7 +25,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const queryClient = useQueryClient();
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   
-  const [phase, setPhase] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'READING' | 'OVERWRITE_CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('IDLE');
+  const [phase, setPhase] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'EMERGENCY_REQUESTED' | 'READING' | 'OVERWRITE_CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('IDLE');
   const [operationId, setOperationId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [existingCardData, setExistingCardData] = useState<any>(null);
@@ -34,6 +34,29 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const [isCollectDepositOpen, setIsCollectDepositOpen] = useState(false);
   const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
   const [overrideCreds, setOverrideCreds] = useState<{ acknowledgedByStaffId?: string, reason?: string } | null>(null);
+
+  const requestEmergencyCheckIn = async () => {
+    const reason = window.prompt('Reason for online emergency check-in (minimum 10 characters):', 'Emergency front-desk operation during desktop outage.')?.trim();
+    if (!reason || reason.length < 10) {
+      setErrorMsg('A clear reason of at least 10 characters is required.');
+      setPhase('FAILED');
+      return;
+    }
+    try {
+      setErrorMsg(null);
+      const response = await fetch(`/api/v1/reservations/${reservationId}/check-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emergency: true, reason, idempotencyKey: `EMERGENCY_CHECKIN:${reservationId}` }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || payload?.error || 'Unable to complete emergency check-in.');
+      setPhase('EMERGENCY_REQUESTED');
+    } catch (error: any) {
+      setErrorMsg(error?.message || 'Unable to create emergency check-in request.');
+      setPhase('FAILED');
+    }
+  };
 
   const { data: resData, isLoading: isFetching } = useQuery({
     queryKey: ['reservation', reservationId],
@@ -213,7 +236,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         {/* Body */}
         <div className="relative z-10 flex-1 overflow-y-auto p-6 flex flex-col justify-center min-h-[300px]">
           
-          {!isDesktopMode ? (
+          {!isDesktopMode && phase !== 'EMERGENCY_REQUESTED' ? (
             <div className="flex flex-col items-center text-center gap-6 animate-in zoom-in-95 duration-300 px-2">
               <div className="relative">
                 <div className="absolute -inset-4 bg-amber-500/10 rounded-full" />
@@ -228,11 +251,23 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                 </p>
               </div>
               <div className="w-full rounded-2xl bg-amber-500/8 border border-amber-500/20 px-4 py-3 text-left text-xs text-amber-200/80 leading-relaxed">
-                Open LodgeCore Desktop on the computer connected to the keycard encoder, then complete the guest check-in there.
+                Emergency check-in records the reservation for operations and Night Audit. Physical card processing follows the Night Audit decision.
               </div>
+              <button onClick={requestEmergencyCheckIn} className="w-full h-12 rounded-xl font-bold text-sm text-slate-950 bg-amber-300 hover:bg-amber-200 transition-all">
+                Register Emergency Check-in
+              </button>
               <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 shadow-[0_0_20px_-5px_rgba(59,130,246,0.5)] transition-all">
                 Close
               </button>
+            </div>
+          ) : phase === 'EMERGENCY_REQUESTED' ? (
+            <div className="flex flex-col items-center text-center gap-5 animate-in zoom-in-95 duration-300 px-2">
+              <CheckCircle2 className="h-16 w-16 text-amber-300" />
+              <div className="max-w-[340px]">
+                <h3 className="text-xl font-bold text-white mb-2">Emergency check-in recorded</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">The guest is checked in for cloud operations. The physical card action is held for Night Audit review.</p>
+              </div>
+              <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-500 transition-all">Close</button>
             </div>
           ) : isFetching ? (
             <div className="flex flex-col items-center text-center gap-5 py-8 animate-in fade-in duration-300">

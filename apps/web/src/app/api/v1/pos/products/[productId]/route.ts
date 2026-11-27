@@ -38,15 +38,39 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
   const updated = await prisma.$transaction(async (tx) => {
     const saved = await tx.posProduct.update({ where: { id: productId }, data });
 
-    // F&B menu images are the operational source of truth for products that
-    // are exposed through Food Commerce. Keep every linked store copy in sync
-    // without creating duplicate Commerce products. The property constraint
-    // prevents an identically-linked product from crossing properties.
+    let imageProductIds = [saved.id];
+
+    // An item may have one PosProduct copy per outlet. The manager UI already
+    // updates those copies, but the API must enforce the same invariant for
+    // direct edits and other clients. Prefer the stable itemCode; older menu
+    // rows without one fall back to the same name, price, and tax within the
+    // property. Only the image is propagated, so outlet-specific pricing,
+    // category, inventory, and availability remain untouched.
     if (Object.prototype.hasOwnProperty.call(body, 'image')) {
       const imageUrl = saved.image?.trim() || null;
+      const siblingWhere = saved.itemCode
+        ? { propertyId: saved.propertyId, itemCode: saved.itemCode, id: { not: saved.id } }
+        : { propertyId: saved.propertyId, name: saved.name, price: saved.price, taxRate: saved.taxRate, id: { not: saved.id } };
+      const siblings = await tx.posProduct.findMany({
+        where: siblingWhere,
+        select: { id: true },
+      });
+      const siblingIds = siblings.map((sibling) => sibling.id);
+      if (siblingIds.length > 0) {
+        await tx.posProduct.updateMany({
+          where: { id: { in: siblingIds } },
+          data: { image: imageUrl, updatedBy: user.id },
+        });
+        imageProductIds = [saved.id, ...siblingIds];
+      }
+
+      // F&B menu images are the operational source of truth for products
+      // exposed through Food Commerce. Keep every linked store copy in sync
+      // without creating duplicate Commerce products, and never cross a
+      // property boundary.
       const linkedProducts = await tx.commerceProduct.findMany({
         where: {
-          posProductId: saved.id,
+          posProductId: { in: imageProductIds },
           store: { propertyId: saved.propertyId },
         },
         select: { id: true },

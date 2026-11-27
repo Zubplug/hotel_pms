@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
         if (operationalReview.departures.some((d: any) => d.status === 'CHECKED_IN')) requiredAckTypes.push('PENDING_DEPARTURES');
         if (financialAudit.highBalances.length > 0) requiredAckTypes.push('HIGH_BALANCE');
         if (financialAudit.rateVariances.length > 0) requiredAckTypes.push('RATE_VARIANCE');
+        if (financialAudit.emergencyFrontdeskOperations?.length > 0) requiredAckTypes.push('EMERGENCY_FRONTDESK_OPERATIONS');
 
         if (requiredAckTypes.length > 0) {
           const acks = await prisma.nightAuditAcknowledgement.findMany({

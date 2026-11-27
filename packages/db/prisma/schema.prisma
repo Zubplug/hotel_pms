@@ -5658,6 +5658,35 @@ model CheckInBypass {
   @@index([status])
 }
 
+/// Emergency online front-desk operation used when the desktop terminal is
+/// unavailable. Cloud reservation, room, folio, and audit state is completed
+/// immediately; only physical card work is reconciled by the desktop later.
+model FrontdeskEmergencyOperation {
+  id                    String   @id @default(uuid()) @db.Uuid
+  propertyId            String   @db.Uuid
+  reservationId         String   @db.Uuid
+  operationType         String   // CHECK_IN | CHECK_OUT
+  status                String   @default("CLOUD_COMPLETED_HARDWARE_PENDING")
+  idempotencyKey        String   @unique
+  reason                String
+  requestedByUserId     String   @db.Uuid
+  businessDate          DateTime @db.Date
+  cardEncodingRequired  Boolean  @default(false)
+  cardEncodingStatus    String   @default("NOT_REQUIRED")
+  cardSerialNumber     String?
+  desktopDeviceId       String?
+  failureReason         String?
+  metadata              Json?
+  cloudCompletedAt      DateTime? @db.Timestamptz
+  hardwareReconciledAt  DateTime? @db.Timestamptz
+  processedAt           DateTime? @db.Timestamptz
+  createdAt             DateTime @default(now()) @db.Timestamptz
+  updatedAt             DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status, createdAt])
+  @@index([reservationId, operationType, status])
+}
+
 // -----------------------------------------------------------------------------
 // EVENT & BANQUET MANAGEMENT (ENTERPRISE CRM, LEASING, BEO)
 // -----------------------------------------------------------------------------

@@ -173,7 +173,7 @@ export async function postNightAuditJournal(tx: any, input: {
         type: { in: ['CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT', 'COMPLIMENTARY'] },
         source: { notIn: ['POS', 'CITY_LEDGER'] }
       },
-      select: { id: true, type: true, amount: true, source: true, revenueCategory: true, revenueClass: true, description: true },
+      select: { id: true, type: true, amount: true, source: true, revenueCategory: true, revenueClass: true, description: true, folio: { select: { type: true } } },
     }),
     tx.payment.findMany({
       where: {
@@ -216,19 +216,22 @@ export async function postNightAuditJournal(tx: any, input: {
   for (const item of folioItems) {
     const amount = Math.abs(Number(item.amount));
     if (!amount) continue;
+    const receivableAccount = item.folio?.type === 'CITY_LEDGER'
+      ? account('cityLedger')
+      : account('guestLedger');
     if (item.type === 'TAX') {
-      addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      addLine(lines, { accountId: receivableAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY' || (item.type === 'ADJUSTMENT' && Number(item.amount) < 0)) {
       const contraAccount = item.type === 'COMPLIMENTARY' ? account('complimentary') : account('discounts');
       const adjustmentDepartmentId = item.type === 'COMPLIMENTARY' || item.revenueCategory === 'FNB' ? fnbDepartment?.id : roomDepartment?.id;
       addLine(lines, { accountId: contraAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id, departmentId: adjustmentDepartmentId });
-      addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      addLine(lines, { accountId: receivableAccount.id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else {
       // ── Revenue classification (precedence-ordered) ──────────────────────
       // 1. Service Charge breakdown lines (GL 2210) — room rate component
       if (item.revenueClass === 'SERVICE_CHARGE') {
-        addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+        addLine(lines, { accountId: receivableAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
         addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id, departmentId: roomDepartment?.id });
         continue;
       }
@@ -252,7 +255,7 @@ export async function postNightAuditJournal(tx: any, input: {
           : (item.source === 'POS' || item.revenueCategory === 'FNB')
             ? 'fnbRevenue'
             : 'otherRevenue';
-      addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      addLine(lines, { accountId: receivableAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       const revenueDepartmentId = eventAccount
         ? (item.revenueClass === 'FOOD' || item.revenueCategory === 'FNB' ? fnbDepartment?.id : recreationDepartment?.id)
         : key === 'roomsRevenue'

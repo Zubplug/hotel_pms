@@ -7,6 +7,8 @@ import { hasPermission } from '@/lib/rbac';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(
   req: NextRequest,
@@ -24,18 +26,22 @@ export async function POST(
     let overrideDeposit = false;
     let acknowledgedByStaffId: string | undefined;
     let reason: string | undefined;
-    let operationId: string | undefined;
+    let emergency = false;
 
     try {
       const body = await req.json();
       let reqPropertyId = body?.propertyId;
       overrideDeposit = body?.overrideDeposit === true;
       acknowledgedByStaffId = body?.acknowledgedByStaffId;
-      reason = body?.reason;
-      // operationId is generated dynamically now
+      reason = typeof body?.reason === 'string' ? body.reason.trim() : undefined;
+      emergency = body?.emergency === true;
       if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     } catch (e) {
       // Ignore body parsing errors
+    }
+
+    if (emergency && (!reason || reason.trim().length < 10)) {
+      return errorResponse('INVALID_REQUEST', 'A clear reason of at least 10 characters is required for emergency check-in.', 400);
     }
 
     // 1. Fetch Reservation
@@ -59,6 +65,12 @@ export async function POST(
     await assertPropertyAccess(session.user.id, propertyId);
     const canCheckIn = await hasPermission(session.user.id, 'reservation', 'update', propertyId);
     if (!canCheckIn) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+    if (emergency) {
+      const existingEmergency = await prisma.frontdeskEmergencyOperation.findUnique({
+        where: { idempotencyKey: `EMERGENCY_CHECKIN:${reservationId}` },
+      });
+      if (existingEmergency) return successResponse(existingEmergency);
+    }
     if (await isNightAuditTransactionLocked(propertyId)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Check-in is temporarily paused while Night Audit is posting.', 409);
     }
@@ -75,24 +87,29 @@ export async function POST(
 
     // Payment validation moved into the atomic transaction
 
-    // 4. Hardware Readiness Guard
+    // An emergency browser check-in completes the cloud stay operation now.
+    // Only the physical card remains pending for the desktop terminal.
+    const idempotencyKey = emergency
+      ? `EMERGENCY_CHECKIN:${reservationId}`
+      : `CHECKIN:${reservationId}`;
+
+    // 4. Hardware Readiness Guard (not required for emergency cloud completion)
     const agent = await prisma.hardwareAgent.findFirst({
       where: { propertyId, enabled: true },
       orderBy: { createdAt: 'desc' }
     });
 
-    if (!agent) {
+    if (!emergency && !agent) {
       return errorResponse('BAD_REQUEST', 'No hardware agent configured for this property.', 400);
     }
-    if (agent.status !== 'ONLINE') {
+    if (!emergency && agent && agent.status !== 'ONLINE') {
       return errorResponse('BAD_REQUEST', 'Hardware agent is OFFLINE. Physical card encoding is required.', 400);
     }
-    if (agent.hardwareStatus !== 'READY') {
+    if (!emergency && agent && agent.hardwareStatus !== 'READY') {
       return errorResponse('BAD_REQUEST', `Encoder is ${agent.hardwareStatus}. Please check USB connection.`, 400);
     }
 
     // 5. Idempotency Check (Don't double-queue)
-    const idempotencyKey = `CHECKIN:${reservationId}`;
     const existingOperation = await prisma.lockOperation.findUnique({
       where: { idempotencyKey }
     });
@@ -195,7 +212,7 @@ export async function POST(
 
              // Idempotency check for bypass
              const existingBypass = await tx.checkInBypass.findUnique({
-               where: { operationId }
+               where: { operationId: generatedOpId }
              });
 
              if (!existingBypass) {
@@ -230,6 +247,113 @@ export async function POST(
           throw new Error('CREDIT_LIMIT_EXCEEDED: The projected reservation charges exceed the corporate account credit limit.');
         }
       }
+
+      if (emergency) {
+        const doorLock = await tx.doorLock.findFirst({ where: { roomId: resRoom.room!.id } }) || await tx.doorLock.create({
+          data: {
+            propertyId,
+            roomId: resRoom.room!.id,
+            lockCode: `ENCODER-${resRoom.room!.id}`,
+            provider: 'DELUNS_ENCODER',
+            status: 'OFFLINE',
+            metadata: { source: 'ONLINE_FRONTDESK_EMERGENCY' },
+          },
+        });
+
+        const op = await tx.lockOperation.create({
+          data: {
+            id: generatedOpId,
+            idempotencyKey,
+            propertyId,
+            lockId: doorLock.id,
+            roomId: resRoom.room!.id,
+            reservationId: reservation.id,
+            operation: 'ENCODE_CARD',
+            status: 'WAITING_FOR_AUDIT_APPROVAL',
+            metadata: {
+              source: 'ONLINE_FRONTDESK_EMERGENCY',
+              roomId: resRoom.room!.id,
+              initiatedBy: session.user.id,
+              initiatedByEmail: session.user.email,
+              initiatedByRole: (session.user as any).role || 'STAFF',
+              reason: reason || 'Desktop terminal unavailable',
+            },
+          },
+        });
+
+        await tx.lockCredential.create({
+          data: {
+            reservationId: reservation.id,
+            guestId: reservation.primaryGuestId,
+            roomId: resRoom.room!.id,
+            lockId: doorLock.id,
+            credentialType: 'rfid',
+            status: 'PENDING',
+            validFrom: new Date(),
+            validUntil: reservation.checkOut,
+            issueOperationId: op.id,
+            metadata: { source: 'ONLINE_FRONTDESK_EMERGENCY' },
+          },
+        });
+
+        await tx.reservation.update({ where: { id: reservation.id }, data: { status: 'CHECKED_IN' } });
+        await tx.room.update({ where: { id: resRoom.room!.id }, data: { status: 'OCCUPIED' } });
+
+        const businessDate = reservation.property.businessDate || getPropertyBusinessDate(reservation.property.timezone);
+        const emergencyOperation = await tx.frontdeskEmergencyOperation.upsert({
+          where: { idempotencyKey },
+          create: {
+            propertyId,
+            reservationId: reservation.id,
+            operationType: 'CHECK_IN',
+            status: 'PENDING_NIGHT_AUDIT_REVIEW',
+            idempotencyKey,
+            reason: reason || 'Desktop terminal unavailable',
+            requestedByUserId: session.user.id,
+            businessDate,
+            cardEncodingRequired: true,
+            cardEncodingStatus: 'AWAITING_NIGHT_AUDIT_APPROVAL',
+            cloudCompletedAt: new Date(),
+            metadata: { source: 'ONLINE_FRONTDESK_EMERGENCY', lockOperationId: op.id, roomId: resRoom.room!.id, previousRoomStatus: resRoom.room!.status },
+          },
+          update: { status: 'PENDING_NIGHT_AUDIT_REVIEW', cardEncodingStatus: 'AWAITING_NIGHT_AUDIT_APPROVAL' },
+        });
+
+        await tx.auditLog.createMany({ data: [
+          {
+            organizationId: reservation.property.organizationId,
+            propertyId,
+            userId: session.user.id,
+            userEmail: session.user.email,
+            userRole: (session.user as any).role || 'STAFF',
+            action: 'RESERVATION_CHECKED_IN',
+            resource: 'Reservation',
+            resourceId: reservation.id,
+            newValue: { status: 'CHECKED_IN', source: 'ONLINE_FRONTDESK_EMERGENCY', hardwareStatus: 'PENDING_DESKTOP_ENCODING' },
+            ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+            userAgent: req.headers.get('user-agent') || 'Unknown',
+            requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+          },
+          {
+            organizationId: reservation.property.organizationId,
+            propertyId,
+            userId: session.user.id,
+            userEmail: session.user.email,
+            userRole: (session.user as any).role || 'STAFF',
+            action: 'FRONTDESK_EMERGENCY_CHECK_IN_COMPLETED',
+            resource: 'FrontdeskEmergencyOperation',
+            resourceId: emergencyOperation.id,
+            newValue: { reservationId: reservation.id, hardwareStatus: 'PENDING_DESKTOP_ENCODING' },
+            ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+            userAgent: req.headers.get('user-agent') || 'Unknown',
+            requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+          },
+        ] });
+
+        return { id: emergencyOperation.id, status: emergencyOperation.status, hardwareStatus: 'PENDING_DESKTOP_ENCODING' };
+      }
+
+      if (!agent) throw new Error('No hardware agent configured for this property.');
 
 
       // Ensure a DoorLock entity exists for this room to satisfy the lockId constraint
@@ -337,7 +461,22 @@ export async function POST(
       return updatedOp;
     });
 
-    return successResponse({ operationId: newOperation.id, status: newOperation.status });
+    if (emergency) {
+      await NotificationEngine.emit({
+        type: 'CHECK_IN',
+        organizationId: reservation.property.organizationId,
+        propertyId,
+        entityType: 'reservation',
+        entityId: reservationId,
+        idempotencyKey: `emergency_checkin_${reservationId}`,
+      });
+    }
+
+    return successResponse({
+      operationId: newOperation.id,
+      status: newOperation.status,
+      ...(emergency ? { cloudStatus: 'COMPLETED', hardwareStatus: 'PENDING_DESKTOP_ENCODING' } : {}),
+    });
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

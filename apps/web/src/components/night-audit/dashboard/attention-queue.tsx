@@ -41,6 +41,7 @@ const ACTION_LABELS: Record<string, string> = {
   ROOM_DISCREPANCY:            'Resolve Room',
   FOLIO_PREVIEW:               'View Folio',
   DISCOUNT_APPROVAL:           'Approve Discount',
+  EMERGENCY_FRONTDESK_OPERATION: 'Review emergency front desk',
 };
 
 export function AttentionQueue({
@@ -61,7 +62,7 @@ export function AttentionQueue({
     (data.system.openFrontdeskSessions || []).forEach((item: any) =>
       items.push({ id: stableId('fd', item), label: 'Open Cashier Shift', description: String(item.shiftReference ?? 'Front desk'), type: 'blocker', category: 'system', actionType: 'FRONTDESK_SHIFT', payload: item }));
     (data.system.financialSyncConflicts || []).forEach((item: any) =>
-      items.push({ id: stableId('sync', item), label: 'Financial Sync Conflict', description: `Event: ${String(item.hotelEvent?.eventType ?? '')}`, type: 'blocker', category: 'system', actionType: 'SYNC_CONFLICT', payload: item }));
+      items.push({ id: stableId('sync', item), label: 'Financial Sync Conflict', description: `Review ${String(item.hotelEvent?.eventType ?? 'transaction')} · Front Desk remains operational`, type: 'blocker', category: 'financial', actionType: 'SYNC_CONFLICT', payload: item }));
     (data.financial.unverifiedComplimentary || []).forEach((item: any) => {
       const g = item.reservationRoom?.reservation?.primaryGuest;
       const name = g ? `${g.firstName ?? ''} ${g.lastName ?? ''}`.trim() : 'Guest';
@@ -69,6 +70,8 @@ export function AttentionQueue({
     });
     (data.financial.pendingCheckInBypasses || []).forEach((item: any) =>
       items.push({ id: stableId('bypass', item), label: 'Check-In Bypass', description: `Res: ${item.reservation?.confirmationNumber ?? ''}`, type: 'blocker', category: 'financial', actionType: 'CHECKIN_BYPASS', payload: { ...item, propertyId: data.property.id } as any }));
+    (data.financial.emergencyFrontdeskOperations || []).forEach((item: any) =>
+      items.push({ id: stableId('emergency-frontdesk', item), label: 'Emergency Front Desk Operation', description: `${item.operationType === 'CHECK_IN' ? 'Check-in' : 'Checkout'} · physical card review`, type: 'blocker', category: 'financial', actionType: 'EMERGENCY_FRONTDESK_OPERATION', payload: { ...item, propertyId: data.property.id } as any }));
     (data.cash.unverifiedTransactions || []).forEach((item: any) =>
       items.push({ id: stableId('trans', item), label: 'Unverified Transaction', description: `${item.method === 'BANK_TRANSFER' ? 'Transfer' : 'POS'} — ${item.amount ?? ''}`, type: 'blocker', category: 'cash', actionType: 'TRANSACTION_VERIFICATION', payload: { unverifiedTransactions: [item], propertyId: data.property.id } as any }));
     (data.cash.cashHandovers || []).forEach((item: any) =>
@@ -119,7 +122,7 @@ export function AttentionQueue({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <QueueMetric label="Requires action" value={blockerCount} detail="Blocks close" tone="rose" icon={XCircle} />
+        <QueueMetric label="Requires action" value={blockerCount} detail="Blocks Night Audit close" tone="rose" icon={XCircle} />
         <QueueMetric label="Review queue" value={warningCount} detail="Does not block close" tone="amber" icon={AlertTriangle} />
         <QueueMetric label="Open exceptions" value={queue.length} detail="Across all controls" tone="indigo" icon={ListFilter} />
         <QueueMetric label="Control mode" value="Live" detail="Refreshes every 5 seconds" tone="emerald" icon={Clock3} />
@@ -129,9 +132,9 @@ export function AttentionQueue({
         <PanelHeader
           icon={Activity}
           title="Operations exception queue"
-          subtitle={blockerCount > 0 ? 'Resolve blockers first, then review warnings.' : warningCount > 0 ? 'No blockers remain. Review the outstanding warnings.' : 'All controls are clear for close.'}
+          subtitle={blockerCount > 0 ? 'Resolve Night Audit blockers first; Front Desk operations remain available.' : warningCount > 0 ? 'No Night Audit blockers remain. Review the outstanding warnings.' : 'All controls are clear for close.'}
           tone={blockerCount > 0 ? 'rose' : warningCount > 0 ? 'amber' : 'emerald'}
-          actions={<Badge tone={blockerCount > 0 ? 'rose' : 'emerald'} dot>{blockerCount > 0 ? 'Close is gated' : 'Ready to proceed'}</Badge>}
+          actions={<Badge tone={blockerCount > 0 ? 'rose' : 'emerald'} dot>{blockerCount > 0 ? 'Night Audit review required' : 'Ready to proceed'}</Badge>}
         />
 
         <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
@@ -172,7 +175,7 @@ export function AttentionQueue({
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-300/70">Resolution protocol</p>
             <h3 className="mt-2 text-sm font-semibold text-white">Work from impact to detail</h3>
             <div className="mt-4 space-y-3 text-[11px] leading-relaxed text-slate-500">
-              <ProtocolStep number="01" title="Clear blockers" detail="These items prevent a controlled close." tone="rose" />
+              <ProtocolStep number="01" title="Review blockers" detail="These items prevent Night Audit close, not Front Desk work." tone="rose" />
               <ProtocolStep number="02" title="Review warnings" detail="Confirm the exception is understood or resolve it." tone="amber" />
               <ProtocolStep number="03" title="Recheck status" detail="The queue refreshes automatically as controls change." tone="emerald" />
             </div>

@@ -14,6 +14,7 @@ import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-refund-email';
 import { assertModifierStockIsNotBaseRecipeIngredient } from '@/lib/pos/modifier-validation';
+import { lockOrchestrator } from '@/lib/locks/orchestrator';
 
 const REFUND_STAGE_ROLES = {
   GENERAL_CASHIER_REVIEW: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'],
@@ -77,6 +78,45 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         });
         await tx.auditLog.create({ data: { organizationId: (await tx.property.findUnique({ where: { id: approval.propertyId } }))?.organizationId || '', propertyId: approval.propertyId, userId: user.id, action: 'ACCOUNT_DELETION_APPROVED_FOR_REVIEW', resource: 'ApprovalRequest', resourceId: approval.id, newValue: { deletionStatus: 'AWAITING_DATA_REVIEW', dataDeleted: false }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
         return { status: 'APPROVED_FOR_REVIEW', dataDeleted: false, approval: updated };
+      }
+
+      if (approval.type === 'FRONTDESK_EMERGENCY_CHECKOUT') {
+        if (approval.status !== 'PENDING') throw new Error('CONFLICT');
+        const details = (approval.details || {}) as Record<string, any>;
+        const role = String(user.role).toUpperCase();
+        const isManagement = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'].includes(role) || user.isSuperAdmin;
+        const isFinance = ['ACCOUNTANT', 'FINANCE_MANAGER'].includes(role) || user.isSuperAdmin;
+        const isReopenAuthorization = details.stage === 'REOPEN_AUTHORIZATION';
+        if (isReopenAuthorization ? !isFinance : !isManagement) throw new Error(isReopenAuthorization ? 'ACCOUNTANT_APPROVAL_REQUIRED' : 'MANAGER_APPROVAL_REQUIRED');
+        const comment = String(body.comment || body.notes || '').trim();
+        if (isReopenAuthorization && comment.length < 10) throw new Error('REOPEN_REASON_REQUIRED');
+        const operation = await tx.frontdeskEmergencyOperation.findFirst({ where: { id: details.operationId, propertyId: approval.propertyId, operationType: 'CHECK_OUT', status: isReopenAuthorization ? 'REOPEN_REQUESTED' : 'REJECTED_MANUAL_REVIEW' } });
+        if (!operation) throw new Error('NOT_FOUND');
+        const now = new Date();
+        if (isReopenAuthorization) {
+          const metadata = (operation.metadata || {}) as Record<string, any>;
+          const originalCheckOut = metadata.originalCheckOut ? new Date(`${metadata.originalCheckOut}T00:00:00.000Z`) : new Date(operation.businessDate.getTime() + 86400000);
+          const reservation = await tx.reservation.findFirst({ where: { id: operation.reservationId, propertyId: approval.propertyId, status: 'CHECKED_OUT' }, include: { reservationRooms: { where: { status: 'ACTIVE' }, select: { roomId: true } } } });
+          if (!reservation) throw new Error('RESERVATION_NOT_REOPENABLE');
+          await tx.reservation.update({ where: { id: reservation.id }, data: { status: 'CHECKED_IN', checkOut: originalCheckOut } });
+          await tx.reservationRoom.updateMany({ where: { reservationId: reservation.id, status: 'ACTIVE' }, data: { checkOut: originalCheckOut } });
+          for (const assignment of reservation.reservationRooms) {
+            if (!assignment.roomId) continue;
+            await tx.room.update({ where: { id: assignment.roomId }, data: { status: 'OCCUPIED' } });
+            await tx.housekeepingTask.updateMany({ where: { roomId: assignment.roomId, type: 'CHECKOUT', status: { not: 'CANCELLED' }, createdAt: { gte: operation.createdAt } }, data: { status: 'CANCELLED', notes: 'Cancelled because the emergency checkout was authorised for reopen.' } });
+          }
+          await tx.folio.updateMany({ where: { reservationId: reservation.id, status: 'CLOSED' }, data: { status: 'OPEN', closedAt: null, closedBy: null, version: { increment: 1 } } });
+          const updatedOperation = await tx.frontdeskEmergencyOperation.update({ where: { id: operation.id }, data: { status: 'REOPENED_FOR_CORRECTION', failureReason: null, processedAt: now, metadata: { ...metadata, finalDecision: 'AUTHORIZE_REOPEN', reopenedBy: user.id, reopenedAt: now.toISOString(), reopenReason: comment, financialState: 'POSTED_IMMUTABLE' } } });
+          const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', executionStatus: 'APPLIED', reviewedBy: user.id, reviewedAt: now, details: { ...details, stage: 'REOPENED_FOR_CORRECTION', accountantDecision: 'AUTHORIZE_REOPEN', accountantApprovedBy: user.id, accountantApprovedAt: now.toISOString(), accountantNote: comment, financialState: 'POSTED_IMMUTABLE' } } });
+          const property = await tx.property.findUnique({ where: { id: approval.propertyId }, select: { organizationId: true } });
+          await tx.auditLog.create({ data: { organizationId: property?.organizationId || '', propertyId: approval.propertyId, userId: user.id, action: 'FRONTDESK_EMERGENCY_CHECKOUT_REOPENED_BY_FINANCE', resource: 'FrontdeskEmergencyOperation', resourceId: operation.id, previousValue: { status: operation.status }, newValue: { status: updatedOperation.status, approvalId: approval.id, reservationStatus: 'CHECKED_IN', financialState: 'POSTED_IMMUTABLE', reason: comment }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+          return { status: 'REOPENED_FOR_CORRECTION', approval: updated, emergencyOperationId: updatedOperation.id, financialCorrectionRequired: true };
+        }
+        const updatedOperation = await tx.frontdeskEmergencyOperation.update({ where: { id: operation.id }, data: { status: 'APPROVED_HARDWARE_PENDING', cardEncodingStatus: 'PENDING_REVOCATION', processedAt: now, metadata: { ...(operation.metadata as any), managerDecision: 'CONFIRM_CHECKOUT', managerApprovedBy: user.id, managerApprovedAt: now.toISOString() } } });
+        const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', executionStatus: 'APPLIED', reviewedBy: user.id, reviewedAt: now, details: { ...details, stage: 'MANAGEMENT_APPROVED', managerDecision: 'CONFIRM_CHECKOUT', managerApprovedBy: user.id, managerApprovedAt: now.toISOString(), financialState: 'POSTED_IMMUTABLE' } } });
+        const property = await tx.property.findUnique({ where: { id: approval.propertyId }, select: { organizationId: true } });
+        await tx.auditLog.create({ data: { organizationId: property?.organizationId || '', propertyId: approval.propertyId, userId: user.id, action: 'FRONTDESK_EMERGENCY_CHECKOUT_CONFIRMED', resource: 'FrontdeskEmergencyOperation', resourceId: operation.id, previousValue: { status: operation.status }, newValue: { status: updatedOperation.status, approvalId: approval.id, financialState: 'POSTED_IMMUTABLE' }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+        return { status: 'EXECUTED', approval: updated, emergencyOperationId: updatedOperation.id, releasePhysicalRevocation: true };
       }
 
       if (approval.type === 'CORPORATE_CONTRACT') {
@@ -632,6 +672,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       return updatedApproval;
     });
+
+    if ((result as any)?.releasePhysicalRevocation && (result as any)?.emergencyOperationId) {
+      const operation = await prisma.frontdeskEmergencyOperation.findUnique({ where: { id: (result as any).emergencyOperationId }, select: { reservationId: true, propertyId: true } });
+      if (operation) await lockOrchestrator.revokeReservationCredentials(operation.reservationId, operation.propertyId);
+    }
 
     if (result && typeof result === 'object' && 'providerTransactionId' in result) {
       const gatewayResult = await executeGatewayRefund(result);

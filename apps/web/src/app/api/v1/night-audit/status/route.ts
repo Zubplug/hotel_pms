@@ -298,6 +298,7 @@ export async function GET(req: NextRequest) {
     if (financial.pendingDiscounts?.length > 0) warnings++;
     if (financial.unverifiedComplimentary?.length > 0) blockers++;
     if (financial.pendingCheckInBypasses?.length > 0) blockers++;
+    if (financial.emergencyFrontdeskOperations?.length > 0) blockers++;
     if (financial.eventHall?.blockers > 0) blockers++;
     if (financial.guestAmenity?.blockers?.length) blockers++;
     if (financial.guestAmenity?.zeroCostItems?.length) warnings++;

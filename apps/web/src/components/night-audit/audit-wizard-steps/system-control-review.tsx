@@ -249,8 +249,8 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
       {financialSyncConflicts?.length > 0 && (
         <div className="pt-2">
           <div className="mb-3">
-            <h4 className="text-sm font-bold text-rose-300">Financial Sync Conflicts (Blocker)</h4>
-            <p className="mt-0.5 text-xs text-rose-400/70">Payments or charges failed to sync with the accounting system.</p>
+            <h4 className="text-sm font-bold text-rose-300">Financial Sync Conflicts (Night Audit Blocker)</h4>
+            <p className="mt-0.5 text-xs text-rose-400/70">Payments or charges failed to sync. The Night Auditor must review them; this does not stop offline Front Desk work or shift submission.</p>
           </div>
           <div className="space-y-2">
             {financialSyncConflicts.map((sc: any) => (

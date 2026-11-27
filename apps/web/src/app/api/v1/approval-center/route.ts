@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!user.isSuperAdmin && !ACCESS_ROLES.has(user.role)) return NextResponse.json({ error: 'Approval center access required' }, { status: 403 });
 
   const propertyFilter = { propertyId: { in: user.allowedProperties } };
-  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders, corporateApprovals, accountDeletionRequests, paymentCorrectionsRaw] = await Promise.all([
+  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders, corporateApprovals, accountDeletionRequests, paymentCorrectionsRaw, emergencyCheckoutApprovals] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: { not: 'CANCELLED' } },
       orderBy: { createdAt: 'desc' }, take: 200,
@@ -83,6 +83,10 @@ export async function GET(req: NextRequest) {
       where: { ...propertyFilter, status: 'REQUESTED' },
       orderBy: { createdAt: 'desc' }, take: 200,
     }),
+    prisma.approvalRequest.findMany({
+      where: { ...propertyFilter, type: 'FRONTDESK_EMERGENCY_CHECKOUT', status: 'PENDING' },
+      orderBy: { createdAt: 'desc' }, take: 100,
+    }),
   ]);
 
   const correctionPaymentIds = paymentCorrectionsRaw.map((correction) => correction.originalPaymentId);
@@ -128,6 +132,12 @@ export async function GET(req: NextRequest) {
     approval,
     approvalStage: (approval.details as { stage?: string } | null)?.stage || 'PROPERTY_MANAGER_REVIEW',
   })) : [];
+  const emergencyCheckouts = emergencyCheckoutApprovals
+    .filter((approval) => {
+      const stage = (approval.details as { stage?: string } | null)?.stage;
+      return (isManagement && stage !== 'REOPEN_AUTHORIZATION') || (isAccountant && stage === 'REOPEN_AUTHORIZATION');
+    })
+    .map((approval) => ({ ...approval, approval, approvalStage: (approval.details as { stage?: string } | null)?.stage || 'MANAGEMENT_REVIEW' }));
   const priceApprovals = priceApprovalsRaw.filter((approval) => {
     const stage = (approval.details as { stage?: string } | null)?.stage;
     return (isAccountant && stage === 'ACCOUNTANT_REVIEW') || (isCashier && stage === 'GENERAL_CASHIER_REVIEW');
@@ -181,6 +191,7 @@ export async function GET(req: NextRequest) {
       purchaseOrders: purchaseOrdersWithStockItems,
       corporateContracts,
       accountDeletions,
+      emergencyCheckouts,
       paymentCorrections,
       role: user.role,
     },

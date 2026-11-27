@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             where: { id },
             data: { 
               status: 'RESOLVED', 
-              resolution: 'REJECTED', 
+              resolution: `REJECTED: ${String(resolutionComment).trim()}`,
               resolvedBy: session.user?.id || null, 
               resolvedAt: new Date() 
             }
@@ -775,7 +775,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             where: { id },
             data: { 
               status: 'RESOLVED', 
-              resolution: 'FORCED', 
+              resolution: `FORCED: ${String(resolutionComment).trim()}`,
               resolvedBy: session.user?.id || null, 
               resolvedAt: new Date() 
             }

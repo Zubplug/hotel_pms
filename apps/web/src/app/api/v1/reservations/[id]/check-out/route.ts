@@ -37,6 +37,12 @@ export async function POST(
 
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
+    const emergency = body.emergency === true;
+    const emergencyReason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    const emergencyIdempotencyKey = `EMERGENCY_CHECKOUT:${id}`;
+    if (emergency && emergencyReason.length < 10) {
+      return errorResponse('INVALID_REQUEST', 'A clear reason of at least 10 characters is required for emergency checkout.', 400);
+    }
     const forceSkipper = body.forceSkipper === true;
     const skipperReason = typeof body.reason === 'string' ? body.reason.trim() : '';
     if (forceSkipper && skipperReason.length < 10) {
@@ -63,6 +69,13 @@ export async function POST(
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
+
+    if (emergency) {
+      const existingEmergency = await prisma.frontdeskEmergencyOperation.findUnique({
+        where: { idempotencyKey: emergencyIdempotencyKey },
+      });
+      if (existingEmergency) return successResponse(existingEmergency);
+    }
     if (reservation.status !== 'CHECKED_IN') {
       return errorResponse('INVALID_STATE', `Cannot check out a reservation with status ${reservation.status}`, 409);
     }
@@ -551,16 +564,68 @@ export async function POST(
 
     // 6. Queue credential revocation (non-blocking)
     let revokedCount = 0;
-    try {
-      revokedCount = await lockOrchestrator.revokeReservationCredentials(id, reservation.propertyId);
-    } catch (hwErr) {
-      console.error('[Check-Out] Revocation dispatch failed (non-blocking):', hwErr);
+    // Emergency checkout must not dispatch physical-card revocation before
+    // Night Audit reviews the cloud operation. Normal desktop checkout keeps
+    // the existing immediate revocation behaviour.
+    if (!emergency) {
+      try {
+        revokedCount = await lockOrchestrator.revokeReservationCredentials(id, reservation.propertyId);
+      } catch (hwErr) {
+        console.error('[Check-Out] Revocation dispatch failed (non-blocking):', hwErr);
+      }
+    }
+
+    let emergencyOperation = null;
+    if (emergency) {
+      emergencyOperation = await prisma.frontdeskEmergencyOperation.upsert({
+        where: { idempotencyKey: emergencyIdempotencyKey },
+        create: {
+          propertyId: reservation.propertyId,
+          reservationId: id,
+          operationType: 'CHECK_OUT',
+          status: 'PENDING_NIGHT_AUDIT_REVIEW',
+          idempotencyKey: emergencyIdempotencyKey,
+          reason: emergencyReason || 'Desktop terminal unavailable',
+          requestedByUserId: actorId,
+          businessDate: checkoutProperty.businessDate || getPropertyBusinessDate(checkoutProperty.timezone),
+          cardEncodingRequired: false,
+          cardEncodingStatus: 'AWAITING_NIGHT_AUDIT_APPROVAL',
+          cloudCompletedAt: new Date(),
+          metadata: { source: 'ONLINE_FRONTDESK_EMERGENCY', revokedCredentials: revokedCount, originalCheckOut: reservation.checkOut.toISOString().slice(0, 10), originalReservationStatus: 'CHECKED_IN' },
+        },
+        update: {
+          status: 'PENDING_NIGHT_AUDIT_REVIEW',
+          cardEncodingStatus: 'AWAITING_NIGHT_AUDIT_APPROVAL',
+          cloudCompletedAt: new Date(),
+        },
+      });
+      await prisma.auditLog.create({
+        data: {
+          organizationId: checkoutProperty.organizationId,
+          propertyId: reservation.propertyId,
+          userId: actorId,
+          userEmail: actorEmail,
+          userRole: actorRole,
+          action: 'FRONTDESK_EMERGENCY_CHECK_OUT_COMPLETED',
+          resource: 'FrontdeskEmergencyOperation',
+          resourceId: emergencyOperation.id,
+          newValue: { reservationId: id, hardwareStatus: revokedCount > 0 ? 'PENDING_DESKTOP_REVOCATION' : 'NOT_REQUIRED' },
+          ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+          userAgent: req.headers.get('user-agent') || 'Unknown',
+          requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+        },
+      });
     }
 
     return successResponse({
       message: 'Check-out complete.',
       revokedCredentials: revokedCount,
       revocationStatus: revokedCount > 0 ? 'QUEUED' : 'NONE',
+      ...(emergency ? {
+        emergencyOperationId: emergencyOperation?.id,
+        cloudStatus: 'COMPLETED',
+        hardwareStatus: revokedCount > 0 ? 'PENDING_DESKTOP_REVOCATION' : 'NOT_REQUIRED',
+      } : {}),
     });
 
   } catch (err: unknown) {

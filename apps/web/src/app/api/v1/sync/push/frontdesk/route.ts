@@ -27,6 +27,12 @@ import { QueuePublisher } from "@/lib/integrations/ota/queue";
 import { fulfilReachBooking } from "@/lib/reach-commission";
 import { emitShiftDecisionNotification } from '@/lib/services/shift-notification-service';
 import { isConcessionManagementPosition } from '@/lib/concession-accountability';
+import {
+  FRONTDESK_SESSION_EVENTS,
+  cloudWinsOperationalConflict,
+  requiresFrontdeskSession,
+  shouldAutoSubmitRecoveryShift,
+} from '@/lib/frontdesk-financial-policy';
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -423,7 +429,11 @@ export async function POST(req: NextRequest) {
       "MODULE_OPERATIONS",
       propertyId,
     );
-    if (await isNightAuditCutoverActive(propertyId)) {
+    const hasFinancialEvents = events.some((event: any) =>
+      FRONTDESK_SESSION_EVENTS.has(String(event?.eventType || "")) &&
+      event?.payload?.frontdeskTransaction !== false,
+    );
+    if (hasFinancialEvents && await isNightAuditCutoverActive(propertyId)) {
       return NextResponse.json(
         {
           error:
@@ -525,21 +535,48 @@ export async function POST(req: NextRequest) {
           }
         }
         const actorId = isUuid(operatorId) ? operatorId : device.id;
-        const sessionBoundEvents = new Set([
-          "ROOM_CHARGE",
-          "POST_CHARGE",
-          "POST_PAYMENT",
-          "PAYMENT_CORRECTION_REQUESTED",
-          "ADVANCE_DEPOSIT",
-          "ADVANCE_DEPOSIT_REQUEST",
-          "CREDIT_ADJUSTMENT_REQUEST",
-          "ROOM_CREDIT",
-          "REFUND_REQUESTED",
-        ]);
         let sessionBusinessDate: Date | null = null;
+        if (requiresFrontdeskSession(eventType, payload.frontdeskTransaction) && !payload.frontdeskSessionId) {
+          // Older offline clients may not have attached a cashier session to
+          // a financial event. Recover it after Night Audit with a zero-float
+          // shift owned by the original staff member. Tender operations are
+          // deliberately left open for normal cashier cash declaration and
+          // approval; only non-tender charge operations are auto-submitted.
+          const recoveryStaff = await prisma.staff.findFirst({
+            where: { OR: [{ id: actorId }, { userId: actorId }], propertyId, isActive: true },
+            select: { id: true },
+          });
+          if (!recoveryStaff) throw new Error("FRONTDESK_STAFF_REQUIRED: Cannot recover financial event without the original staff member.");
+          const existingRecoveryShift = await prisma.frontdeskSession.findFirst({
+            where: { propertyId, staffId: recoveryStaff.id, status: "OPEN", controlStatus: "OPEN" },
+            select: { id: true, shiftReference: true },
+          });
+          if (existingRecoveryShift) {
+            payload.frontdeskSessionId = existingRecoveryShift.id;
+            payload.__autoRecoveryShift = existingRecoveryShift.shiftReference.startsWith("FD-RECOVERY-");
+          } else {
+            const till = await prisma.cashAccount.findFirst({ where: { propertyId, type: "FRONTDESK_TILL", isActive: true }, orderBy: { createdAt: "asc" }, select: { id: true } });
+            if (!till) throw new Error("FRONTDESK_TILL_REQUIRED: No active Front Desk Till is available for financial event recovery.");
+            const recoveryDate = parseLocalDateString(payload.businessDate) || authoritativeBusinessDate;
+            const recoveryId = randomUUID();
+            await prisma.frontdeskSession.create({
+              data: {
+                id: recoveryId,
+                propertyId,
+                staffId: recoveryStaff.id,
+                cashAccountId: till.id,
+                shiftReference: `FD-RECOVERY-${recoveryId.slice(0, 8).toUpperCase()}`,
+                businessDate: recoveryDate,
+                openingFloat: 0,
+                systemExpectedCash: 0,
+              },
+            });
+            payload.frontdeskSessionId = recoveryId;
+            payload.__autoRecoveryShift = true;
+          }
+        }
         if (
-          sessionBoundEvents.has(eventType) &&
-          payload.frontdeskTransaction !== false
+          requiresFrontdeskSession(eventType, payload.frontdeskTransaction)
         ) {
           const frontdeskSessionId = payload.frontdeskSessionId;
           if (!frontdeskSessionId)
@@ -549,10 +586,14 @@ export async function POST(req: NextRequest) {
           const frontdeskSession = await prisma.frontdeskSession.findUnique({
             where: { id: frontdeskSessionId },
           });
+          const frontdeskStaff = await prisma.staff.findFirst({
+            where: { OR: [{ id: actorId }, { userId: actorId }], propertyId },
+            select: { id: true },
+          });
           if (
             !frontdeskSession ||
             frontdeskSession.propertyId !== propertyId ||
-            frontdeskSession.staffId !== actorId ||
+            (frontdeskSession.staffId !== actorId && frontdeskSession.staffId !== frontdeskStaff?.id) ||
             (frontdeskSession.status !== "OPEN" && frontdeskSession.status !== "CLOSED" && frontdeskSession.status !== "RETURNED")
           ) {
             throw new Error(
@@ -4174,7 +4215,7 @@ export async function POST(req: NextRequest) {
             const propertyBusinessDateStr = (authoritativeBusinessDate || new Date()).toISOString().split('T')[0];
             const checkInStr = res.checkIn.toISOString().split('T')[0];
             const isToday = checkInStr === propertyBusinessDateStr;
-            
+
             let newStatus = "AVAILABLE";
             if (res.status === "CHECKED_IN") {
               newStatus = "OCCUPIED";
@@ -4256,6 +4297,149 @@ export async function POST(req: NextRequest) {
               await tx.reservationRoom.update({
                 where: { id: activeRoom.id },
                 data: { checkOut: newCheckOut },
+              });
+            }
+
+            // An extension rejected during Night Audit is a late room posting,
+            // not a free date change. Post the added night exactly once using
+            // the original business date carried by the offline event.
+            const extensionOperationId = `EXTEND_STAY_CHARGE:${idempotencyKey}`;
+            const extensionAmount = Number(payload.additionalCharge || 0) > 0
+              ? Number(payload.additionalCharge)
+              : Number(activeRoom?.rateAmount || 0) * Math.max(1, Math.ceil((newCheckOut.getTime() - res.checkOut.getTime()) / (1000 * 60 * 60 * 24)));
+            if (extensionAmount > 0.01) {
+              // Corporate reservations post to the company's open City Ledger
+              // folio, matching normal room-charge routing. Non-corporate
+              // reservations use their own room folio.
+              let extensionFolio = res.corporateAccountId
+                ? await tx.folio.findFirst({ where: { corporateAccountId: res.corporateAccountId, propertyId, type: "CITY_LEDGER", status: "OPEN" } })
+                : await tx.folio.findFirst({ where: { reservationId: aggregateId, propertyId, status: { not: "VOID" } } });
+              if (!extensionFolio) {
+                extensionFolio = await tx.folio.create({
+                  data: {
+                    reservationId: res.corporateAccountId ? undefined : aggregateId,
+                    propertyId,
+                    guestId: res.corporateAccountId ? undefined : res.primaryGuestId,
+                    corporateAccountId: res.corporateAccountId || undefined,
+                    folioNumber: `FOL-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`,
+                    type: res.corporateAccountId ? "CITY_LEDGER" : "ROOM",
+                    status: "OPEN",
+                    currency: res.currency,
+                  },
+                });
+              }
+              const existingExtensionCharge = await tx.folioItem.findFirst({ where: { folioId: extensionFolio.id, operationId: `${extensionOperationId}:ROOM` } });
+              if (!existingExtensionCharge) {
+                const breakdownConfig = resolveBreakdownConfig((property.settings as any) || {});
+                const breakdown = computeRateBreakdown(
+                  extensionAmount,
+                  { ...breakdownConfig, enabled: breakdownConfig.enabled && professionalOperationsEnabled },
+                  false,
+                  activeRoom?.roomTypeId || "Room extension",
+                  null,
+                );
+                const extensionLines: Array<{ type: string; revenueCategory: "ROOM" | "FNB" | "TAX" | "OTHER"; revenueClass: string; amount: number; description: string; operationId: string }> = [
+                  { type: "CHARGE", revenueCategory: "ROOM", revenueClass: "ROOM", amount: breakdown.netAccommodation, description: `Late net accommodation posting for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:ROOM` },
+                  ...(breakdown.complimentaryFoodAmount > 0 ? [{ type: "CHARGE", revenueCategory: "FNB", revenueClass: "FOOD", amount: breakdown.complimentaryFoodAmount, description: `${breakdown.complimentaryAllocationName} for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:FNB` }] : []),
+                  ...(breakdown.vatAmount > 0 ? [{ type: "TAX", revenueCategory: "TAX", revenueClass: "VAT", amount: breakdown.vatAmount, description: `VAT for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:VAT` }] : []),
+                  ...(breakdown.serviceChargeAmount > 0 ? [{ type: "CHARGE", revenueCategory: "OTHER", revenueClass: "SERVICE_CHARGE", amount: breakdown.serviceChargeAmount, description: `Service Charge for ${postingBusinessDate.toISOString().slice(0, 10)}`, operationId: `${extensionOperationId}:SC` }] : []),
+                ];
+                for (const line of extensionLines) {
+                  await tx.folioItem.create({
+                    data: {
+                      folioId: extensionFolio.id,
+                      reservationId: aggregateId,
+                      guestId: res.primaryGuestId,
+                      businessDate: postingBusinessDate,
+                      type: line.type,
+                      source: "ROOM_CHARGE",
+                      revenueCategory: line.revenueCategory,
+                      revenueClass: line.revenueClass,
+                      description: line.description,
+                      quantity: 1,
+                      unitAmount: line.amount,
+                      amount: line.amount,
+                      currency: extensionFolio.currency || res.currency,
+                      baseAmount: line.amount,
+                      postedBy: staffOperatorId,
+                      deviceId: device.id,
+                      operationId: line.operationId,
+                      isLatePosting: true,
+                      latePostingReason: "Offline extension was deferred while Night Audit was in progress",
+                      originalBusinessDate: postingBusinessDate,
+                      syncedAt: new Date(),
+                    },
+                  });
+                }
+                const postedAmount = extensionLines.reduce((sum, line) => sum + Number(line.amount), 0);
+                await tx.folio.update({ where: { id: extensionFolio.id }, data: { totalCharges: { increment: postedAmount }, balance: { increment: postedAmount }, version: { increment: 1 } } });
+
+                // Late folio rows must also create the same balanced GL entry
+                // as the normal Night Audit journal. Keep the journal tied to
+                // the extension idempotency key so a retry cannot duplicate it.
+                const glReference = `LATE_EXTEND_STAY:${idempotencyKey}`;
+                const existingJournal = await tx.journalEntry.findFirst({ where: { propertyId, reference: glReference }, select: { id: true } });
+                if (!existingJournal) {
+                  const receivableAccount = res.corporateAccountId
+                    ? await GLMappingService.getCityLedgerAccount(propertyId)
+                    : await GLMappingService.getGuestLedgerAccount(propertyId);
+                  const roomRevenue = await tx.chartOfAccount.findFirst({ where: { propertyId, code: "4050", isActive: true }, select: { id: true } });
+                  if (!roomRevenue) throw new Error("LATE_POSTING_ACCOUNTING_CONFIG: Rooms Revenue GL Account 4050 is missing or inactive.");
+                  const glLines: Array<{ accountId: string; debit: number; credit: number; description: string; sourceType: string; sourceId: string }> = [
+                    { accountId: receivableAccount, debit: postedAmount, credit: 0, description: "Late room extension receivable", sourceType: "LATE_EXTEND_STAY", sourceId: idempotencyKey },
+                  ];
+                  for (const line of extensionLines) {
+                    const amount = Number(line.amount);
+                    if (amount <= 0.01) continue;
+                    let accountId = roomRevenue.id;
+                    if (line.revenueClass === "FOOD") accountId = await GLMappingService.getPosRevenueAccount(propertyId, "FOOD");
+                    if (line.revenueClass === "VAT") accountId = await GLMappingService.getTaxPayableAccount(propertyId);
+                    if (line.revenueClass === "SERVICE_CHARGE") accountId = await GLMappingService.getServiceChargePayableAccount(propertyId);
+                    glLines.push({ accountId, debit: 0, credit: amount, description: line.description, sourceType: "FOLIO_ITEM", sourceId: `${extensionOperationId}:${line.revenueClass}` });
+                  }
+                  await GeneralLedgerService.postJournal({
+                    userId: staffOperatorId,
+                    propertyIds: [propertyId],
+                    organizationId: property.organizationId,
+                    role: "SYSTEM",
+                    permissions: [],
+                    outletIds: [],
+                  }, {
+                    propertyId,
+                    entryDate: postingBusinessDate,
+                    reference: glReference,
+                    description: "Late room extension posting",
+                    sourceModule: "AR",
+                    lines: glLines,
+                  }, tx);
+                }
+              }
+            }
+
+            const autoSubmitRecoveryShift = payload.__autoRecoveryShift === true && shouldAutoSubmitRecoveryShift(eventType);
+            if (autoSubmitRecoveryShift && payload.frontdeskSessionId) {
+              await tx.frontdeskSession.update({
+                where: { id: payload.frontdeskSessionId },
+                data: {
+                  status: "CLOSED",
+                  controlStatus: "SUBMITTED",
+                  varianceStatus: null,
+                  declaredCash: 0,
+                  systemExpectedCash: 0,
+                  variance: 0,
+                  closingAt: new Date(),
+                  closedAt: new Date(),
+                  submittedAt: new Date(),
+                  submittedBy: staffOperatorId,
+                },
+              });
+              await tx.frontdeskSessionAudit.create({
+                data: {
+                  frontdeskSessionId: payload.frontdeskSessionId,
+                  action: "SUBMITTED",
+                  performedBy: staffOperatorId,
+                  notes: "Auto-recovery shift submitted for normal cashier/night-auditor approval after deferred extension posting.",
+                },
               });
             }
 
@@ -5716,59 +5900,128 @@ export async function POST(req: NextRequest) {
             results.push({ id, status: "SYNCED", idempotencyKey });
           }
         } else if (
-          err.message === "CONCURRENCY_CONFLICT" ||
-          err.code === "P2002"
+          (err.message === "CONCURRENCY_CONFLICT" || err.code === "P2002") &&
+          !cloudWinsOperationalConflict(eventType)
         ) {
           // If the unique constraint violation is on idempotencyKey, treat it as a successful duplicate
-          if (err.code === "P2002" && err.meta?.target && (
-            (Array.isArray(err.meta.target) && err.meta.target.includes("idempotencyKey")) ||
-            (typeof err.meta.target === "string" && err.meta.target.includes("idempotencyKey"))
-          )) {
-            console.log(`[sync/push] Handled P2002 idempotencyKey conflict as SYNCED for ${idempotencyKey}`);
-            results.push({ id, status: "SYNCED", idempotencyKey });
-            continue;
-          }
-          
-          if (err.code === "P2002") {
-            console.warn(`[sync/push] P2002 error details for event ${id}:`, err.meta);
-          }
-          // If P2002, it means another thread inserted the same aggregateVersion for this aggregate.
-          let expectedVersion = err.currentVersion || aggregateVersion;
+            if (err.code === "P2002" && err.meta?.target && (
+              (Array.isArray(err.meta.target) && err.meta.target.includes("idempotencyKey")) ||
+              (typeof err.meta.target === "string" && err.meta.target.includes("idempotencyKey"))
+            )) {
+              console.log(`[sync/push] Handled P2002 idempotencyKey conflict as SYNCED for ${idempotencyKey}`);
+              results.push({ id, status: "SYNCED", idempotencyKey });
+              continue;
+            }
 
-          if (err.code === "P2002") {
-            // Fetch the true actual version from DB to populate the conflict correctly
-            try {
-              if (aggregateType === "FOLIO") {
-                let f = await prisma.folio.findUnique({
-                  where: { id: rawAggregateId },
-                });
-                if (!f) {
-                  const parsed = JSON.parse(payloadJson || "{}");
-                  if (parsed?.reservationId) {
-                    f = await prisma.folio.findFirst({
-                      where: { reservationId: parsed.reservationId, propertyId },
-                    });
+            if (err.code === "P2002") {
+              console.warn(`[sync/push] P2002 error details for event ${id}:`, err.meta);
+            }
+            // If P2002, it means another thread inserted the same aggregateVersion for this aggregate.
+            let expectedVersion = err.currentVersion || aggregateVersion;
+
+            if (err.code === "P2002") {
+              // Fetch the true actual version from DB to populate the conflict correctly
+              try {
+                if (aggregateType === "FOLIO") {
+                  let f = await prisma.folio.findUnique({
+                    where: { id: rawAggregateId },
+                  });
+                  if (!f) {
+                    const parsed = JSON.parse(payloadJson || "{}");
+                    if (parsed?.reservationId) {
+                      f = await prisma.folio.findFirst({
+                        where: { reservationId: parsed.reservationId, propertyId },
+                      });
+                    }
                   }
+                  if (f) expectedVersion = f.version;
+                } else if (aggregateType === "RESERVATION") {
+                  const r = await prisma.reservation.findUnique({
+                    where: { id: rawAggregateId },
+                  });
+                  if (r) expectedVersion = r.version;
                 }
-                if (f) expectedVersion = f.version;
-              } else if (aggregateType === "RESERVATION") {
-                const r = await prisma.reservation.findUnique({
-                  where: { id: rawAggregateId },
+              } catch (e) {}
+            }
+            // We must record the HotelEvent and SyncConflict outside the failed business transaction
+            try {
+              await prisma.$transaction(async (tx2) => {
+                const parsedPayload = JSON.parse(payloadJson || "{}");
+                const ev = await tx2.hotelEvent.upsert({
+                  where: { id },
+                  update: {
+                    idempotencyKey,
+                    payload: parsedPayload
+                  },
+                  create: {
+                    id,
+                    idempotencyKey,
+                    propertyId,
+                    deviceId: device.id,
+                    operatorId: isUuid(operatorId) ? operatorId : device.id,
+                    aggregateType,
+                    aggregateId: rawAggregateId,
+                    aggregateVersion,
+                    eventType,
+                    occurredAt: new Date(occurredAt || Date.now()),
+                    sequence,
+                    payload: parsedPayload,
+                  },
                 });
-                if (r) expectedVersion = r.version;
-              }
-            } catch (e) {}
-          }
-          // We must record the HotelEvent and SyncConflict outside the failed business transaction
+
+                await tx2.syncConflict.upsert({
+                  where: { hotelEventId: ev.id },
+                  update: {
+                    expectedVersion: expectedVersion,
+                    receivedVersion: aggregateVersion,
+                    status: "PENDING"
+                  },
+                  create: {
+                    propertyId,
+                    hotelEventId: ev.id,
+                    aggregateType,
+                    aggregateId: rawAggregateId,
+                    expectedVersion: expectedVersion,
+                    receivedVersion: aggregateVersion,
+                    conflictReason:
+                      "Optimistic Concurrency Failure: Edge node operated on stale state.",
+                    status: "PENDING",
+                  },
+                });
+              });
+              results.push({
+                id,
+                status: "CONFLICT",
+                idempotencyKey,
+                error: "Concurrency conflict. Manager resolution required.",
+              });
+            } catch (conflictErr: any) {
+              console.error(
+                `Error saving conflict for event ${id}:`,
+                conflictErr,
+              );
+              results.push({
+                id,
+                status: "FAILED",
+                idempotencyKey,
+                error: "Failed to record conflict state.",
+              });
+            }
+        } else if (
+          (err.message === "CONCURRENCY_CONFLICT" || err.code === "P2002") &&
+          cloudWinsOperationalConflict(eventType)
+        ) {
+          // The cloud is authoritative for operational projections. Preserve
+          // the rejected edge event as resolved evidence, then let the next
+          // pull replace the terminal state. Financial and arrival/departure
+          // mutations deliberately do not enter this branch.
+          const expectedVersion = err.currentVersion || aggregateVersion;
           try {
             await prisma.$transaction(async (tx2) => {
               const parsedPayload = JSON.parse(payloadJson || "{}");
               const ev = await tx2.hotelEvent.upsert({
                 where: { id },
-                update: {
-                  idempotencyKey,
-                  payload: parsedPayload
-                },
+                update: { idempotencyKey, payload: parsedPayload },
                 create: {
                   id,
                   idempotencyKey,
@@ -5784,44 +6037,41 @@ export async function POST(req: NextRequest) {
                   payload: parsedPayload,
                 },
               });
-
               await tx2.syncConflict.upsert({
                 where: { hotelEventId: ev.id },
                 update: {
-                  expectedVersion: expectedVersion,
+                  expectedVersion,
                   receivedVersion: aggregateVersion,
-                  status: "PENDING"
+                  conflictReason: "Cloud-authoritative operational state superseded stale offline mutation.",
+                  status: "RESOLVED",
+                  resolvedBy: isUuid(operatorId) ? operatorId : null,
+                  resolvedAt: new Date(),
+                  resolution: "CLOUD_WON_OPERATIONAL_STATE",
                 },
                 create: {
                   propertyId,
                   hotelEventId: ev.id,
                   aggregateType,
                   aggregateId: rawAggregateId,
-                  expectedVersion: expectedVersion,
+                  expectedVersion,
                   receivedVersion: aggregateVersion,
-                  conflictReason:
-                    "Optimistic Concurrency Failure: Edge node operated on stale state.",
-                  status: "PENDING",
+                  conflictReason: "Cloud-authoritative operational state superseded stale offline mutation.",
+                  status: "RESOLVED",
+                  resolvedBy: isUuid(operatorId) ? operatorId : null,
+                  resolvedAt: new Date(),
+                  resolution: "CLOUD_WON_OPERATIONAL_STATE",
                 },
               });
             });
             results.push({
               id,
-              status: "CONFLICT",
+              status: "CLOUD_WON",
               idempotencyKey,
-              error: "Concurrency conflict. Manager resolution required.",
+              error: "Cloud state retained; the local operational change was superseded and will be refreshed.",
             });
-          } catch (conflictErr: any) {
-            console.error(
-              `Error saving conflict for event ${id}:`,
-              conflictErr,
-            );
-            results.push({
-              id,
-              status: "FAILED",
-              idempotencyKey,
-              error: "Failed to record conflict state.",
-            });
+          } catch (cloudResolutionError) {
+            console.error(`Error recording cloud-authoritative resolution for event ${id}:`, cloudResolutionError);
+            results.push({ id, status: "FAILED", idempotencyKey, error: "Failed to record cloud-authoritative resolution." });
           }
         } else if (
           aggregateType === "CITY_LEDGER" &&

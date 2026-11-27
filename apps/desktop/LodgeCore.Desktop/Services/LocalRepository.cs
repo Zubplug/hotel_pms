@@ -91,27 +91,6 @@ public class LocalRepository
         await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
     }
 
-    private async Task<int> GetPendingPosTransactionCountAsync(string sessionId)
-    {
-        // The session-start event may still be queued during a fully offline
-        // opening. It is safe to close that local shift because the event
-        // sequence will send the start before the settlement. Transaction
-        // events, however, must be synchronized before the shift is closed;
-        // otherwise the server will correctly reject them against a locked
-        // shift and the terminal will create dead letters.
-        var lifecycleEvents = new[]
-        {
-            "POS_SESSION_STARTED",
-            "POS_SESSION_UPDATED",
-            "POS_OPERATOR_SESSION_STARTED",
-        };
-
-        return await _dbContext.SyncEvents.CountAsync(evt =>
-            evt.SessionId == sessionId &&
-            !lifecycleEvents.Contains(evt.OperationType) &&
-            evt.Status != "SYNCED");
-    }
-
     /// <summary>
     /// Repairs an order left on a stale local shift after a terminal reinstall.
     /// The repair is deliberately narrow: the replacement shift must be open
@@ -1575,6 +1554,7 @@ public class LocalRepository
         }
 
         var previousCheckOut = res.CheckOutDate;
+        var activeFrontdeskSession = await GetActiveFrontdeskSessionAsync(res.PropertyId, userId);
         res.CheckOutDate = newCheckOut;
         var reservationRoom = res.Rooms.FirstOrDefault();
         if (reservationRoom != null) reservationRoom.CheckOutDate = newCheckOut;
@@ -1598,6 +1578,8 @@ public class LocalRepository
             {
                 previousCheckOutDate = previousCheckOut.ToString("o"),
                 newCheckOutDate = newCheckOut.ToString("o"),
+                frontdeskSessionId = activeFrontdeskSession?.Id,
+                businessDate = activeFrontdeskSession?.BusinessDate ?? res.BusinessDate,
                 roomId = res.RoomId,
                 additionalNights,
                 additionalCharge
@@ -2776,6 +2758,10 @@ public class LocalRepository
             throw new UnauthorizedAccessException(
                 "Night Auditors cannot close Front Desk shifts. The cashier must submit the shift; Night Audit can review and approve it.");
         }
+        // Shift submission is a local cashier control. It must remain
+        // available while offline events are pending or in conflict; the
+        // cloud/Night Auditor reconciles those events after synchronization.
+        // AssertNightAuditAllowsAsync is intentionally non-blocking here.
         await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
         // A returned shift remains operationally CLOSED on the server and is
         // reopened for declaration through controlStatus=RETURNED. Accept
@@ -7613,15 +7599,10 @@ public class LocalRepository
             throw new InvalidOperationException(
                 $"You have {pendingOrders.Count} open order(s) that must be settled or voided before your shift can be closed.");
 
-        // BLOCKER: a fully offline terminal must not close a shift while any
-        // order, payment, KOT, cash movement, or other POS transaction is
-        // still waiting to synchronize. The terminal remains usable offline,
-        // but the shift stays OPEN until the queue has been accepted by the
-        // server.
-        var pendingTransactions = await GetPendingPosTransactionCountAsync(sessionId);
-        if (pendingTransactions > 0)
-            throw new InvalidOperationException(
-                $"You have {pendingTransactions} POS transaction(s) waiting to synchronize. Reconnect and synchronize them before closing this shift.");
+        // Pending, failed, or conflicted sync events must not prevent a
+        // cashier from declaring and submitting a locally complete shift.
+        // The local ledger and cash declaration are preserved; cloud sync
+        // reconciles the events and Night Audit reviews any exception.
 
         var operatorStaff = await _dbContext.Staff.FirstOrDefaultAsync(staff => staff.Id == operatorId);
         var operatorRole = operatorStaff?.Role ?? string.Empty;
@@ -7643,11 +7624,9 @@ public class LocalRepository
 
         var details = await GetSessionSettlementDetailsAsync(sessionId);
 
-        // Validation for override variance
-        if (session.BankType != "SERVER" && details.Variance != 0 && string.IsNullOrEmpty(authorizerId))
-        {
-            throw new UnauthorizedAccessException("Variance requires supervisor approval.");
-        }
+        // A cashier may submit a declared variance. Independent review and
+        // approval belong to the General Cashier/Night Audit workflow after
+        // submission; do not require the reviewer to be present at the POS.
 
         string operationId = $"op_settle_{deviceId}_{DateTime.UtcNow.Ticks}";
 

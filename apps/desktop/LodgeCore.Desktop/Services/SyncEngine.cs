@@ -3762,6 +3762,18 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         || e.LastError?.Contains("REFUND_REQUIRED", StringComparison.OrdinalIgnoreCase) == true)))
             .ToList();
 
+        // Older builds stored Night-Audit pauses as permanent CONFLICT rows.
+        // Requeue those rows once so the new retryable classification can take
+        // over after the audit finishes.
+        foreach (var evt in allPending.Where(e =>
+            e.Status == "CONFLICT" &&
+            e.LastError?.Contains("Financial synchronization is temporarily paused", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            evt.Status = "FAILED";
+            evt.LastError = "Requeued deferred front-desk financial event after Night Audit pause.";
+            evt.NextAttemptAt = DateTime.UtcNow;
+        }
+
         // These CITY_LEDGER operations are append-only and older clients
         // emitted every event with aggregateVersion=1. They could be recorded
         // as false OCC conflicts by older cloud schemas. Once the cloud
@@ -3927,9 +3939,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             evt.Status = res.Status; 
                             evt.LastError = res.Error;
                             
-                            if (res.Status == "SYNCED" || res.Status == "PENDING_APPROVAL")
+                            if (res.Status == "SYNCED" || res.Status == "CLOUD_WON" || res.Status == "PENDING_APPROVAL")
                             {
-                                if (res.Status == "SYNCED") evt.SyncedAt = DateTime.UtcNow;
+                                if (res.Status == "SYNCED" || res.Status == "CLOUD_WON") evt.SyncedAt = DateTime.UtcNow;
                                 evt.NextAttemptAt = null;
                                 ClearIsDirtyIfSafe(dbContext, evt);
                                 if (res.Status == "SYNCED" && evt.EventType == "CITY_LEDGER_PAYMENT")
@@ -4080,6 +4092,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         {
                             await ReopenCityLedgerPaymentAsync(evt.IdempotencyKey, stoppingToken);
                         }
+                    }
+                    else if (statusCode == 409 && errorBody.Contains("Financial synchronization is temporarily paused", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Night Audit pauses the sync endpoint temporarily. It
+                        // is not an optimistic-concurrency conflict; keep the
+                        // offline operation retryable until the audit finishes.
+                        evt.Status = "FAILED";
+                        evt.LastError = $"HTTP 409: Night Audit is in progress; synchronization deferred. {FormatPushError(errorBody)}";
+                        evt.LastAttemptAt = DateTime.UtcNow;
+                        evt.NextAttemptAt = DateTime.UtcNow.AddMinutes(2);
                     }
                     else if (statusCode == 409)
                     {

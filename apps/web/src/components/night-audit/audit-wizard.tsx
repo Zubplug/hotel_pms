@@ -95,6 +95,7 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
     data.system.openPosOrders?.length ? `Open POS orders (${data.system.openPosOrders.length})` : null,
     data.financial.unverifiedComplimentary?.length ? `Unverified complimentary records (${data.financial.unverifiedComplimentary.length})` : null,
     data.financial.pendingCheckInBypasses?.length ? `Pending check-in bypasses (${data.financial.pendingCheckInBypasses.length})` : null,
+    data.financial.emergencyFrontdeskOperations?.length ? `Emergency front-desk operations (${data.financial.emergencyFrontdeskOperations.length})` : null,
     data.financial.paymentCorrections?.length ? `Payment corrections awaiting review (${data.financial.paymentCorrections.length})` : null,
     data.financial.eventHall?.blockers ? `Event/hall revenue postings missing (${data.financial.eventHall.blockers})` : null,
     data.cash.unverifiedTransactions?.length ? `Unverified transactions (${data.cash.unverifiedTransactions.length})` : null,

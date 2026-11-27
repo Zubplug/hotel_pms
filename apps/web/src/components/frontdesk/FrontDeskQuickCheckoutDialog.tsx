@@ -24,11 +24,34 @@ const formatCurrency = (amount: number) =>
 export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, initialReservation }: FrontDeskQuickCheckoutDialogProps) {
   const queryClient = useQueryClient();
   const { provider, isDesktopMode } = useLodgeCoreProvider();
-  const [step, setStep] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'LOADING' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [step, setStep] = useState<'IDLE' | 'OFFLINE_REQUIRED' | 'EMERGENCY_REQUESTED' | 'LOADING' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   const [reservation, setReservation] = useState<any>(null);
   const [showManagerOverride, setShowManagerOverride] = useState(false);
   const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
+
+  const requestEmergencyCheckout = async () => {
+    if (!initialReservation?.id) return;
+    const reason = window.prompt('Reason for online emergency checkout (minimum 10 characters):', 'Emergency front-desk operation during desktop outage.')?.trim();
+    if (!reason || reason.length < 10) {
+      setErrorMsg('A clear reason of at least 10 characters is required.');
+      setStep('ERROR');
+      return;
+    }
+    try {
+      const response = await fetch(`/api/v1/reservations/${initialReservation.id}/check-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emergency: true, reason, idempotencyKey: `EMERGENCY_CHECKOUT:${initialReservation.id}` }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || payload?.error || 'Unable to complete emergency checkout.');
+      setStep('EMERGENCY_REQUESTED');
+    } catch (error: any) {
+      setErrorMsg(error?.message || 'Unable to create emergency checkout request.');
+      setStep('ERROR');
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -229,11 +252,25 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                   </p>
                 </div>
                 <div className="w-full rounded-2xl bg-amber-500/8 border border-amber-500/20 px-4 py-3 text-left text-xs text-amber-200/80 leading-relaxed">
-                  Open LodgeCore Desktop on the computer connected to the keycard encoder, then complete the checkout there.
+                  Emergency checkout completes the folio, room release, and Night Audit state online. Physical card processing follows the Night Audit decision.
                 </div>
+                <button onClick={requestEmergencyCheckout} className="w-full h-12 rounded-xl font-bold text-sm text-slate-950 bg-amber-300 hover:bg-amber-200 transition-all">
+                  Register Emergency Checkout
+                </button>
                 <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] transition-all">
                   Close
                 </button>
+              </div>
+            )}
+
+            {step === 'EMERGENCY_REQUESTED' && (
+              <div className="flex flex-col items-center text-center gap-6 animate-in zoom-in-95 duration-300 px-2">
+                <CheckCircle2 className="h-16 w-16 text-amber-300" />
+                <div className="max-w-[340px]">
+                  <h3 className="text-xl font-bold text-white mb-2">Emergency checkout recorded</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">Checkout is complete for cloud operations. The physical card action is held for Night Audit review.</p>
+                </div>
+                <button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-500 transition-all">Close</button>
               </div>
             )}
 

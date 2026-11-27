@@ -17,13 +17,13 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 };
 
 export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
-  const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts, pendingCheckInBypasses, paymentCorrections = [], eventHall, guestAmenity } = data.financial;
+  const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts, pendingCheckInBypasses, paymentCorrections = [], emergencyFrontdeskOperations = [], eventHall, guestAmenity } = data.financial;
   const [selectedEventInvoice, setSelectedEventInvoice] = useState<any | null>(null);
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
   const unverifiedCompl = unverifiedComplimentary?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
 
-  const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || paymentCorrections.length > 0 || (pendingDiscounts?.length || 0) > 0 || (pendingCheckInBypasses?.length || 0) > 0 || (eventHall?.warnings || 0) > 0 || (eventHall?.blockers || 0) > 0 || (guestAmenity?.blockers?.length || 0) > 0 || (guestAmenity?.zeroCostItems?.length || 0) > 0;
+  const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || paymentCorrections.length > 0 || emergencyFrontdeskOperations.length > 0 || (pendingDiscounts?.length || 0) > 0 || (pendingCheckInBypasses?.length || 0) > 0 || (eventHall?.warnings || 0) > 0 || (eventHall?.blockers || 0) > 0 || (guestAmenity?.blockers?.length || 0) > 0 || (guestAmenity?.zeroCostItems?.length || 0) > 0;
   const eventInvoiceDialog = <EventInvoiceReviewDialog invoice={selectedEventInvoice} currency={currency} onClose={() => setSelectedEventInvoice(null)} />;
 
   const guestAmenityPanel = guestAmenity ? (
@@ -178,6 +178,29 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
                 >
                   Review
                 </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {emergencyFrontdeskOperations.length > 0 && (
+        <div className="pt-2">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-rose-300">Emergency Front Desk Operations (Blocker)</h4>
+              <p className="mt-0.5 text-xs text-rose-400/70">Review the cloud check-in or checkout, then authorise or reject the pending physical card action.</p>
+            </div>
+            <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-xs font-bold text-rose-300">{emergencyFrontdeskOperations.length} pending</span>
+          </div>
+          <div className="space-y-2">
+            {emergencyFrontdeskOperations.map((operation: any) => (
+              <div key={operation.id} className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/15 bg-rose-400/[0.03] p-4 text-sm sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold text-rose-200">Emergency {operation.operationType === 'CHECK_IN' ? 'check-in' : 'checkout'}</p>
+                  <p className="mt-1 text-xs text-slate-400">Reservation {String(operation.reservationId).slice(0, 8)} · {operation.reason}</p>
+                </div>
+                <button type="button" onClick={() => onResolve('EMERGENCY_FRONTDESK_OPERATION', { ...operation, propertyId })} className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-bold text-rose-200">Review</button>
               </div>
             ))}
           </div>

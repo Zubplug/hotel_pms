@@ -958,7 +958,22 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     originalPayment: correctionPaymentById.get(correction.originalPaymentId) || null,
   }));
 
-  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: [...enrichedComplimentary, ...missingComplimentaryRecords], pendingCheckInBypasses, paymentCorrections, eventHall, guestAmenity };
+  // Emergency browser check-ins/check-outs complete the cloud operation but
+  // must remain visible to Night Audit until the auditor authorises the
+  // physical card work (or rejects the exception).
+  const emergencyFrontdeskOperations = await prisma.frontdeskEmergencyOperation.findMany({
+    where: {
+      propertyId,
+      // Rejected checkouts are routed to the Accountant/Finance approval center.
+      // Night Audit should not receive the reopen decision a second time.
+      status: { in: ['PENDING_NIGHT_AUDIT_REVIEW', 'CLOUD_COMPLETED_HARDWARE_PENDING'] },
+      businessDate,
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 200,
+  });
+
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: [...enrichedComplimentary, ...missingComplimentaryRecords], pendingCheckInBypasses, paymentCorrections, emergencyFrontdeskOperations, eventHall, guestAmenity };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

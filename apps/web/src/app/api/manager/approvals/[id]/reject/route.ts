@@ -45,6 +45,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await tx.corporateContractVersion.update({ where: { id: contract.versions[0].id }, data: { status: 'REJECTED' } });
         return tx.approvalRequest.update({ where: { id }, data: { status: 'REJECTED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'REJECTED', rejectionComment: comment } } });
       }
+      if (approval.type === 'FRONTDESK_EMERGENCY_CHECKOUT') {
+        const managementRoles = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'];
+        if (!user.isSuperAdmin && !managementRoles.includes(String(user.role).toUpperCase())) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        const operation = await tx.frontdeskEmergencyOperation.findFirst({ where: { id: (details as any).operationId, propertyId: approval.propertyId, operationType: 'CHECK_OUT', status: 'REJECTED_MANUAL_REVIEW' } });
+        if (!operation) throw new Error('NOT_FOUND');
+        const now = new Date();
+        await tx.frontdeskEmergencyOperation.update({ where: { id: operation.id }, data: { status: 'REOPEN_REQUESTED', failureReason: comment, processedAt: now, metadata: { ...(operation.metadata as any), managerDecision: 'REQUEST_REOPEN', reopenRequestedBy: user.id, reopenRequestedAt: now.toISOString(), reopenReason: comment } } });
+        const updated = await tx.approvalRequest.update({ where: { id }, data: { status: 'PENDING', executionStatus: 'NOT_APPLIED', reviewedBy: null, reviewedAt: null, details: { ...details, stage: 'REOPEN_AUTHORIZATION', managerDecision: 'REQUEST_REOPEN', reopenRequestedBy: user.id, reopenRequestedAt: now.toISOString(), reopenReason: comment, financialState: 'POSTED_IMMUTABLE' } } });
+        const property = await tx.property.findUnique({ where: { id: approval.propertyId }, select: { organizationId: true } });
+        await tx.auditLog.create({ data: { organizationId: property?.organizationId || '', propertyId: approval.propertyId, userId: user.id, action: 'FRONTDESK_EMERGENCY_CHECKOUT_REOPEN_REQUESTED', resource: 'FrontdeskEmergencyOperation', resourceId: operation.id, previousValue: { status: operation.status }, newValue: { status: 'REOPEN_REQUESTED', approvalId: approval.id, reason: comment, financialState: 'POSTED_IMMUTABLE' }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+        return updated;
+      }
       let refundStage: string | undefined;
       if (approval.type === 'REFUND' && details.refundRequestId && !user.isSuperAdmin) {
         const refundRequest = await tx.refundRequest.findUnique({ where: { id: details.refundRequestId }, select: { currentApprovalStep: true } });

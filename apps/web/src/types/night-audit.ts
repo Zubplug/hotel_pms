@@ -58,6 +58,7 @@ export interface FinancialData {
   unverifiedComplimentary: any[];
   pendingCheckInBypasses: any[];
   paymentCorrections?: any[];
+  emergencyFrontdeskOperations?: any[];
   rateVariances: any[];
   pendingNightAuditPostings?: any[];
   eventHall?: {

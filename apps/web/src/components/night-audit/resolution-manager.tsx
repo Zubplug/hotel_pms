@@ -27,12 +27,47 @@ export type ResolutionAction =
   | { type: 'CHECKIN_BYPASS'; item: any }
   | { type: 'CASH_HANDOVER'; item: any }
   | { type: 'PAYMENT_CORRECTION'; item: any }
+  | { type: 'EMERGENCY_FRONTDESK_OPERATION'; item: any }
   | null;
 
 interface Props {
   action: ResolutionAction;
   onClose: () => void;
   onSuccess: () => void;
+}
+
+function EmergencyFrontdeskResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const decide = async (decision: 'APPROVE' | 'REJECT' | 'CONFIRM_CHECKOUT' | 'REQUEST_REOPEN' | 'AUTHORIZE_REOPEN') => {
+    if (['REJECT', 'REQUEST_REOPEN'].includes(decision) && reason.trim().length < 10) {
+      setError('Enter a rejection reason of at least 10 characters.');
+      return;
+    }
+    setLoading(true); setError(null);
+    try {
+      const response = await fetch('/api/v1/night-audit/emergency-frontdesk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId: item.propertyId, operationId: item.id, decision, reason: reason.trim() }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to record decision');
+      toast.success(decision === 'APPROVE' || decision === 'CONFIRM_CHECKOUT' ? 'Physical card action released' : decision === 'REQUEST_REOPEN' ? 'Reopen request sent for authorised correction' : decision === 'AUTHORIZE_REOPEN' ? 'Reservation reopened; financial correction remains with Finance' : 'Emergency operation rejected and recorded');
+      onSuccess();
+    } catch (cause: any) { setError(cause.message || 'Unable to record decision'); }
+    finally { setLoading(false); }
+  };
+
+  return <div className="space-y-5 p-1">
+    <DialogHeader><DialogTitle className="text-xl text-white">Review Emergency {item.operationType === 'CHECK_IN' ? 'Check-in' : 'Checkout'}</DialogTitle><DialogDescription className="text-slate-400">The cloud operation is recorded. Decide whether the physical card action may proceed.</DialogDescription></DialogHeader>
+    <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4 text-sm"><p className="font-semibold text-white">Operation {String(item.id).slice(0, 8)}</p><p className="mt-2 text-slate-400">Reason: {item.reason}</p>{item.operationType === 'CHECK_OUT' && <p className="mt-2 text-amber-300">Posted folio and accounting entries remain immutable. Confirm the checkout or request an authorised reopen for correction.</p>}</div>
+    <div><label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Decision notes</label><textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-white/[.1] bg-black/20 p-3 text-sm text-white outline-none focus:border-indigo-400/50" placeholder="Required when rejecting" /></div>
+    {error && <p className="text-sm text-rose-300">{error}</p>}
+    {item.status === 'REOPEN_REQUESTED' ? <div className="flex flex-col gap-3"><p className="text-xs leading-5 text-slate-500">Reopen requested. An Accountant or Finance Manager must complete the correction from the Accounting Approval Center.</p></div> : item.status === 'REJECTED_MANUAL_REVIEW' ? <div className="flex flex-col gap-3"><Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => decide('CONFIRM_CHECKOUT')} disabled={loading}>Confirm checkout & release revocation</Button><Button variant="outline" className="border-amber-400/30 bg-amber-400/10 text-amber-200" onClick={() => decide('REQUEST_REOPEN')} disabled={loading}>Request authorised reopen</Button></div> : <div className="flex gap-3"><Button variant="outline" className="flex-1 border-rose-400/30 bg-rose-400/10 text-rose-300" onClick={() => decide('REJECT')} disabled={loading}>Reject</Button><Button className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => decide('APPROVE')} disabled={loading}>{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Approve & release</Button></div>}
+    <button type="button" onClick={onClose} className="w-full text-center text-xs text-slate-500 hover:text-slate-300">Cancel</button>
+  </div>;
 }
 
 export function ResolutionManager({ action, onClose, onSuccess }: Props) {
@@ -62,6 +97,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'CHECKIN_BYPASS' && <CheckinBypassResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'CASH_HANDOVER' && <CashHandoverResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'PAYMENT_CORRECTION' && <PaymentCorrectionResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
+        {action.type === 'EMERGENCY_FRONTDESK_OPERATION' && <EmergencyFrontdeskResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
   );
@@ -1035,15 +1071,20 @@ function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onS
 function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [decisionNote, setDecisionNote] = useState('');
 
   const handleResolve = async (action: 'FORCE_EDGE_EVENT' | 'REJECT_EDGE_EVENT') => {
+    if (decisionNote.trim().length < 10) {
+      setError('Record at least 10 characters explaining the evidence and decision.');
+      return;
+    }
     setLoading(action);
     setError(null);
     try {
       const res = await fetch(`/api/v1/sync/conflicts/${item.id}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ action, resolutionComment: `Night Audit manual resolution: ${action}` })
+        body: JSON.stringify({ action, resolutionComment: decisionNote.trim() })
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -1108,17 +1149,24 @@ function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSu
             </div>
           )}
 
-          <div className="pt-2 mt-2 border-t border-white/[0.08] text-[11px] text-slate-500">
-            {item.errorDetails?.message || 'Version mismatch detected.'}
+          <div className="pt-2 mt-2 border-t border-white/[0.08] space-y-1 text-[11px] text-slate-500">
+            <p>{item.conflictReason || item.errorDetails?.message || 'Version mismatch detected.'}</p>
+            <p>Occurred: {item.hotelEvent?.occurredAt ? format(new Date(item.hotelEvent.occurredAt), 'dd MMM yyyy HH:mm') : 'Unknown'} · Created: {item.createdAt ? format(new Date(item.createdAt), 'dd MMM yyyy HH:mm') : 'Unknown'}</p>
+            <p>Cloud version: {item.expectedVersion ?? '—'} · Offline version: {item.receivedVersion ?? '—'}</p>
           </div>
         </div>
+
+        <label className="block text-xs text-slate-300">
+          Decision evidence <span className="text-slate-500">(required)</span>
+          <textarea value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-white/10 bg-white/[.04] p-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-indigo-300/50" placeholder="State what you reviewed, which source is authoritative, and why you accepted or rejected the event." />
+        </label>
 
         <div className="grid grid-cols-2 gap-3">
           <Button 
             variant="outline" 
             className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1 border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05] text-white"
             onClick={() => handleResolve('REJECT_EDGE_EVENT')} 
-            disabled={!!loading}
+            disabled={!!loading || decisionNote.trim().length < 10}
           >
             <span className="font-semibold text-sm text-white">Reject Event</span>
             <span className="text-[10px] text-slate-400 text-left leading-tight mt-1">Discard the POS change. The PMS state wins.</span>
@@ -1128,7 +1176,7 @@ function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSu
           <Button 
             className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1 bg-rose-600 hover:bg-rose-700 text-white border-none"
             onClick={() => handleResolve('FORCE_EDGE_EVENT')} 
-            disabled={!!loading}
+            disabled={!!loading || decisionNote.trim().length < 10}
           >
             <span className="font-semibold text-sm">Force Sync</span>
             <span className="text-[10px] text-rose-200 text-left leading-tight mt-1">Apply the POS charge/payment forcibly.</span>
