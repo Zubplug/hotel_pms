@@ -980,6 +980,29 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
           box-shadow: 0 6px 20px rgba(201,169,110,0.7);
         }
 
+        /* Mobile cards need an explicit height because the image and copy are
+           layered absolutely. Without a row height, CSS Grid collapses each
+           card into a thin strip on narrow screens. */
+        @media (max-width: 600px) {
+          .os-featured { padding: var(--space-12) var(--space-4); }
+          .os-featured__header { align-items: flex-start; margin-bottom: var(--space-6); }
+          .os-featured__title { font-size: clamp(2rem, 10vw, 2.75rem); line-height: 1.05; }
+          .os-featured__see-all { padding: 9px 17px; font-size: var(--text-xs); }
+          .os-featured__grid { grid-template-columns: 1fr; grid-template-rows: none; gap: var(--space-4); }
+          .os-featured-card,
+          .os-featured-card--large {
+            grid-column: auto;
+            grid-row: auto;
+            min-height: 248px;
+            border-radius: var(--radius-xl);
+          }
+          .os-featured-card--large { min-height: 286px; }
+          .os-featured-card__body { padding: var(--space-5) var(--space-4) var(--space-4); }
+          .os-featured-card__name,
+          .os-featured-card--large .os-featured-card__name { font-size: var(--text-lg); }
+          .os-featured-card__add { top: var(--space-3); right: var(--space-3); }
+        }
+
         /* ── Menu Section ── */
         .os-menu-section {
           padding-bottom: var(--space-24);

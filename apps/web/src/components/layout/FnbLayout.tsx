@@ -92,7 +92,7 @@ const FNB_NAV = [
   }
 ];
 
-export function FnbLayout({ children }: { children: React.ReactNode }) {
+export function FnbLayout({ children, showFoodCommerce = false }: { children: React.ReactNode; showFoodCommerce?: boolean }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasMultipleProperties, setHasMultipleProperties] = useState(true);
   const [timelineView, setTimelineView] = useState(false);
@@ -133,6 +133,12 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
     if (item.activeWhen === 'register') return pathname === '/fnb/events/bookings' && !timelineView;
     return pathname === item.href || pathname?.startsWith(`${item.href}/`);
   })?.name || 'F&B Operations';
+  const visibleNav = showFoodCommerce
+    ? FNB_NAV
+    : FNB_NAV.map((section) => ({
+        ...section,
+        children: section.children.filter((item) => item.href !== '/fnb/commerce'),
+      }));
 
   if (status === 'loading') {
     return (
@@ -146,12 +152,6 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (status === 'unauthenticated' || !session?.user) return null;
-
-  // Commerce has its own focused navigation. Do not nest it inside the
-  // general F&B shell, otherwise users see two competing sidebars.
-  if (pathname === '/fnb/commerce' || pathname?.startsWith('/fnb/commerce/')) {
-    return <>{children}</>;
-  }
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="flex h-full flex-col bg-[#1a1311]">
@@ -168,7 +168,7 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
 
       {/* Nav */}
       <div className="flex flex-1 flex-col overflow-y-auto px-3 py-5 gap-6">
-        {FNB_NAV.map((section) => (
+        {visibleNav.map((section) => (
           <div key={section.name} className="flex flex-col gap-1">
             <div className="flex items-center gap-2 px-3 mb-1">
               <section.icon className="h-3.5 w-3.5 text-slate-500" />
