@@ -131,6 +131,7 @@ public static class MauiProgram
             db.ApplyGuestCreditAllocationSchemaAsync().GetAwaiter().GetResult(); // offline credit allocation table
             db.ApplyEventInvoiceSchemaAsync().GetAwaiter().GetResult();
             db.ApplyPoolOperationsSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyPosOrderFulfillmentSchemaAsync().GetAwaiter().GetResult();
             db.ApplyCommerceInboundOrderSchemaAsync().GetAwaiter().GetResult(); // Food Commerce online order injection
         }
 

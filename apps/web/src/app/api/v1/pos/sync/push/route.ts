@@ -11,6 +11,88 @@ import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { hasEntitlement } from "@/lib/auth/entitlement";
 import { verifyDeviceCredential } from "@/lib/pos/device-credential";
 import { resolveSelectedModifiers } from "@/lib/pos/modifier-validation";
+import { sendOrderNotification, type CommerceNotificationEvent } from "@/lib/commerce/notifications";
+
+async function reconcileOnlineCommerceStatus(event: any, payload: any) {
+  if (event.aggregateType !== 'POS_ORDER') return;
+  if (!['ORDER_UPDATED', 'ORDER_COMPLETED', 'ORDER_CLOSED'].includes(String(event.eventType))) return;
+
+  const localStatus = String(
+    payload.status || payload.Status ||
+    (event.eventType === 'ORDER_COMPLETED' || event.eventType === 'ORDER_CLOSED' ? 'COMPLETED' : '')
+  ).toUpperCase();
+  const requestedCommerceStatus = String(payload.fulfillmentStatus || payload.FulfillmentStatus || payload.commerceStatus || payload.CommerceStatus || '').toUpperCase();
+  const commerceStatus = ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(requestedCommerceStatus)
+    ? requestedCommerceStatus
+    : localStatus === 'IN_SERVICE'
+    ? 'PREPARING'
+    : localStatus === 'READY'
+      ? 'READY'
+      : ['COMPLETED', 'CLOSED'].includes(localStatus)
+        ? 'DELIVERED'
+        : localStatus === 'CANCELLED' || localStatus === 'VOIDED'
+          ? 'CANCELLED'
+          : null;
+  if (!commerceStatus) return;
+
+  const order = await prisma.posOrder.findUnique({
+    where: { id: event.aggregateId },
+    select: { id: true, orderType: true, notes: true },
+  });
+  if (order?.orderType !== 'ONLINE_WEB') return;
+
+  // The acknowledgement normally stores reportedPosOrderId. During the
+  // narrow race where staff updates an order before that acknowledgement is
+  // committed, recover the cloud order from the immutable order reference in
+  // the local note instead of dropping the customer notification.
+  const orderRef = order.notes?.match(/\[Online Order\]\s+([^|\s]+)/i)?.[1];
+
+  const commerceOrder = await prisma.commerceOrder.findFirst({
+    where: {
+      OR: [
+        { reportedPosOrderId: event.aggregateId },
+        ...(orderRef ? [{ orderRef }] : []),
+      ],
+    },
+    include: {
+      customer: { select: { name: true, phone: true, email: true } },
+      store: { select: { id: true, notifySmsEnabled: true, notifyEmailEnabled: true, termiiSenderName: true } },
+    },
+  });
+  if (!commerceOrder || !commerceOrder.customer) return;
+  if (commerceOrder.status === commerceStatus) return;
+
+  const eventByStatus: Record<string, CommerceNotificationEvent> = {
+    PREPARING: 'PREPARING',
+    READY: 'READY',
+    READY_FOR_PICKUP: 'READY_FOR_PICKUP',
+    OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
+    DELIVERED: 'DELIVERED',
+    CANCELLED: 'CANCELLED',
+  };
+  await prisma.commerceOrder.update({
+    where: { id: commerceOrder.id },
+    data: {
+      status: commerceStatus,
+      ...(commerceStatus === 'DELIVERED' ? { deliveredNotifiedAt: new Date() } : {}),
+    },
+  });
+  await sendOrderNotification({
+    orderId: commerceOrder.id,
+    storeId: commerceOrder.store.id,
+    event: eventByStatus[commerceStatus],
+    customer: {
+      name: commerceOrder.customer.name,
+      phone: commerceOrder.customer.phone,
+      email: commerceOrder.customer.email ?? undefined,
+    },
+    store: {
+      notifySmsEnabled: commerceOrder.store.notifySmsEnabled,
+      notifyEmailEnabled: commerceOrder.store.notifyEmailEnabled,
+      termiiSenderName: commerceOrder.store.termiiSenderName,
+    },
+  });
+}
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
 // while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
@@ -762,16 +844,24 @@ export async function POST(req: NextRequest) {
               });
           }
           else if (event.eventType === 'ORDER_UPDATED') {
-              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }, select: { id: true } });
+              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }, select: { id: true, orderType: true } });
               if (!existingOrder) {
                   throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${event.aggregateId} has not reached the cloud yet`);
               }
+              const newStatus = String(payload.status || payload.Status || '').toUpperCase();
+              if (existingOrder.orderType === 'ONLINE_WEB' && (newStatus === 'CANCELLED' || newStatus === 'VOIDED')) {
+                  throw new Error('FNB_MANAGER_REQUIRED: Commerce order cancellation must be approved by the F&B manager.');
+              }
               await tx.posOrder.update({
-                  where: { id: event.aggregateId },
-                  data: { status: payload.status || payload.Status, notes: payload.notes || payload.Notes, updatedAt: new Date() }
+                where: { id: event.aggregateId },
+                data: {
+                  status: payload.status || payload.Status,
+                  ...(payload.fulfillmentStatus || payload.FulfillmentStatus ? { fulfillmentStatus: payload.fulfillmentStatus || payload.FulfillmentStatus } : {}),
+                  notes: payload.notes || payload.Notes,
+                  updatedAt: new Date(),
+                }
               });
               
-              const newStatus = payload.status || payload.Status;
               if (newStatus === 'CLOSED' || newStatus === 'CANCELLED' || newStatus === 'VOIDED') {
                 await tx.posTable.updateMany({
                   where: { currentOrderId: event.aggregateId },
@@ -1027,7 +1117,11 @@ export async function POST(req: NextRequest) {
               }
               await tx.posOrder.update({
                   where: { id: event.aggregateId },
-                  data: { status: "CLOSED", updatedAt: new Date() }
+                  data: {
+                    status: "CLOSED",
+                    ...(payload.fulfillmentStatus || payload.FulfillmentStatus ? { fulfillmentStatus: payload.fulfillmentStatus || payload.FulfillmentStatus } : {}),
+                    updatedAt: new Date(),
+                  }
               });
               await tx.posTable.updateMany({
                   where: { currentOrderId: event.aggregateId },
@@ -1710,6 +1804,19 @@ export async function POST(req: NextRequest) {
         
         // 5. Post-transaction notifications for mobile parity
         // Emit only after successful DB commit
+        if (event.aggregateType === 'POS_ORDER' && ['ORDER_UPDATED', 'ORDER_COMPLETED', 'ORDER_CLOSED'].includes(String(event.eventType))) {
+            try {
+                const onlinePayload = typeof event.payloadJson === 'string'
+                  ? JSON.parse(event.payloadJson || '{}')
+                  : (event.payloadJson || {});
+                await reconcileOnlineCommerceStatus(event, onlinePayload);
+            } catch (commerceNotificationError) {
+                // The POS event is already committed. Notification failure must
+                // not turn a successful financial sync into a retry/duplicate;
+                // the notification log remains available for reconciliation.
+                console.error('[POS Sync] Failed to reconcile online Commerce status:', commerceNotificationError);
+            }
+        }
         if (event.eventType === 'PAYMENT_RECORDED') {
             try {
                 const syncedPayload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : (event.payloadJson || {});

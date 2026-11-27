@@ -5808,20 +5808,44 @@ public class LocalRepository
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
         await AssertPosSessionOpenAsync(order.SessionId);
 
-        if ((status == "CANCELLED" || status == "VOIDED") && order.Status != "CANCELLED" && order.Status != "VOIDED")
+        var requestedStatus = status.Trim().ToUpperInvariant();
+        if (order.OrderType == "ONLINE_WEB" && (requestedStatus is "CANCELLED" or "VOIDED"))
         {
-            await RestoreLocalSaleAsync(order, userId, deviceId, $"op_restore_{status.ToLowerInvariant()}_{order.Id}");
+            throw new InvalidOperationException(
+                "Commerce order cancellation is managed by the F&B manager and is not available from the offline terminal.");
         }
-        order.Status = status;
+        var commerceStatus = order.OrderType == "ONLINE_WEB"
+            ? requestedStatus switch
+            {
+                "READY_FOR_PICKUP" => "READY_FOR_PICKUP",
+                "OUT_FOR_DELIVERY" => "OUT_FOR_DELIVERY",
+                "DELIVERED" or "COMPLETED" => "DELIVERED",
+                _ => null,
+            }
+            : null;
+        var localStatus = commerceStatus switch
+        {
+            "READY_FOR_PICKUP" or "OUT_FOR_DELIVERY" => "READY",
+            "DELIVERED" => "CLOSED",
+            _ => requestedStatus,
+        };
+
+        if ((localStatus == "CANCELLED" || localStatus == "VOIDED") && order.Status != "CANCELLED" && order.Status != "VOIDED")
+        {
+            await RestoreLocalSaleAsync(order, userId, deviceId, $"op_restore_{localStatus.ToLowerInvariant()}_{order.Id}");
+        }
+        order.Status = localStatus;
+        if (commerceStatus != null) order.FulfillmentStatus = commerceStatus;
+        else if (localStatus is "CANCELLED" or "VOIDED") order.FulfillmentStatus = "CANCELLED";
         if (!string.IsNullOrEmpty(reason))
         {
             order.Notes = string.IsNullOrEmpty(order.Notes) ? $"Status Reason: {reason}" : $"{order.Notes}\nStatus Reason: {reason}";
         }
         order.UpdatedAt = DateTime.UtcNow;
 
-        AppendSyncEvent("POS_ORDER", order.Id, status == "CLOSED" ? "ORDER_CLOSED" : "ORDER_UPDATED", new { status = order.Status, notes = order.Notes, updatedAt = order.UpdatedAt }, deviceId, order.OutletId, order.SessionId, userId);
+        AppendSyncEvent("POS_ORDER", order.Id, localStatus == "CLOSED" ? "ORDER_CLOSED" : "ORDER_UPDATED", new { status = order.Status, fulfillmentStatus = order.FulfillmentStatus, notes = order.Notes, updatedAt = order.UpdatedAt }, deviceId, order.OutletId, order.SessionId, userId);
 
-        if (status == "CLOSED" || status == "CANCELLED" || status == "VOIDED")
+        if (localStatus == "CLOSED" || localStatus == "CANCELLED" || localStatus == "VOIDED")
         {
             var table = await _dbContext.PosTables.FirstOrDefaultAsync(t => t.CurrentOrderId == order.Id);
             if (table != null)
@@ -6404,13 +6428,25 @@ public class LocalRepository
             query = query.Where(o => o.SessionId == sessionId);
         // else: no terminal outlet and no session — return nothing safely
 
+        var onlineCommerceOrders = string.Equals(filter, "online_orders", StringComparison.OrdinalIgnoreCase);
+
         query = query.Where(o => o.Status != "CLOSED"
             && o.Status != "COMPLETED"
-            && o.Status != "PAID"
             && o.Status != "VOIDED"
-            && o.Status != "CANCELLED"
-            && o.PaymentStatus != "PAID"
-            && o.PaymentStatus != "REFUNDED");
+            && o.Status != "CANCELLED");
+
+        // Online Commerce orders are paid before they arrive at the terminal.
+        // They need their own queue and must not be removed by the normal
+        // unpaid/resumable-order filter used by the cashier workspace.
+        if (onlineCommerceOrders)
+        {
+            query = query.Where(o => o.OrderType == "ONLINE_WEB");
+        }
+        else
+        {
+            query = query.Where(o => o.PaymentStatus != "PAID"
+                && o.PaymentStatus != "REFUNDED");
+        }
 
         if (filter == "my_orders" && !string.IsNullOrEmpty(staffId))
         {
@@ -6475,6 +6511,7 @@ public class LocalRepository
                 folioId = o.FolioId,
                 notes = o.Notes,
                 status = o.Status,
+                fulfillmentStatus = o.FulfillmentStatus,
                 paymentStatus = o.PaymentStatus,
                 itemCount,
                 total = o.Total != 0m ? o.Total : calculatedTotal,

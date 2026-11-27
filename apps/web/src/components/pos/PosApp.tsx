@@ -27,6 +27,8 @@ import { WaiterTicketsModal } from '@/components/pos/WaiterTicketsModal';
 import { MySalesModal } from '@/components/pos/MySalesModal';
 import { MyOrdersModal } from '@/components/pos/MyOrdersModal';
 import { ActiveOrdersModal } from '@/components/pos/ActiveOrdersModal';
+import { OnlineOrdersPanel } from '@/components/pos/OnlineOrdersPanel';
+import { OnlineOrderAlertModal } from '@/components/pos/OnlineOrderAlertModal';
 import { TableMap } from '@/components/pos/TableMap';
 import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal';
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
@@ -158,6 +160,7 @@ export default function PosApp() {
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [showActiveOrders, setShowActiveOrders] = useState(false);
+  const [showOnlineOrders, setShowOnlineOrders] = useState(false);
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [showVoidOrderModal, setShowVoidOrderModal] = useState(false);
   const [isVoidingOrder, setIsVoidingOrder] = useState(false);
@@ -194,6 +197,7 @@ export default function PosApp() {
   const isPoolOutlet =
     ['POOL', 'RECREATION', 'SWIMMING_POOL', 'SWIMMING_POOL_OUTLET'].includes(outletType) ||
     terminalType === 'POOL_POS';
+  const isRestaurantTerminal = isDesktopMode && ['RESTAURANT_POS', 'BAR_POS'].includes(terminalType) && !isPoolOutlet;
 
   const lockOperator = useCallback(() => {
     operatorSwitchOverride.current = true;
@@ -218,6 +222,9 @@ export default function PosApp() {
     setShowEmergencyModal(false);
     setShowMyOrders(false);
     setShowActiveOrders(false);
+    setShowOnlineOrders(false);
+    setOnlineOrderAlert(null);
+    stopOnlineOrderChime();
     setShowChargeModal(false);
     setShowVoidOrderModal(false);
     setShowKitchenModal(false);
@@ -260,6 +267,25 @@ export default function PosApp() {
   const [offlineBookingNotification, setOfflineBookingNotification] = useState<any | null>(null);
   const offlineBookingChimeTimer = useRef<number | null>(null);
   const [acknowledgedOfflineBookingNotificationIds] = useState<Set<string>>(() => readAcknowledgements('pos-booking'));
+  const [pendingOnlineOrderCount, setPendingOnlineOrderCount] = useState(0);
+  const [onlineOrderAlert, setOnlineOrderAlert] = useState<any | null>(null);
+  const seenOnlineOrderIds = useRef<Set<string>>(new Set());
+  const onlineOrdersPrimed = useRef(false);
+  const onlineOrderChimeTimer = useRef<number | null>(null);
+
+  const stopOnlineOrderChime = useCallback(() => {
+    if (onlineOrderChimeTimer.current !== null) {
+      window.clearInterval(onlineOrderChimeTimer.current);
+      onlineOrderChimeTimer.current = null;
+    }
+    stopAllChimes();
+  }, []);
+
+  const startOnlineOrderChime = useCallback(() => {
+    stopOnlineOrderChime();
+    void playRoomServiceChime();
+    onlineOrderChimeTimer.current = window.setInterval(() => void playRoomServiceChime(), 5000);
+  }, [stopOnlineOrderChime]);
 
   const stopRoomServiceChime = useCallback(() => {
     if (roomServiceChimeTimer.current !== null) {
@@ -388,6 +414,47 @@ export default function PosApp() {
       stopOfflineBookingChime();
     };
   }, [pollOfflineBookingNotifications, stopOfflineBookingChime]);
+
+  // Commerce orders are already paid and are injected into the local POS by
+  // the desktop sync worker. Poll the local queue so an operator gets an
+  // alert without requiring cloud connectivity or a page refresh.
+  const pollOnlineOrders = useCallback(async () => {
+    if (!isRestaurantTerminal || !activeOperator || !operatorToken) return;
+    try {
+      const result = await provider.pos.getActiveOrders(posSessionId || '', operatorToken, 'online_orders');
+      if (result.error) return;
+      const orders = (result.data || []).filter((order: any) => !['COMPLETED', 'CLOSED', 'VOIDED', 'CANCELLED'].includes(String(order.status || '').toUpperCase()));
+      setPendingOnlineOrderCount(orders.length);
+      const incoming = orders.filter((order: any) => !seenOnlineOrderIds.current.has(order.id));
+      if (!onlineOrdersPrimed.current) {
+        orders.forEach((order: any) => seenOnlineOrderIds.current.add(order.id));
+        onlineOrdersPrimed.current = true;
+        return;
+      }
+      if (incoming.length > 0) {
+        incoming.forEach((order: any) => seenOnlineOrderIds.current.add(order.id));
+        void unlockAudio();
+        startOnlineOrderChime();
+        const first = incoming[0];
+        setOnlineOrderAlert(first);
+        toast.info(incoming.length > 1 ? `${incoming.length} new online orders` : `New online order ${first.orderNumber || ''}`, {
+          description: 'Payment received. Review the order and start preparation.',
+          duration: 10000,
+          action: { label: 'Open orders', onClick: () => setShowOnlineOrders(true) },
+        });
+      }
+    } catch {
+      // Local polling is best-effort and must never interrupt order entry.
+    }
+  }, [activeOperator, isRestaurantTerminal, operatorToken, posSessionId, provider.pos, startOnlineOrderChime]);
+
+  useEffect(() => {
+    void pollOnlineOrders();
+    const interval = window.setInterval(() => void pollOnlineOrders(), 10000);
+    return () => window.clearInterval(interval);
+  }, [pollOnlineOrders]);
+
+  useEffect(() => stopOnlineOrderChime, [stopOnlineOrderChime]);
 
   const acknowledgeOfflineBookingNotification = useCallback(async () => {
     if (!offlineBookingNotification) return;
@@ -1408,6 +1475,7 @@ export default function PosApp() {
           viewMode={viewMode}
           setViewMode={setViewMode}
           onOpenMyOrders={() => setShowActiveOrders(true)}
+          onOpenOnlineOrders={() => setShowOnlineOrders(true)}
 
           onOpenMySales={() => setShowMySales(true)}
           onOpenShiftBank={() => setShowShiftBank(true)}
@@ -1426,6 +1494,8 @@ export default function PosApp() {
           isDesktop={isDesktopMode}
           isPoolOutlet={isPoolOutlet}
           pendingRoomServiceCount={pendingRoomServiceOrders.length}
+          pendingOnlineOrderCount={pendingOnlineOrderCount}
+          isRestaurantTerminal={isRestaurantTerminal}
           onOpenRoomService={() => setShowRoomServiceAlert(true)}
           onPrintBreakfastEntitlements={() => router.push('/pos/breakfast')}
         />
@@ -2129,6 +2199,21 @@ export default function PosApp() {
         onViewHistory={() => setShowMyOrders(true)}
         refreshKey={tableRefreshTrigger}
         allowAllOpen={String(bankingModel).toUpperCase() !== 'SERVER_BANKING'}
+      />
+
+      <OnlineOrdersPanel
+        isOpen={showOnlineOrders}
+        onClose={() => setShowOnlineOrders(false)}
+        sessionId={posSessionId}
+        operatorToken={operatorToken || ''}
+        isRestaurantTerminal={isRestaurantTerminal}
+      />
+
+      <OnlineOrderAlertModal
+        order={onlineOrderAlert}
+        count={pendingOnlineOrderCount}
+        onDismiss={() => { stopOnlineOrderChime(); setOnlineOrderAlert(null); }}
+        onReview={() => { stopOnlineOrderChime(); setOnlineOrderAlert(null); setShowOnlineOrders(true); }}
       />
 
       

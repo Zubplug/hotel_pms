@@ -13,6 +13,7 @@ interface PosSidebarProps {
   viewMode: 'menu' | 'tables';
   setViewMode: (mode: 'menu' | 'tables') => void;
   onOpenMyOrders: () => void;
+  onOpenOnlineOrders?: () => void;
   onOpenMySales: () => void;
   onOpenShiftBank: () => void;
   onOpenKitchen: () => void;
@@ -28,12 +29,15 @@ interface PosSidebarProps {
   isDesktop?: boolean;
   isPoolOutlet?: boolean;
   pendingRoomServiceCount?: number;
+  pendingOnlineOrderCount?: number;
+  isRestaurantTerminal?: boolean;
 }
 
 export function PosSidebar({
   viewMode,
   setViewMode,
   onOpenMyOrders,
+  onOpenOnlineOrders,
   onOpenMySales,
   onOpenShiftBank,
   onOpenKitchen,
@@ -49,6 +53,8 @@ export function PosSidebar({
   isDesktop = false,
   isPoolOutlet = false,
   pendingRoomServiceCount = 0,
+  pendingOnlineOrderCount = 0,
+  isRestaurantTerminal = false,
 }: PosSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -159,6 +165,9 @@ export function PosSidebar({
       <div className="flex flex-col gap-0.5 px-2">
         {!collapsed && <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1 mb-1">Manage</p>}
         <NavItem icon={Receipt} label="All Orders" onClick={onOpenMyOrders} />
+        {isDesktop && isRestaurantTerminal && (
+          <NavItem icon={Bell} label="Online Orders" badge={pendingOnlineOrderCount} onClick={() => onOpenOnlineOrders?.()} />
+        )}
         <NavItem icon={TrendingUp} label="My Sales"     onClick={onOpenMySales} />
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
         {isPoolOutlet && (

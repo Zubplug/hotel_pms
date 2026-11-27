@@ -463,7 +463,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
                 >
                   <div className="os-product-card__hex-wrap">
                     <div className="os-product-card__hex">
-                      {product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill style={{ objectFit: 'contain' }} sizes="(max-width: 600px) 45vw, 260px" /> : (
+                      {product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill style={{ objectFit: 'cover', objectPosition: 'center' }} sizes="(max-width: 600px) 45vw, 260px" /> : (
                         <div className="os-product-card__hex-placeholder">{categoryIcon(productCategory?.name ?? '')}</div>
                       )}
                       {!product.isAvailable && <div className="os-product-card__sold-out">Sold Out</div>}
@@ -554,7 +554,7 @@ export function OutdoorServiceClient({ store, menus, promotions }: Props) {
                         {product.imageUrl ? (
                           <Image
                             src={product.imageUrl} alt={product.name}
-                            fill style={{ objectFit: 'contain' }}
+                            fill style={{ objectFit: 'cover', objectPosition: 'center' }}
                             sizes="(max-width: 600px) 45vw, 260px"
                           />
                         ) : (

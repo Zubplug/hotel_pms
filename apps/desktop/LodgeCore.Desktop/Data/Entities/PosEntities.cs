@@ -192,6 +192,7 @@ public class LocalPosOrder
     public string? FolioId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string FulfillmentStatus { get; set; } = "NONE";
     public DateTime BusinessDate { get; set; }
     public decimal Subtotal { get; set; }
     public decimal TaxAmount { get; set; }

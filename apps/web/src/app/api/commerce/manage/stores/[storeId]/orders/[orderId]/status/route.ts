@@ -19,7 +19,8 @@ type Params = { params: Promise<{ storeId: string; orderId: string }> };
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   AWAITING_RESTAURANT: ['ACCEPTED', 'CANCELLED'],
   ACCEPTED:            ['PREPARING', 'CANCELLED'],
-  PREPARING:           ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
+  PREPARING:           ['READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
+  READY:               ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
   READY_FOR_PICKUP:    ['DELIVERED', 'CANCELLED'],
   OUT_FOR_DELIVERY:    ['DELIVERED', 'CANCELLED'],
   DELIVERED:           [],
@@ -29,6 +30,7 @@ const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
 const STATUS_TO_EVENT: Record<string, CommerceNotificationEvent> = {
   ACCEPTED:         'PREPARING',
   PREPARING:        'PREPARING',
+  READY:            'READY',
   READY_FOR_PICKUP: 'READY_FOR_PICKUP',
   OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
   DELIVERED:        'DELIVERED',
@@ -36,7 +38,7 @@ const STATUS_TO_EVENT: Record<string, CommerceNotificationEvent> = {
 };
 
 const patchSchema = z.object({
-  status: z.enum(['ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']),
+  status: z.enum(['ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']),
   note: z.string().max(300).optional(),
 });
 

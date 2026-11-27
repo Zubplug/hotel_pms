@@ -10,8 +10,10 @@
  * SMS: Termii API — first SMS integration in the codebase.
  *   Uses: TERMII_API_KEY env var.
  *
- * Decision 01 Fallback Chain:
- *   SMS fails → retry ×2 → (email fallback if customer has email)
+ * Delivery policy:
+ *   SMS and email are delivered independently when enabled. SMS retries up
+ *   to three times; email remains an independent delivery record rather than
+ *   being delayed behind SMS failure.
  *   WhatsApp fails → silent (supplementary only)
  *
  * Every send attempt is logged to CommerceNotificationLog.
@@ -23,6 +25,7 @@ export type CommerceNotificationEvent =
   | 'ORDER_PLACED'
   | 'PAYMENT_CONFIRMED'
   | 'PREPARING'
+  | 'READY'
   | 'READY_FOR_PICKUP'
   | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
@@ -50,6 +53,7 @@ const EVENT_MESSAGES: Record<CommerceNotificationEvent, (name: string) => string
   ORDER_PLACED:       (n) => `Hi ${n}, your order has been received! We'll notify you when it's being prepared.`,
   PAYMENT_CONFIRMED:  (n) => `Hi ${n}, payment confirmed! Your order is queued for our kitchen and bar teams.`,
   PREPARING:          (n) => `Hi ${n}, great news! Your order is now being prepared.`,
+  READY:              (n) => `Hi ${n}, your order is ready and awaiting final service arrangements.`,
   READY_FOR_PICKUP:   (n) => `Hi ${n}, your order is ready for pickup! Please come collect it.`,
   OUT_FOR_DELIVERY:   (n) => `Hi ${n}, your order is on its way! Our driver is heading to you.`,
   DELIVERED:          (n) => `Hi ${n}, your order has been delivered. Enjoy your meal! 🍽️`,
@@ -61,6 +65,7 @@ const EVENT_SUBJECTS: Record<CommerceNotificationEvent, string> = {
   ORDER_PLACED:      'Order received — we got it!',
   PAYMENT_CONFIRMED: 'Payment confirmed',
   PREPARING:         'Your order is being prepared',
+  READY:             'Your order is ready',
   READY_FOR_PICKUP:  'Ready for pickup!',
   OUT_FOR_DELIVERY:  'Your order is on its way',
   DELIVERED:         'Order delivered — enjoy!',
@@ -76,6 +81,9 @@ export async function sendOrderNotification(input: NotificationInput): Promise<v
   const { storeId, orderId, event, customer, store } = input;
   const message = EVENT_MESSAGES[event](customer.name);
 
+  // SMS and email are independent customer preferences. When both are
+  // enabled, deliver through both channels; email is not merely an SMS
+  // fallback. This gives customers a reliable status trail on every update.
   if (store.notifySmsEnabled) {
     await attemptSms({
       orderId, storeId, event,
@@ -83,11 +91,11 @@ export async function sendOrderNotification(input: NotificationInput): Promise<v
       message,
       senderName: store.termiiSenderName ?? 'LodgeCore',
       attempt: 1,
-      fallbackEmail: store.notifyEmailEnabled ? customer.email : undefined,
+      fallbackEmail: undefined,
       customerName: customer.name,
     });
-  } else if (store.notifyEmailEnabled && customer.email) {
-    // SMS disabled — send email directly
+  }
+  if (store.notifyEmailEnabled && customer.email) {
     await attemptEmail({ orderId, storeId, event, email: customer.email, name: customer.name, message });
   }
 }

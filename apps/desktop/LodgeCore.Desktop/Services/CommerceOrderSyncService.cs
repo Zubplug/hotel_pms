@@ -105,7 +105,7 @@ public class CommerceOrderSyncService : BackgroundService
         }
 
         // 2. Gate: need an authenticated session token.
-        var token = await _authManager.GetAccessTokenAsync();
+        var token = await _authManager.GetAuthTokenAsync();
         if (string.IsNullOrWhiteSpace(token)) return;
 
         // 3. Use the outlet assigned to this terminal. Never select an arbitrary
@@ -124,9 +124,10 @@ public class CommerceOrderSyncService : BackgroundService
         }
 
         // 4. Collect already-acknowledged sync event IDs so we don't re-process.
-        var knownIds = await db.CommerceInboundOrders
+        var knownIds = (await db.CommerceInboundOrders
             .Select(o => o.SyncEventId)
-            .ToHashSetAsync(ct);
+            .ToListAsync(ct))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // 5. Pull pending events from the cloud POS bridge.
         var events = await PullFromCloudAsync(token, outlet.Id, ct);
@@ -170,7 +171,7 @@ public class CommerceOrderSyncService : BackgroundService
         // 8. Acknowledge successfully injected orders back to the cloud.
         var injected = await db.CommerceInboundOrders
             .Where(o => o.InjectionStatus == "INJECTED" && o.CloudAcknowledgedAt == null)
-            .Select(o => o.SyncEventId)
+            .Select(o => new InjectedOrder(o.SyncEventId, o.LocalPosOrderId))
             .ToListAsync(ct);
 
         if (injected.Count > 0)
@@ -211,7 +212,7 @@ public class CommerceOrderSyncService : BackgroundService
 
     // ─── Cloud acknowledge ────────────────────────────────────────────────────
 
-    private async Task AcknowledgeAsync(string token, string outletId, List<string> syncEventIds, CancellationToken ct)
+    private async Task AcknowledgeAsync(string token, string outletId, List<InjectedOrder> injected, CancellationToken ct)
     {
         try
         {
@@ -222,11 +223,12 @@ public class CommerceOrderSyncService : BackgroundService
                 {
                     action = "acknowledge",
                     outletId,
-                    results = syncEventIds.Select(syncEventId => new
+                    results = injected.Select(item => new
                     {
-                        syncEventId,
+                        syncEventId = item.SyncEventId,
                         idempotencyKey = string.Empty,
                         success = true,
+                        localPosOrderId = item.LocalPosOrderId,
                     }),
                 }),
                 Encoding.UTF8, "application/json");
@@ -234,12 +236,12 @@ public class CommerceOrderSyncService : BackgroundService
             var response = await _httpClient.SendAsync(request, ct);
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("CommerceOrderSyncService: Acknowledged {Count} event(s).", syncEventIds.Count);
+                _logger.LogInformation("CommerceOrderSyncService: Acknowledged {Count} event(s).", injected.Count);
 
                 using var scope = _serviceProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
                 var rows = await db.CommerceInboundOrders
-                    .Where(o => syncEventIds.Contains(o.SyncEventId) && o.InjectionStatus == "INJECTED")
+                    .Where(o => injected.Select(item => item.SyncEventId).Contains(o.SyncEventId) && o.InjectionStatus == "INJECTED")
                     .ToListAsync(ct);
 
                 foreach (var row in rows)
@@ -259,6 +261,8 @@ public class CommerceOrderSyncService : BackgroundService
     }
 
     // ─── Local POS injection ──────────────────────────────────────────────────
+
+    private sealed record InjectedOrder(string SyncEventId, string? LocalPosOrderId);
 
     private async Task InjectOrderAsync(
         LocalDbContext db,
@@ -336,30 +340,42 @@ public class CommerceOrderSyncService : BackgroundService
                 .Distinct()
                 .ToList();
             var products = await db.PosProducts
-                .Where(product => productIds.Contains(product.Id))
+                .Where(product => productIds.Contains(product.Id)
+                    && product.PropertyId == property.Id
+                    && product.IsActive)
                 .ToListAsync(ct);
             var categoryIds = products.Select(product => product.CategoryId).Distinct().ToList();
             var categories = await db.ProductCategories
-                .Where(category => categoryIds.Contains(category.Id))
+                .Where(category => categoryIds.Contains(category.Id)
+                    && category.OutletId == outlet.Id
+                    && category.IsActive)
                 .ToDictionaryAsync(category => category.Id, ct);
             var productMap = products.ToDictionary(product => product.Id);
 
             string ResolveStation(LocalPosOrderItem item)
             {
-                if (item.ProductId != null && productMap.TryGetValue(item.ProductId, out var product))
+                if (string.IsNullOrWhiteSpace(item.ProductId)
+                    || !productMap.TryGetValue(item.ProductId, out var product))
                 {
-                    var station = product.ProductionStation;
-                    if (string.IsNullOrWhiteSpace(station)
-                        && categories.TryGetValue(product.CategoryId, out var category))
-                    {
-                        station = category.ProductionStation;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(station))
-                        return station.Trim().ToUpperInvariant();
+                    throw new InvalidOperationException(
+                        $"Online product '{item.ProductName}' is not linked to an active local POS product.");
                 }
 
-                return "KITCHEN";
+                var station = product.ProductionStation;
+                if (string.IsNullOrWhiteSpace(station)
+                    && categories.TryGetValue(product.CategoryId, out var category))
+                {
+                    station = category.ProductionStation;
+                }
+
+                station = station?.Trim().ToUpperInvariant();
+                if (station is not ("KITCHEN" or "BAR" or "DIRECT" or "NONE"))
+                {
+                    throw new InvalidOperationException(
+                        $"Online product '{item.ProductName}' has no valid production station. Configure KITCHEN, BAR, DIRECT, or NONE.");
+                }
+
+                return station;
             }
 
             var stationGroups = orderItems.GroupBy(ResolveStation).ToList();
@@ -407,7 +423,7 @@ public class CommerceOrderSyncService : BackgroundService
                 };
 
                 foreach (var item in stationGroup)
-                    item.KotId = kotId;
+                    item.KotId = kot.Id;
 
                 kots.Add(kot);
             }
@@ -426,8 +442,8 @@ public class CommerceOrderSyncService : BackgroundService
             await db.SaveChangesAsync(ct);
 
             _logger.LogInformation(
-                "CommerceOrderSyncService: Injected online order {OrderRef} → LocalPosOrder {PosOrderId} with KOT {KotId}.",
-                inbound.OrderRef, orderId, kotId);
+                "CommerceOrderSyncService: Injected online order {OrderRef} → LocalPosOrder {PosOrderId} with {KotCount} production KOT(s).",
+                inbound.OrderRef, orderId, kots.Count);
         }
         catch (Exception ex)
         {

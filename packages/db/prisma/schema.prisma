@@ -4648,6 +4648,7 @@ model PosOrder {
   orderNumber   String                @unique
   orderType     PosOrderType          @default(TABLE)
   status        PosOrderStatus        @default(SUBMITTED)
+  fulfillmentStatus String             @default("NONE")
   paymentStatus PosOrderPaymentStatus @default(UNPAID)
   businessDate  DateTime              @db.Date
 
