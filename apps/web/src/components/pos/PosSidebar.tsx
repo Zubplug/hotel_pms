@@ -6,7 +6,7 @@ import Image from 'next/image';
 import {
   LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat, Wallet,
   Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer,
-  AlertTriangle, ChevronLeft, ChevronRight, ArrowRightLeft, Hotel, Waves, Coffee,
+  AlertTriangle, Bell, ChevronLeft, ChevronRight, ArrowRightLeft, Hotel, Waves, Coffee,
 } from 'lucide-react';
 
 interface PosSidebarProps {

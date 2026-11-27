@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@hotel-pms/db";
+import type { PosOrderType } from "@hotel-pms/db";
 import crypto, { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { assertOfflineSessionOpenDate, isNightAuditCutoverActive } from "@/lib/night-audit-guard";
@@ -12,6 +13,11 @@ import { hasEntitlement } from "@/lib/auth/entitlement";
 import { verifyDeviceCredential } from "@/lib/pos/device-credential";
 import { resolveSelectedModifiers } from "@/lib/pos/modifier-validation";
 import { sendOrderNotification, type CommerceNotificationEvent } from "@/lib/commerce/notifications";
+
+function isOnlineCommerceOrder(order: { orderType?: unknown; notes?: string | null } | null | undefined) {
+  return String(order?.orderType || '').toUpperCase() === 'ONLINE_WEB'
+    || String(order?.notes || '').includes('[Online Order]');
+}
 
 async function reconcileOnlineCommerceStatus(event: any, payload: any) {
   if (event.aggregateType !== 'POS_ORDER') return;
@@ -39,7 +45,7 @@ async function reconcileOnlineCommerceStatus(event: any, payload: any) {
     where: { id: event.aggregateId },
     select: { id: true, orderType: true, notes: true },
   });
-  if (order?.orderType !== 'ONLINE_WEB') return;
+  if (!isOnlineCommerceOrder(order)) return;
 
   // The acknowledgement normally stores reportedPosOrderId. During the
   // narrow race where staff updates an order before that acknowledgement is
@@ -732,6 +738,10 @@ export async function POST(req: NextRequest) {
                    select: { businessDate: true }
                  });
                  const authoritativeBusinessDate = linkedSession?.businessDate ?? propertyDate?.businessDate ?? new Date();
+                 const requestedOrderType = String(payload.OrderType || payload.orderType || 'TABLE').toUpperCase();
+                 const cloudOrderType: PosOrderType = ['TABLE', 'WALK_IN', 'ROOM_SERVICE', 'TAKEAWAY', 'BAR'].includes(requestedOrderType)
+                   ? requestedOrderType as PosOrderType
+                   : 'TAKEAWAY';
                  const createdOrder = await tx.posOrder.create({
                      data: {
                          id: event.aggregateId,
@@ -743,7 +753,11 @@ export async function POST(req: NextRequest) {
                          subtotal: payload.Subtotal || 0,
                          taxAmount: payload.TaxAmount || 0,
                          total: payload.Total || 0,
-                         orderType: payload.OrderType || payload.orderType || 'DINE_IN',
+                         // ONLINE_WEB belongs to the local desktop model. Keep
+                         // the cloud enum valid and retain the immutable marker
+                         // in notes for reconciliation and notifications.
+                         orderType: cloudOrderType,
+                         notes: payload.Notes || payload.notes || (requestedOrderType === 'ONLINE_WEB' ? '[Online Order]' : null),
                          tableId: tableId,
                          businessDate: authoritativeBusinessDate,
                          serverStaffId: operatorId,
@@ -844,12 +858,12 @@ export async function POST(req: NextRequest) {
               });
           }
           else if (event.eventType === 'ORDER_UPDATED') {
-              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }, select: { id: true, orderType: true } });
+              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }, select: { id: true, orderType: true, notes: true } });
               if (!existingOrder) {
                   throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${event.aggregateId} has not reached the cloud yet`);
               }
               const newStatus = String(payload.status || payload.Status || '').toUpperCase();
-              if (existingOrder.orderType === 'ONLINE_WEB' && (newStatus === 'CANCELLED' || newStatus === 'VOIDED')) {
+              if (isOnlineCommerceOrder(existingOrder) && (newStatus === 'CANCELLED' || newStatus === 'VOIDED')) {
                   throw new Error('FNB_MANAGER_REQUIRED: Commerce order cancellation must be approved by the F&B manager.');
               }
               await tx.posOrder.update({
