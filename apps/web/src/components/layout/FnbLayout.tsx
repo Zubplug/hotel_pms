@@ -23,6 +23,7 @@ import {
   Package,
   TrendingUp,
   Settings,
+  Store,
   Menu,
   X,
   ShieldCheck,
@@ -47,6 +48,7 @@ const FNB_NAV = [
       { name: 'Sales & Analytics', href: '/fnb/dashboard', icon: LayoutDashboard },
       { name: 'Live Orders', href: '/fnb/orders', icon: ClipboardList },
       { name: 'Menu', href: '/fnb/menu', icon: Utensils },
+      { name: 'Food Commerce', href: '/fnb/commerce', icon: Store },
     ],
   },
   {
@@ -144,6 +146,12 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (status === 'unauthenticated' || !session?.user) return null;
+
+  // Commerce has its own focused navigation. Do not nest it inside the
+  // general F&B shell, otherwise users see two competing sidebars.
+  if (pathname === '/fnb/commerce' || pathname?.startsWith('/fnb/commerce/')) {
+    return <>{children}</>;
+  }
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="flex h-full flex-col bg-[#1a1311]">
