@@ -48,6 +48,8 @@ const PUBLIC_PATHS = [
   '/api/v1/hardware', '/api/manager', '/api/mobile', '/api/desktop-update',
   '/api/v1/pos', '/api/v1/sync', '/api/v1/night-audit', '/api/v1/refund-requests',
   '/api/v1/cron/ota-reconciliation',
+  // Scheduled jobs authenticate with CRON_SECRET inside their route handlers.
+  '/api/v1/cron/commerce-scheduled-orders', '/api/v1/cron/commerce-sync-watchdog',
   '/api/v1/billing/webhook', '/api/v1/reach/wallet/webhook',
   '/api/v1/referrals/activation/webhook', '/api/v1/webhooks/ota', '/api/v1/webhooks/flutterwave',
   '/desktop',
