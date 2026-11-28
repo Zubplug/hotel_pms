@@ -3853,7 +3853,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
              }
         }
 
-        var pendingEvents = eventsToPush.OrderBy(e => e.CreatedAt).Take(50).ToList();
+        var orderedEventsToPush = eventsToPush.OrderBy(e => e.CreatedAt).ToList();
+        // Preserve the original outbox order. A session-open event is sent as
+        // a short prerequisite request so cloud session creation is committed
+        // before the following financial events and cannot be hidden behind a
+        // slow batch operation.
+        var firstEvent = orderedEventsToPush.FirstOrDefault();
+        var pendingEvents = firstEvent?.AggregateType == "FRONTDESK_SESSION"
+            && firstEvent.EventType == "FRONTDESK_SESSION_OPENED"
+            ? new List<LocalOutboxEvent> { firstEvent }
+            : orderedEventsToPush.Take(10).ToList();
 
         if (!pendingEvents.Any()) 
         {
@@ -4153,6 +4162,27 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            var retryAt = DateTime.UtcNow.AddSeconds(30);
+            var error = "Front Desk cloud request timed out or was interrupted; retry scheduled."
+                + $" {FormatPushError(ex.Message)}";
+            _logger.LogWarning(ex,
+                "[PUSH-FD] Cloud request cancellation. Events remain retryable; retryAt={RetryAt}",
+                retryAt);
+
+            foreach (var evt in pendingEvents)
+            {
+                evt.Status = "FAILED";
+                evt.LastError = error;
+                evt.LastAttemptAt = DateTime.UtcNow;
+                evt.NextAttemptAt = retryAt;
+            }
+
+            await dbContext.SaveChangesAsync(stoppingToken);
+            BroadcastHealth(SyncState.ERROR, error, "PUSH_FD", 0, pendingEvents.Count, error);
+            return;
         }
         catch (Exception ex)
         {
