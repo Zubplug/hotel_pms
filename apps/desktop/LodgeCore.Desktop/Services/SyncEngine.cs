@@ -3859,8 +3859,21 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         // before the following financial events and cannot be hidden behind a
         // slow batch operation.
         var firstEvent = orderedEventsToPush.FirstOrDefault();
-        var pendingEvents = firstEvent?.AggregateType == "FRONTDESK_SESSION"
-            && firstEvent.EventType == "FRONTDESK_SESSION_OPENED"
+        var isolateFinancialEvent = firstEvent != null && (
+            firstEvent.AggregateType == "FRONTDESK_SESSION"
+            || firstEvent.EventType is "ROOM_CHARGE"
+                or "POST_CHARGE"
+                or "POST_PAYMENT"
+                or "ADVANCE_DEPOSIT"
+                or "ADVANCE_DEPOSIT_REQUEST"
+                or "PAYMENT_CORRECTION_REQUESTED"
+                or "CREDIT_ADJUSTMENT_REQUEST"
+                or "ROOM_CREDIT"
+                or "REFUND_REQUESTED"
+                or "CITY_LEDGER_SETTLEMENT"
+                or "CITY_LEDGER_PAYMENT"
+                or "EXTEND_STAY");
+        var pendingEvents = isolateFinancialEvent
             ? new List<LocalOutboxEvent> { firstEvent }
             : orderedEventsToPush.Take(10).ToList();
 

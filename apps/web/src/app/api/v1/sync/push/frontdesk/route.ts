@@ -618,6 +618,20 @@ export async function POST(req: NextRequest) {
         // yesterday shift when the event is synced after midnight instead of
         // silently re-dating the credit/payment/charge to today.
         const postingBusinessDate = sessionBusinessDate ?? authoritativeBusinessDate;
+        if (sessionBusinessDate) {
+          const payloadBusinessDateValue = payload.businessDate ?? payload.BusinessDate;
+          const payloadBusinessDate = parseLocalDateString(payloadBusinessDateValue);
+          if (payloadBusinessDate && payloadBusinessDate.getTime() !== sessionBusinessDate.getTime()) {
+            // The session is the accounting-date authority. Preserve the
+            // terminal's stale value for audit traceability, but make the
+            // persisted event payload agree with the date used for posting.
+            if (payload.originalBusinessDate == null) {
+              payload.originalBusinessDate = payloadBusinessDateValue;
+            }
+            payload.businessDate = postingBusinessDate.toISOString();
+            delete payload.BusinessDate;
+          }
+        }
 
         // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
         await prisma.$transaction(async (tx) => {
@@ -5773,22 +5787,28 @@ export async function POST(req: NextRequest) {
           try {
             if (property.organizationId) {
               const amount = Number(payload.amount);
-              await NotificationEngine.emit({
-                type: "PAYMENT_RECEIVED",
-                organizationId: property.organizationId,
-                propertyId: property.id,
-                entityType: "folio",
-                entityId: aggregateId,
-                metadata: {
-                  amount: amount > 0 ? amount : -amount,
-                  currency: payload.currency || "NGN",
-                  method:
-                    payload.method ||
-                    (eventType === "ADVANCE_DEPOSIT" ? "TOP-UP" : "PAYMENT"),
-                  operatorName: "Sync Service"
-                },
-                idempotencyKey: `sync_PAYMENT_${idempotencyKey || id}`,
-              });
+              // The financial transaction has already committed. Notification
+              // delivery is a post-commit side effect and must not hold the
+              // sync response open until the desktop's 30-second timeout.
+              await Promise.race([
+                NotificationEngine.emit({
+                  type: "PAYMENT_RECEIVED",
+                  organizationId: property.organizationId,
+                  propertyId: property.id,
+                  entityType: "folio",
+                  entityId: aggregateId,
+                  metadata: {
+                    amount: amount > 0 ? amount : -amount,
+                    currency: payload.currency || "NGN",
+                    method:
+                      payload.method ||
+                      (eventType === "ADVANCE_DEPOSIT" ? "TOP-UP" : "PAYMENT"),
+                    operatorName: "Sync Service"
+                  },
+                  idempotencyKey: `sync_PAYMENT_${idempotencyKey || id}`,
+                }),
+                new Promise<void>(resolve => setTimeout(resolve, 1000)),
+              ]);
             }
           } catch (notifErr) {
             console.error(
