@@ -11,7 +11,7 @@ import { calculateFolioTotals } from "@/lib/finance/folio-totals";
 import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
 import { reconcileFolioBalanceFromCounters } from "@/lib/finance/reconcile-folio-balance";
-import { assertOfflineSessionOpenDate, isNightAuditCutoverActive } from "@/lib/night-audit-guard";
+import { isNightAuditCutoverActive, reconcileOfflineSessionOpenDate } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { getApprovedRoomDiscount } from "@/lib/finance/approved-room-discount";
 import { computeRateBreakdown, resolveBreakdownConfig } from "@/lib/room-rate-breakdown";
@@ -466,6 +466,11 @@ export async function POST(req: NextRequest) {
     // the authoritative checkout transaction settles the folio first; the
     // transfer will then be a safe no-op when no credit remains.
     const orderedEvents = [...events].sort((left: any, right: any) => {
+      const leftIsSessionOpen = left.aggregateType === "FRONTDESK_SESSION" && left.eventType === "FRONTDESK_SESSION_OPENED";
+      const rightIsSessionOpen = right.aggregateType === "FRONTDESK_SESSION" && right.eventType === "FRONTDESK_SESSION_OPENED";
+      if (leftIsSessionOpen && !rightIsSessionOpen) return -1;
+      if (rightIsSessionOpen && !leftIsSessionOpen) return 1;
+
       const leftIsCheckout = left.aggregateType === "RESERVATION" && left.eventType === "CHECK_OUT";
       const rightIsCheckout = right.aggregateType === "RESERVATION" && right.eventType === "CHECK_OUT";
       const leftIsTransfer = left.aggregateType === "FOLIO" && left.eventType === "GUEST_CREDIT_TRANSFER";
@@ -1092,12 +1097,13 @@ export async function POST(req: NextRequest) {
             if (Number.isNaN(openedAt.getTime())) {
               throw new Error("Invalid FRONTDESK_SESSION_OPENED payload: occurredAt is required.");
             }
-            assertOfflineSessionOpenDate({
+            const reconciledDate = reconcileOfflineSessionOpenDate({
               propertyBusinessDate: property.businessDate ?? authoritativeBusinessDate,
               sessionBusinessDate: businessDate,
               occurredAt: openedAt,
               timezone: property.timezone || "Africa/Lagos",
             });
+            const correctedBusinessDate = reconciledDate.businessDate;
             const existingSession = await tx.frontdeskSession.findUnique({
               where: { id: sessionId },
             });
@@ -1122,7 +1128,7 @@ export async function POST(req: NextRequest) {
                   staffId: payload.staffId || actorId,
                   cashAccountId: payload.cashAccountId,
                   shiftReference,
-                  businessDate,
+                  businessDate: correctedBusinessDate,
                   openingFloat: Number(payload.openingFloat || 0),
                   systemExpectedCash: Number(payload.openingFloat || 0),
                 },
@@ -1132,7 +1138,9 @@ export async function POST(req: NextRequest) {
                   frontdeskSessionId: sessionId,
                   action: "OPENED",
                   performedBy: actorId,
-                  notes: "Offline session synchronized",
+                  notes: reconciledDate.corrected
+                    ? `Offline session synchronized; stale business date corrected from ${businessDate.toISOString().slice(0, 10)} to ${correctedBusinessDate.toISOString().slice(0, 10)}`
+                    : "Offline session synchronized",
                 },
               });
             }
@@ -3890,6 +3898,12 @@ export async function POST(req: NextRequest) {
               throw new Error(
                 `Cannot assess a ${res.status} reservation as no-show`,
               );
+            const overrideLateArrival = payload.overrideLateArrival === true;
+            const overrideReason = String(payload.reason || "").trim();
+            if (res.lateArrivalExpected && !overrideLateArrival)
+              throw new Error("Late arrival is authorized for this reservation");
+            if (res.lateArrivalExpected && overrideReason.length < 10)
+              throw new Error("A reason of at least 10 characters is required to convert an authorized late arrival to no-show");
             const cutoff = new Date(res.checkIn);
             const [cutoffHour, cutoffMinute] = String(
               res.noShowPolicy?.cutoffTime || "02:00",
@@ -3938,6 +3952,7 @@ export async function POST(req: NextRequest) {
               where: { id: aggregateId },
               data: {
                 status: "NO_SHOW",
+                lateArrivalExpected: false,
                 noShowAt: new Date(),
                 noShowBy: isUuid(event.operatorId) ? event.operatorId : null,
                 noShowAssessedAt: new Date(),

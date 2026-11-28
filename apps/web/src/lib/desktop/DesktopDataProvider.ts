@@ -262,7 +262,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('reservations.cancel', { id, reason });
     },
     markLateArrival: async (id: string, notes: string) => invokeDesktop('reservations.lateArrival', { id, notes }),
-    assessNoShow: async (id: string) => invokeDesktop('reservations.noShow', { id }),
+    assessNoShow: async (id: string, options) => invokeDesktop('reservations.noShow', { id, ...options }),
     reinstate: async (id: string, reason: string) => invokeDesktop('reservations.reinstate', { id, reason }),
     checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean, overrideDeposit?: boolean, acknowledgedByStaffId?: string, reason?: string }) => {
       const bypass = options?.bypassKeycard === true;

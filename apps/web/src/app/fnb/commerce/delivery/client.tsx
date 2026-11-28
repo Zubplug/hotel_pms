@@ -14,6 +14,8 @@ const LANES = [
   { key: 'OUT_FOR_DELIVERY', label: 'Out for delivery', tone: 'cyan', next: 'DELIVERED', action: 'Confirm delivery' },
 ] as const;
 
+const TERMINAL_DELIVERY_STATUSES = new Set(['CANCELLED', 'REFUNDED', 'DELIVERED']);
+
 function formatAddress(value: unknown) {
   if (!value) return 'Address not provided';
   if (typeof value === 'string') return value;
@@ -41,7 +43,9 @@ export function CommerceDeliveryClient() {
   );
 
   const orders = useMemo(
-    () => ((data?.data ?? []) as any[]).filter((order) => order.orderType === 'DELIVERY'),
+    () => ((data?.data ?? []) as any[]).filter(
+      (order) => order.orderType === 'DELIVERY' && !TERMINAL_DELIVERY_STATUSES.has(order.status),
+    ),
     [data],
   );
 
@@ -85,7 +89,7 @@ export function CommerceDeliveryClient() {
       </header>
 
       <div className="delivery-ops__summary">
-        <div><span>Active deliveries</span><strong>{orders.filter((order) => order.status !== 'DELIVERED').length}</strong></div>
+        <div><span>Active deliveries</span><strong>{orders.length}</strong></div>
         <div><span>Out for delivery</span><strong>{orders.filter((order) => order.status === 'OUT_FOR_DELIVERY').length}</strong></div>
         <div><span>Awaiting dispatch</span><strong>{orders.filter((order) => order.status === 'READY').length}</strong></div>
         <div><span>Refresh cycle</span><strong>10 sec</strong></div>

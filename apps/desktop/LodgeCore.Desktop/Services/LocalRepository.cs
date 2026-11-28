@@ -1266,7 +1266,7 @@ public class LocalRepository
         return reservation;
     }
 
-    public async Task<object?> AssessNoShowAsync(string reservationId, string userId, string deviceId)
+    public async Task<object?> AssessNoShowAsync(string reservationId, string userId, string deviceId, bool overrideLateArrival = false, string reason = "")
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
@@ -1275,7 +1275,8 @@ public class LocalRepository
         if (reservation == null) throw new InvalidOperationException("Reservation not found");
         
         if (reservation.Status != "CONFIRMED") throw new InvalidOperationException($"Cannot assess a {reservation.Status} reservation as no-show.");
-        if (reservation.LateArrivalExpected) throw new InvalidOperationException("Late arrival is authorized for this reservation.");
+        if (reservation.LateArrivalExpected && !overrideLateArrival) throw new InvalidOperationException("Late arrival is authorized for this reservation.");
+        if (reservation.LateArrivalExpected && reason.Trim().Length < 10) throw new InvalidOperationException("A reason of at least 10 characters is required to convert an authorised late arrival to no-show.");
         var property = await _dbContext.Properties.FindAsync(reservation.PropertyId);
         var cutoff = reservation.CheckInDate.Date.AddDays(1);
         if (TimeSpan.TryParse(property?.NoShowCutoffTime ?? "02:00", out var cutoffTime)) cutoff = cutoff.Add(cutoffTime);
@@ -1300,10 +1301,10 @@ public class LocalRepository
             ? Math.Max(0, Math.Min(totalPaid, bookedValue > 0 ? bookedValue : totalPaid) - noShowCharge)
             : 0m;
 
-        reservation.Status = "NO_SHOW"; reservation.NoShowAt = DateTime.UtcNow; reservation.NoShowBy = userId; reservation.NoShowAssessedAt = DateTime.UtcNow; reservation.NoShowChargeAmount = noShowCharge; reservation.NoShowRefundableAmount = refundableAmount; reservation.IsDirty = true; reservation.LocalSequence++;
+        reservation.Status = "NO_SHOW"; reservation.LateArrivalExpected = false; reservation.NoShowAt = DateTime.UtcNow; reservation.NoShowBy = userId; reservation.NoShowAssessedAt = DateTime.UtcNow; reservation.NoShowChargeAmount = noShowCharge; reservation.NoShowRefundableAmount = refundableAmount; reservation.IsDirty = true; reservation.LocalSequence++;
         int eventVersion = reservation.Version;
         reservation.Version++;
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, AggregateVersion = eventVersion, EventType = "NO_SHOW", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id }) });
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, AggregateVersion = eventVersion, EventType = "NO_SHOW", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id, reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(), overrideLateArrival }) });
         await _dbContext.SaveChangesAsync();
         return new { reservation = reservation, assessment = new { totalNights, bookedValue, noShowCharge, refundableAmount }, refundRequired = refundableAmount > 0 };
     }

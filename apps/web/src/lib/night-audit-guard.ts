@@ -134,6 +134,49 @@ export function assertOfflineSessionOpenDate(input: {
   }
 }
 
+/**
+ * Reconcile a stale business date on an offline Front Desk session.
+ *
+ * A terminal may open while disconnected immediately after midnight and still
+ * carry yesterday's cached property date. If the cloud property has already
+ * advanced to the same date on which the session was actually opened, the
+ * cloud can safely correct the session date before creating it. Older delayed
+ * historical events remain protected by assertOfflineSessionOpenDate().
+ */
+export function reconcileOfflineSessionOpenDate(input: {
+  propertyBusinessDate: Date;
+  sessionBusinessDate: Date;
+  occurredAt: Date;
+  timezone: string;
+}) {
+  const propertyDate = new Date(input.propertyBusinessDate);
+  propertyDate.setUTCHours(0, 0, 0, 0);
+  const sessionDate = new Date(input.sessionBusinessDate);
+  sessionDate.setUTCHours(0, 0, 0, 0);
+
+  if (Number.isNaN(propertyDate.getTime()) || Number.isNaN(sessionDate.getTime()) || Number.isNaN(input.occurredAt.getTime())) {
+    throw new Error('BAD_REQUEST:Offline shift dates are invalid.');
+  }
+  if (sessionDate.getTime() > propertyDate.getTime()) {
+    throw new Error('NIGHT_AUDIT_REQUIRED:Offline shift belongs to a business date that is ahead of the property date. Refresh before opening a shift.');
+  }
+
+  const occurredDate = getPropertyBusinessDate(input.timezone, input.occurredAt);
+  if (occurredDate.getTime() > sessionDate.getTime()) {
+    // Only repair the exact stale-cache rollover case. If the terminal is
+    // several business days behind, opening a newly-created shift on the
+    // current date would silently misdate historical work.
+    const yesterday = new Date(propertyDate);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    if (occurredDate.getTime() === propertyDate.getTime() && sessionDate.getTime() === yesterday.getTime()) {
+      return { businessDate: propertyDate, corrected: true };
+    }
+    throw new Error(`NIGHT_AUDIT_REQUIRED:Offline shift was opened on ${occurredDate.toISOString().slice(0, 10)} but is assigned to business date ${sessionDate.toISOString().slice(0, 10)}. Complete Night Audit and refresh the terminal before opening a new shift.`);
+  }
+
+  return { businessDate: sessionDate, corrected: false };
+}
+
 export function canOverrideNightAudit(role: unknown) {
   return ['SUPER_ADMIN', 'CEO', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER'].includes(String(role || '').toUpperCase());
 }

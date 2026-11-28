@@ -834,9 +834,9 @@ public class OfflinePMSInterop
         catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
-    public async Task<string> AssessNoShowAsync(string reservationId)
+    public async Task<string> AssessNoShowAsync(string reservationId, bool overrideLateArrival = false, string reason = "")
     {
-        try { var ctx = await GetSecureContextAsync("reservation:update", "frontdesk:all"); var result = await _repo.AssessNoShowAsync(reservationId, ctx.UserId, ctx.DeviceId); return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions); }
+        try { var ctx = await GetSecureContextAsync("reservation:update", "frontdesk:all"); var result = await _repo.AssessNoShowAsync(reservationId, ctx.UserId, ctx.DeviceId, overrideLateArrival, reason); return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions); }
         catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 

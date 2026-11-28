@@ -34,7 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Reservation changes are temporarily paused while Night Audit is posting.', 409);
     }
     if (reservation.status !== 'CONFIRMED') return errorResponse('BAD_REQUEST', `Cannot assess a reservation that is ${reservation.status}`, 400);
-    if (reservation.lateArrivalExpected && !body.overrideLateArrival) return errorResponse('CONFLICT', 'Late arrival is authorized for this reservation.', 409);
+    const overrideLateArrival = body.overrideLateArrival === true;
+    const overrideReason = String(body.reason || '').trim();
+    if (reservation.lateArrivalExpected && !overrideLateArrival) return errorResponse('CONFLICT', 'Late arrival is authorized for this reservation.', 409);
+    if (reservation.lateArrivalExpected && overrideReason.length < 10) return errorResponse('VALIDATION_ERROR', 'A reason of at least 10 characters is required to convert an authorised late arrival to no-show.', 422);
 
     const policy = reservation.noShowPolicy;
     const cutoff = new Date(reservation.checkIn);
@@ -47,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const assessment = calculateNoShowAssessment({ checkIn: reservation.checkIn, checkOut: reservation.checkOut, bookedValue, totalPaid, chargeType: policy?.chargeType || 'FIRST_NIGHT', chargeValue: Number(policy?.chargeValue || 0), refundableUnusedNights: policy?.refundableUnusedNights ?? true });
 
     const result = await prisma.$transaction(async tx => {
-      const updated = await tx.reservation.update({ where: { id }, data: { status: 'NO_SHOW', noShowAt: new Date(), noShowBy: session.user.id, noShowAssessedAt: new Date(), noShowChargeAmount: assessment.noShowCharge, noShowRefundableAmount: assessment.refundableAmount } });
+      const updated = await tx.reservation.update({ where: { id }, data: { status: 'NO_SHOW', lateArrivalExpected: false, noShowAt: new Date(), noShowBy: session.user.id, noShowAssessedAt: new Date(), noShowChargeAmount: assessment.noShowCharge, noShowRefundableAmount: assessment.refundableAmount } });
       if (reservation.reservationRooms.length) {
         await tx.reservationRoom.updateMany({ where: { reservationId: id, status: 'ACTIVE' }, data: { status: 'NO_SHOW' } });
         for (const reservationRoom of reservation.reservationRooms) {
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           if (!otherActive) await tx.room.update({ where: { id: reservationRoom.roomId }, data: { status: 'AVAILABLE' } });
         }
       }
-      await tx.auditLog.create({ data: { organizationId: reservation.property.organizationId, propertyId: reservation.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: (session.user as any).role || 'STAFF', action: 'RESERVATION_NO_SHOW_ASSESSED', resource: 'Reservation', resourceId: id, previousValue: { status: reservation.status }, newValue: { status: 'NO_SHOW', chargeAmount: assessment.noShowCharge, refundableAmount: assessment.refundableAmount }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });
+      await tx.auditLog.create({ data: { organizationId: reservation.property.organizationId, propertyId: reservation.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: (session.user as any).role || 'STAFF', action: 'RESERVATION_NO_SHOW_ASSESSED', resource: 'Reservation', resourceId: id, previousValue: { status: reservation.status, lateArrivalExpected: reservation.lateArrivalExpected }, newValue: { status: 'NO_SHOW', chargeAmount: assessment.noShowCharge, refundableAmount: assessment.refundableAmount, reason: overrideReason || null }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });
       return updated;
     });
     return successResponse({ reservation: result, assessment, refundRequired: assessment.refundableAmount > 0 });
