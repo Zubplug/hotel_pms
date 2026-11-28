@@ -41,6 +41,16 @@ const parseLocalDateString = (dateString: string | Date | undefined): Date | und
   return new Date(datePart + 'T00:00:00.000Z');
 };
 
+function referencesFrontdeskSession(event: any, sessionId: string): boolean {
+  try {
+    const payload = JSON.parse(event?.payloadJson || "{}");
+    return [payload.sessionId, payload.frontdeskSessionId, payload.FrontdeskSessionId]
+      .some(value => String(value || "") === sessionId);
+  } catch {
+    return false;
+  }
+}
+
 const isUuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -468,8 +478,10 @@ export async function POST(req: NextRequest) {
     const orderedEvents = [...events].sort((left: any, right: any) => {
       const leftIsSessionOpen = left.aggregateType === "FRONTDESK_SESSION" && left.eventType === "FRONTDESK_SESSION_OPENED";
       const rightIsSessionOpen = right.aggregateType === "FRONTDESK_SESSION" && right.eventType === "FRONTDESK_SESSION_OPENED";
-      if (leftIsSessionOpen && !rightIsSessionOpen) return -1;
-      if (rightIsSessionOpen && !leftIsSessionOpen) return 1;
+      // Only move a session open ahead of an event that references that same
+      // session. Unrelated reservations/folios must retain outbox order.
+      if (leftIsSessionOpen && !rightIsSessionOpen && referencesFrontdeskSession(right, String(left.aggregateId))) return -1;
+      if (rightIsSessionOpen && !leftIsSessionOpen && referencesFrontdeskSession(left, String(right.aggregateId))) return 1;
 
       const leftIsCheckout = left.aggregateType === "RESERVATION" && left.eventType === "CHECK_OUT";
       const rightIsCheckout = right.aggregateType === "RESERVATION" && right.eventType === "CHECK_OUT";
