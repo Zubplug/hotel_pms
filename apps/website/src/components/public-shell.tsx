@@ -351,7 +351,7 @@ export function PublicFooter() {
         </div>
         <div className="footer-col">
           <h4>Company</h4>
-          {([["/about","About LodgeCore"],["/partners","Partners"],["/pricing","Pricing"],["/integrations","Integrations"],["/book-demo","Contact"],["/portal","Customer Portal"],["/privacy","Privacy"],["/terms","Terms"]] as [string,string][]).map(([h,l])=><Link key={h} href={h}>{l}</Link>)}
+          {([["/about","About LodgeCore"],["/partners","Partners"],["/pricing","Pricing"],["/integrations","Integrations"],["/downloads","Desktop downloads"],["/book-demo","Contact"],["/portal","Customer Portal"],["/privacy","Privacy"],["/terms","Terms"]] as [string,string][]).map(([h,l])=><Link key={h} href={h}>{l}</Link>)}
           <a href={PLAY_STORE_URL} target="_blank" rel="noreferrer">Get the mobile app</a>
         </div>
       </div>
