@@ -67,6 +67,11 @@ export async function GET(req: NextRequest, { params }: Params) {
             },
           },
           payment: { select: { status: true, amount: true, provider: true } },
+          delivery: {
+            include: {
+              driver: { select: { name: true, phone: true, vehicleType: true, vehiclePlate: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,

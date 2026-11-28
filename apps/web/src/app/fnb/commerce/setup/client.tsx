@@ -14,8 +14,10 @@ const TABS = [
   { key: 'storefront',    label: 'Storefront',    icon: Globe },
 ];
 
-export function CommerceSetupClient() {
-  const [activeTab, setActiveTab] = useState('general');
+export function CommerceSetupClient({ initialTab }: { initialTab?: string }) {
+  const [activeTab, setActiveTab] = useState(
+    TABS.some((tab) => tab.key === initialTab) ? initialTab! : 'general',
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
